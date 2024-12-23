@@ -10,7 +10,8 @@ import init, {
   upsert_vault_with_name,
   list_vaults,
   export_vault,
-  import_vault
+  import_vault,
+  configure_cleanup
 } from '../../hoddor/pkg/hoddor.js';
 
 let initialized = false;
@@ -56,7 +57,7 @@ self.onmessage = async (message) => {
         result = await read_from_vault_with_name(payload.vaultName, payload.password, payload.namespace)
         break
       case 'upsert_vault_with_name':
-        await upsert_vault_with_name(payload.vaultName, payload.password, payload.namespace, payload.data)
+        await upsert_vault_with_name(payload.vaultName, payload.password, payload.namespace, payload.data, payload.expiration)
         result = { success: true }
         break
       case 'remove_vault_with_name':
@@ -78,11 +79,19 @@ self.onmessage = async (message) => {
           throw e;
         }
         break
+      case 'configure_cleanup':
+        configure_cleanup(payload.intervalSeconds)
+        result = { success: true }
+        break
     }
     
     self.postMessage({ type: 'success', result })
   } catch (error) {
-    self.postMessage({ type: 'error', error: error.message })
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    self.postMessage({ 
+      type: 'error', 
+      error: errorMessage
+    });
   }
 }
 

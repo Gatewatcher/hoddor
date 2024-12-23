@@ -3,7 +3,7 @@ extern crate console_error_panic_hook;
 use core::str;
 use js_sys::{Function, Reflect};
 use serde_wasm_bindgen::{from_value, to_value};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 use std::{collections::HashMap, fmt};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
@@ -25,13 +25,22 @@ use argon2::{
 
 use rand::RngCore;
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+use std::future::Future;
+use std::pin::Pin;
+
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+struct Expiration {
+    expires_at: i64,
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 struct EncryptedNamespace {
     data: Vec<u8>,
     nonce: [u8; 12],
+    expiration: Option<Expiration>,
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 struct Vault {
     namespaces: HashMap<String, EncryptedNamespace>,
     salt: [u8; 32],
@@ -44,6 +53,7 @@ enum VaultError {
     InvalidPassword,
     SerializationError { message: &'static str },
     JsError(String),
+    DataExpired,
 }
 
 impl fmt::Display for VaultError {
@@ -56,6 +66,7 @@ impl fmt::Display for VaultError {
                 write!(f, "Serialization Error: {}", message)
             }
             VaultError::JsError(msg) => write!(f, "JavaScript Error: {}", msg),
+            VaultError::DataExpired => write!(f, "Data has expired"),
         }
     }
 }
@@ -209,7 +220,7 @@ pub async fn upsert_vault(
 ) -> Result<(), JsValue> {
     let namespace_str: String = from_value(namespace.clone())?;
     validate_namespace(&namespace_str)?;
-    upsert_vault_with_name("default", password, namespace, data).await
+    upsert_vault_with_name("default", password, namespace, data, None).await
 }
 
 #[wasm_bindgen]
@@ -218,6 +229,7 @@ pub async fn upsert_vault_with_name(
     password: JsValue,
     namespace: JsValue,
     data: JsValue,
+    expires_in_seconds: Option<i64>,
 ) -> Result<(), JsValue> {
     let namespace_str: String = from_value(namespace.clone())?;
     validate_namespace(&namespace_str)?;
@@ -260,17 +272,30 @@ pub async fn upsert_vault_with_name(
         .encrypt(nonce, data_bytes.as_ref())
         .map_err(|e| JsValue::from_str(&format!("Encryption failed: {:?}", e)))?;
 
+    let expiration = expires_in_seconds.map(|seconds| {
+        let now = js_sys::Date::now() as i64 / 1000;
+        Expiration {
+            expires_at: now + seconds,
+        }
+    });
+
+    if let Some(exp) = &expiration {
+        log(&format!(
+            "Setting expiration for namespace '{}' to timestamp {}",
+            namespace, exp.expires_at
+        ));
+    }
+
     vault.namespaces.insert(
         namespace,
         EncryptedNamespace {
             data: encrypted_data,
             nonce: nonce_bytes,
+            expiration,
         },
     );
 
-    save_vault(&file_handle, &vault)
-        .await
-        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+    save_vault(&file_handle, vault).await?;
 
     Ok(())
 }
@@ -312,7 +337,7 @@ pub async fn remove_from_vault_with_name(
         return Err(VaultError::NamespaceNotFound.into());
     }
 
-    save_vault(&file_handle, &vault).await?;
+    save_vault(&file_handle, vault).await?;
     Ok(())
 }
 
@@ -344,7 +369,7 @@ pub async fn read_from_vault_with_name(
             message: "Invalid namespace format",
         })?;
 
-        let (_, vault) = match read_vault_with_name(vault_name).await {
+        let (file_handle, mut vault) = match read_vault_with_name(vault_name).await {
             Ok(result) => result,
             Err(VaultError::IoError { .. }) => {
                 return Err(VaultError::NamespaceNotFound.into());
@@ -356,6 +381,15 @@ pub async fn read_from_vault_with_name(
             .namespaces
             .get(&namespace)
             .ok_or(VaultError::NamespaceNotFound)?;
+
+        if let Some(expiration) = &encrypted_namespace.expiration {
+            let now = js_sys::Date::now() as i64 / 1000;
+            if now >= expiration.expires_at {
+                vault.namespaces.remove(&namespace);
+                save_vault(&file_handle, vault.clone()).await?;
+                return Err(VaultError::DataExpired.into());
+            }
+        }
 
         let key_bytes = time_it!("Key derivation", {
             derive_key(password.as_bytes(), &vault.salt)?
@@ -487,7 +521,6 @@ fn derive_key(password: &[u8], salt: &[u8]) -> Result<[u8; 32], JsValue> {
 async fn read_vault_with_name(
     vault_name: &str,
 ) -> Result<(FileSystemFileHandle, Vault), VaultError> {
-    // Removed lock here since this is a read operation
     time_it!("Total read_vault", {
         let root = time_it!("Getting root directory", {
             get_root_directory_handle().await?
@@ -551,18 +584,28 @@ async fn read_vault_with_name(
             })?
         });
 
+        let (file_handle, mut vault) = (file_handle, vault);
+
+        check_and_cleanup(&mut vault, &file_handle).await?;
+
         Ok((file_handle, vault))
     })
 }
 
-async fn save_vault(file_handle: &FileSystemFileHandle, vault: &Vault) -> Result<(), VaultError> {
-    // Keep lock for write operations
+async fn save_vault(
+    file_handle: &FileSystemFileHandle,
+    mut vault: Vault,
+) -> Result<(), VaultError> {
     let vault_name = file_handle.name();
     let _lock = acquire_vault_lock(&vault_name).await?;
 
     if let Some(_perf) = get_performance() {
         time("save_vault");
     }
+
+    let cleanup_future: Pin<Box<dyn Future<Output = Result<(), VaultError>>>> =
+        Box::pin(check_and_cleanup(&mut vault, file_handle));
+    cleanup_future.await?;
 
     let result = time_it!("Total save_vault", {
         let json_bytes = time_it!("Serializing vault", {
@@ -613,6 +656,64 @@ async fn save_vault(file_handle: &FileSystemFileHandle, vault: &Vault) -> Result
     }
 
     result
+}
+
+async fn cleanup_expired_data(
+    vault: &mut Vault,
+    file_handle: &FileSystemFileHandle,
+) -> Result<bool, VaultError> {
+    let vault_name = file_handle.name();
+    let _lock = acquire_vault_lock(&vault_name).await?;
+
+    let now = js_sys::Date::now() as i64 / 1000;
+    let mut data_removed = false;
+
+    let expired_namespaces: Vec<String> = vault
+        .namespaces
+        .iter()
+        .filter_map(|(namespace, encrypted)| {
+            if let Some(expiration) = &encrypted.expiration {
+                if now >= expiration.expires_at {
+                    Some(namespace.clone())
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    for namespace in expired_namespaces {
+        vault.namespaces.remove(&namespace);
+        data_removed = true;
+        log(&format!("Removed expired namespace: {}", namespace));
+    }
+
+    Ok(data_removed)
+}
+
+async fn check_and_cleanup(
+    vault: &mut Vault,
+    file_handle: &FileSystemFileHandle,
+) -> Result<(), VaultError> {
+    let interval = CLEANUP_INTERVAL.load(Ordering::SeqCst);
+    if interval > 0 {
+        let now = js_sys::Date::now() as i64 / 1000;
+        let last = LAST_CLEANUP.load(Ordering::SeqCst);
+
+        if now - last >= interval {
+            let vault_name = file_handle.name();
+            let _lock = acquire_vault_lock(&vault_name).await?; // Acquire lock before cleanup
+
+            if cleanup_expired_data(vault, file_handle).await? {
+                // No need to acquire lock here as save_vault already does it
+                save_vault(file_handle, vault.clone()).await?;
+                LAST_CLEANUP.store(now, Ordering::SeqCst);
+            }
+        }
+    }
+    Ok(())
 }
 
 async fn get_root_directory_handle() -> Result<FileSystemDirectoryHandle, VaultError> {
@@ -774,7 +875,7 @@ pub async fn create_vault_with_name(
     validate_vault_name(&vault_name)?;
 
     let _lock = acquire_vault_lock(&vault_name).await?;
-    upsert_vault_with_name(&vault_name, password, namespace, data).await
+    upsert_vault_with_name(&vault_name, password, namespace, data, None).await
 }
 
 #[wasm_bindgen]
@@ -905,7 +1006,7 @@ pub async fn import_vault_with_name(
     }
 
     let file_handle = get_or_create_file_handle_with_name(vault_name).await?;
-    save_vault(&file_handle, &imported_vault).await?;
+    save_vault(&file_handle, imported_vault).await?;
 
     Ok(())
 }
@@ -913,4 +1014,45 @@ pub async fn import_vault_with_name(
 #[wasm_bindgen]
 pub async fn import_vault(password: JsValue, data: JsValue) -> Result<(), JsValue> {
     import_vault_with_name("default", password, data).await
+}
+
+#[wasm_bindgen]
+pub async fn create_vault_with_expiration(
+    vault_name: JsValue,
+    password: JsValue,
+    namespace: JsValue,
+    data: JsValue,
+    expires_in_seconds: Option<i64>,
+) -> Result<(), JsValue> {
+    let vault_name: String = from_value(vault_name)?;
+    validate_vault_name(&vault_name)?;
+
+    let _lock = acquire_vault_lock(&vault_name).await?;
+    upsert_vault_with_name(&vault_name, password, namespace, data, expires_in_seconds).await
+}
+
+static CLEANUP_INTERVAL: AtomicI64 = AtomicI64::new(0);
+static LAST_CLEANUP: AtomicI64 = AtomicI64::new(0);
+
+#[wasm_bindgen]
+pub fn configure_cleanup(interval_seconds: i64) {
+    if interval_seconds > 0 {
+        log(&format!(
+            "Configuring cleanup with interval of {} seconds",
+            interval_seconds
+        ));
+        CLEANUP_INTERVAL.store(interval_seconds, Ordering::SeqCst);
+        LAST_CLEANUP.store(js_sys::Date::now() as i64 / 1000, Ordering::SeqCst);
+    } else {
+        log("Disabling automatic cleanup");
+        CLEANUP_INTERVAL.store(0, Ordering::SeqCst);
+    }
+}
+
+#[wasm_bindgen]
+pub async fn force_cleanup_vault(vault_name: &str) -> Result<(), JsValue> {
+    let _lock = acquire_vault_lock(vault_name).await?; // Acquire lock before cleanup
+    let (file_handle, mut vault) = read_vault_with_name(vault_name).await?;
+    cleanup_expired_data(&mut vault, &file_handle).await?;
+    Ok(())
 }

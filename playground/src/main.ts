@@ -301,6 +301,42 @@ removeVaultButton.onclick = async () => {
 };
 document.body.appendChild(removeVaultButton);
 
+const expirationTestButton = document.createElement('button');
+expirationTestButton.textContent = 'Test Data Expiration';
+expirationTestButton.onclick = async () => {
+  const statusDiv = document.createElement('div');
+  statusDiv.style.marginTop = '10px';
+  document.body.appendChild(statusDiv);
+
+  try {
+    const testData = { message: "This data will expire soon!" };
+    await vault.upsertVaultWithName("expiration_test", PASSWORD, "test_namespace", testData, 5n);
+    console.log("Created data with 5 second expiration");
+    
+    const initialData = await vault.readFromVaultWithName("expiration_test", PASSWORD, "test_namespace");
+    statusDiv.textContent = "Initial read successful: " + JSON.stringify(Object.fromEntries(initialData));
+    
+    // Try reading every second for 10 seconds
+    for (let i = 0; i < 10; i++) {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      try {
+        const data = await vault.readFromVaultWithName("expiration_test", PASSWORD, "test_namespace");
+        statusDiv.textContent = `${i + 1}s: Data still accessible: ${JSON.stringify(Object.fromEntries(data))}`;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        statusDiv.textContent = `${i + 1}s: Data expired: ${errorMessage}`;
+        console.log('Data expired:', errorMessage);
+        break;
+      }
+    }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error('Expiration test failed:', errorMessage);
+    statusDiv.textContent = `Test failed: ${errorMessage}`;
+  }
+};
+document.body.appendChild(expirationTestButton);
+
 const counterDiv = document.createElement('div');
 counterDiv.textContent = '0';
 counterDiv.style.position = 'absolute';

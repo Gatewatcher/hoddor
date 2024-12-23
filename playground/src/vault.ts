@@ -13,7 +13,7 @@ export class VaultWorker {
       const handler = (message: MessageEvent) => {
         this.worker.removeEventListener('message', handler)
         if (message.data.type === 'error') {
-          reject(new Error(JSON.stringify(message)))
+          reject(new Error(message.data.error));
         } else {
           resolve(message.data.result)
         }
@@ -56,8 +56,8 @@ export class VaultWorker {
     return this.send('read_from_vault_with_name', { vaultName, password, namespace })
   }
 
-  async upsertVaultWithName(vaultName: string, password: string, namespace: string, data: any): Promise<void> {
-    await this.send('upsert_vault_with_name', { vaultName, password, namespace, data })
+  async upsertVaultWithName(vaultName: string, password: string, namespace: string, data: any, expiration?: any): Promise<void> {
+    await this.send('upsert_vault_with_name', { vaultName, password, namespace, data, expiration })
   }
 
   async removeVaultWithName(vaultName: string, password: string, namespace: string): Promise<void> {
@@ -79,5 +79,9 @@ export class VaultWorker {
 
   async importVault(password: string, data: Uint8Array): Promise<void> {
     await this.send('import_vault', { password, data });
+  }
+
+  async configureCleanup(intervalSeconds: number): Promise<void> {
+    await this.send('configure_cleanup', { intervalSeconds });
   }
 }
