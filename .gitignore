@@ -1,6 +1,8 @@
-/target
 **/*.rs.bk
 Cargo.lock
 bin/
 pkg/
 wasm-pack.log
+node_modules/
+target
+.DS_Store

@@ -1,0 +1,20 @@
+{
+  "name": "playground-hoddor",
+  "private": false,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "RUSTFLAGS='--cfg=web_sys_unstable_apis' concurrently \"cd ../hoddor && watchexec -w src -- wasm-pack build --target web\" \"vite\"",
+    "build": "RUSTFLAGS='--cfg=web_sys_unstable_apis' tsc && vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "concurrently": "9.1.0",
+    "typescript": "5.6.2",
+    "vite": "5.4.10"
+  },
+  "dependencies": {
+    "vite-plugin-wasm": "3.3.0",
+    "vite-plugin-wasm-pack": "0.1.12"
+  }
+}
