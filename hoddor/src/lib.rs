@@ -24,7 +24,6 @@ use argon2::{
 };
 
 use rand::RngCore;
-use serde_json;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 struct EncryptedNamespace {
@@ -176,8 +175,10 @@ pub fn hash_password(password: JsValue) -> Result<JsValue, JsValue> {
         .map_err(|e| JsValue::from_str(&format!("Failed to hash password: {:?}", e)))?
         .to_string();
 
-    Ok(to_value(&password_hash)
-        .map_err(|e| JsValue::from_str(&format!("Failed to serialize hash: {:?}", e)))?)
+    let result = to_value(&password_hash)
+        .map_err(|e| JsValue::from_str(&format!("Failed to serialize hash: {:?}", e)))?;
+
+    Ok(result)
 }
 
 fn validate_namespace(namespace: &str) -> Result<(), VaultError> {
@@ -307,7 +308,7 @@ pub async fn remove_from_vault_with_name(
         });
     }
 
-    if !vault.namespaces.remove(&namespace).is_some() {
+    if vault.namespaces.remove(&namespace).is_none() {
         return Err(VaultError::NamespaceNotFound.into());
     }
 
@@ -331,7 +332,7 @@ pub async fn read_from_vault_with_name(
     let namespace_str: String = from_value(namespace.clone())?;
     validate_namespace(&namespace_str)?;
     let namespace_str = namespace.as_string().unwrap_or_default();
-    if let Some(_) = get_performance() {
+    if get_performance().is_some() {
         time(&format!("read_from_vault {} {}", vault_name, namespace_str));
     }
 
@@ -392,7 +393,7 @@ pub async fn read_from_vault_with_name(
         })
     });
 
-    if let Some(_) = get_performance() {
+    if get_performance().is_some() {
         timeEnd(&format!("read_from_vault {} {}", vault_name, namespace_str));
     }
 
@@ -487,7 +488,7 @@ async fn read_vault_with_name(
     vault_name: &str,
 ) -> Result<(FileSystemFileHandle, Vault), VaultError> {
     // Removed lock here since this is a read operation
-    let result = time_it!("Total read_vault", {
+    time_it!("Total read_vault", {
         let root = time_it!("Getting root directory", {
             get_root_directory_handle().await?
         });
@@ -551,9 +552,7 @@ async fn read_vault_with_name(
         });
 
         Ok((file_handle, vault))
-    });
-
-    result
+    })
 }
 
 async fn save_vault(file_handle: &FileSystemFileHandle, vault: &Vault) -> Result<(), VaultError> {
@@ -609,7 +608,7 @@ async fn save_vault(file_handle: &FileSystemFileHandle, vault: &Vault) -> Result
         Ok(())
     });
 
-    if let Some(_) = get_performance() {
+    if get_performance().is_some() {
         timeEnd("save_vault");
     }
 
@@ -691,9 +690,8 @@ pub async fn list_vaults() -> Result<JsValue, JsValue> {
             break;
         }
 
-        if let Some(value) = js_sys::Reflect::get(&next_result, &JsValue::from_str("value"))?
+        if let Ok(value) = js_sys::Reflect::get(&next_result, &JsValue::from_str("value"))?
             .dyn_into::<js_sys::Array>()
-            .ok()
         {
             if let Some(name) = value.get(0).as_string() {
                 if name.starts_with("vault_") && name.ends_with(".dat") {
