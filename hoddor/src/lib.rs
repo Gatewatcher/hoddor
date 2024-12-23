@@ -800,7 +800,6 @@ pub async fn export_vault_with_name(
         Err(e) => return Err(e.into()),
     };
 
-    // Verify the password
     if let Some((_, first_encrypted)) = vault.namespaces.iter().next() {
         let key_bytes = derive_key(password.as_bytes(), &vault.salt)?;
         let cipher_key = Key::from_slice(&key_bytes);
@@ -814,26 +813,33 @@ pub async fn export_vault_with_name(
             .map_err(|_| VaultError::InvalidPassword)?;
     }
 
-    // Serialize to binary format
-    let mut vault_bytes = Vec::new();
-    let magic = b"VAULT10"; // Magic number + version
-    vault_bytes.extend_from_slice(magic);
-
-    let serialized = serde_json::to_vec(&vault).map_err(|_| VaultError::SerializationError {
-        message: "Failed to serialize vault for export",
+    // Create binary format with magic number "VAULT1"
+    let magic = b"VAULT1";
+    let serialized = serde_json::to_vec(&vault).map_err(|e| {
+        log(&format!("Serialization error: {:?}", e));
+        VaultError::SerializationError {
+            message: "Failed to serialize vault for export",
+        }
     })?;
 
-    let length = serialized.len() as u32;
-    vault_bytes.extend_from_slice(&length.to_be_bytes());
+    let total_size = magic.len() + 4 + serialized.len();
+    let mut vault_bytes = Vec::with_capacity(total_size);
 
+    vault_bytes.extend_from_slice(magic);
+    vault_bytes.extend_from_slice(&(serialized.len() as u32).to_be_bytes());
     vault_bytes.extend_from_slice(&serialized);
 
-    Ok(to_value(&vault_bytes)?)
-}
+    log(&format!(
+        "Exporting vault data: {} bytes (magic: {}, length: 4, content: {})",
+        vault_bytes.len(),
+        magic.len(),
+        serialized.len()
+    ));
 
-#[wasm_bindgen]
-pub async fn import_vault(password: JsValue, data: JsValue) -> Result<(), JsValue> {
-    import_vault_with_name("default", password, data).await
+    let array = js_sys::Uint8Array::new_with_length(vault_bytes.len() as u32);
+    array.copy_from(&vault_bytes);
+
+    Ok(array.into())
 }
 
 #[wasm_bindgen]
@@ -844,13 +850,25 @@ pub async fn import_vault_with_name(
 ) -> Result<(), JsValue> {
     let password: String = from_value(password)?;
 
-    let vault_bytes: Vec<u8> = from_value(data)
-        .map_err(|e| JsValue::from_str(&format!("Failed to convert input data: {:?}", e)))?;
+    let vault_bytes = if data.is_instance_of::<js_sys::Uint8Array>() {
+        let array = js_sys::Uint8Array::from(data);
+        array.to_vec()
+    } else {
+        from_value(data)
+            .map_err(|e| JsValue::from_str(&format!("Failed to convert input data: {:?}", e)))?
+    };
 
     log(&format!(
         "Attempting to import vault data of size: {} bytes",
         vault_bytes.len()
     ));
+
+    if vault_bytes.len() < 10 || &vault_bytes[..6] != b"VAULT1" {
+        return Err(VaultError::SerializationError {
+            message: "Invalid vault file: missing or incorrect magic number",
+        }
+        .into());
+    }
 
     let length = u32::from_be_bytes([
         vault_bytes[6],
@@ -859,16 +877,15 @@ pub async fn import_vault_with_name(
         vault_bytes[9],
     ]) as usize;
 
-    if vault_bytes.len() < length + 10 {
+    if vault_bytes.len() != length + 10 {
         return Err(VaultError::SerializationError {
-            message: "Invalid vault file: truncated data",
+            message: "Invalid vault file: content length mismatch",
         }
         .into());
     }
 
-    let content = &vault_bytes[10..];
-    let imported_vault: Vault = serde_json::from_slice(content).map_err(|e| {
-        log(&format!("Binary deserialization error: {:?}", e));
+    let imported_vault: Vault = serde_json::from_slice(&vault_bytes[10..]).map_err(|e| {
+        log(&format!("Deserialization error: {:?}", e));
         VaultError::SerializationError {
             message: "Failed to deserialize vault data",
         }
@@ -891,4 +908,9 @@ pub async fn import_vault_with_name(
     save_vault(&file_handle, &imported_vault).await?;
 
     Ok(())
+}
+
+#[wasm_bindgen]
+pub async fn import_vault(password: JsValue, data: JsValue) -> Result<(), JsValue> {
+    import_vault_with_name("default", password, data).await
 }
