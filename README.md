@@ -32,6 +32,7 @@ A secure browser-based vault implementation using WebAssembly (Rust) that provid
 
 - Rust and Cargo
 - wasm-pack
+- watchexec
 - Node.js and npm
 - A modern web browser with File System Access API support
 
@@ -50,7 +51,12 @@ cd playground
 npm install
 ```
 
-3. Start the development server:
+3. Install Rust dependencies:
+```bash
+cargo install wasm-pack watchexec
+```
+
+4. Start the playground server:
 ```bash
 cd playground
 npm run dev
