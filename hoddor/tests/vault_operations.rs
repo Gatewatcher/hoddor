@@ -1,10 +1,10 @@
 #![cfg(target_arch = "wasm32")]
 
 extern crate wasm_bindgen_test;
-use wasm_bindgen_test::*;
 use hoddor::*;
-use wasm_bindgen::JsValue;
 use serde_wasm_bindgen::from_value;
+use wasm_bindgen::JsValue;
+use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_browser);
 
@@ -26,18 +26,28 @@ async fn test_vault_crud_operations() {
     let namespace: JsValue = "test_namespace".into();
     let data: JsValue = "test_data".into();
 
-    create_vault(password.clone(), namespace.clone(), data.clone()).await.expect("Failed to create vault");
+    create_vault(password.clone(), namespace.clone(), data.clone())
+        .await
+        .expect("Failed to create vault");
 
-    let read_data = read_from_vault(password.clone(), namespace.clone()).await.expect("Failed to read from vault");
+    let read_data = read_from_vault(password.clone(), namespace.clone())
+        .await
+        .expect("Failed to read from vault");
     assert_eq!(read_data.as_string().unwrap(), "test_data");
 
     let updated_data: JsValue = "updated_test_data".into();
-    upsert_vault(password.clone(), namespace.clone(), updated_data.clone()).await.expect("Failed to update vault");
+    upsert_vault(password.clone(), namespace.clone(), updated_data.clone())
+        .await
+        .expect("Failed to update vault");
 
-    let read_updated_data = read_from_vault(password.clone(), namespace.clone()).await.expect("Failed to read updated data");
+    let read_updated_data = read_from_vault(password.clone(), namespace.clone())
+        .await
+        .expect("Failed to read updated data");
     assert_eq!(read_updated_data.as_string().unwrap(), "updated_test_data");
 
-    remove_from_vault(password.clone(), namespace.clone()).await.expect("Failed to remove from vault");
+    remove_from_vault(password.clone(), namespace.clone())
+        .await
+        .expect("Failed to remove from vault");
 
     let result = read_from_vault(password, namespace).await;
     assert!(result.is_err(), "Vault should be removed");
@@ -55,14 +65,22 @@ async fn test_list_namespaces() {
     for ns in &namespaces {
         let ns_value: JsValue = (*ns).into();
         let data: JsValue = "test_data".into();
-        create_vault(password.clone(), ns_value, data).await.expect("Failed to create vault");
+        create_vault(password.clone(), ns_value, data)
+            .await
+            .expect("Failed to create vault");
     }
 
-    let listed = list_namespaces(password.clone()).await.expect("Failed to list namespaces");
+    let listed = list_namespaces(password.clone())
+        .await
+        .expect("Failed to list namespaces");
     let listed_namespaces: Vec<String> = from_value(listed).expect("Failed to convert namespaces");
-    
+
     for ns in &namespaces {
-        assert!(listed_namespaces.contains(&ns.to_string()), "Missing namespace: {}", ns);
+        assert!(
+            listed_namespaces.contains(&ns.to_string()),
+            "Missing namespace: {}",
+            ns
+        );
     }
 
     cleanup_all_vaults().await;
@@ -75,12 +93,16 @@ async fn test_invalid_password() {
     let namespace: JsValue = "test_namespace".into();
     let data: JsValue = "test_data".into();
 
-    create_vault(password.clone(), namespace.clone(), data).await.expect("Failed to create vault");
+    create_vault(password.clone(), namespace.clone(), data)
+        .await
+        .expect("Failed to create vault");
 
     let result = read_from_vault(wrong_password, namespace.clone()).await;
     assert!(result.is_err(), "Should fail with wrong password");
 
-    remove_from_vault(password, namespace).await.expect("Failed to cleanup vault");
+    remove_from_vault(password, namespace)
+        .await
+        .expect("Failed to cleanup vault");
 }
 
 #[wasm_bindgen_test]
@@ -98,7 +120,7 @@ async fn test_list_vaults() {
         let password: JsValue = (*password).into();
         let namespace: JsValue = (*ns).into();
         let data: JsValue = (*data).into();
-        
+
         create_vault_with_name(vault_name, password, namespace, data)
             .await
             .expect("Failed to create test vault");
@@ -106,8 +128,9 @@ async fn test_list_vaults() {
 
     let listed = list_vaults().await.expect("Failed to list vaults");
     let listed_vaults: Vec<String> = from_value(listed).expect("Failed to convert vault list");
-    
-    let expected_names: Vec<String> = vault_configs.iter()
+
+    let expected_names: Vec<String> = vault_configs
+        .iter()
         .map(|(name, _, _, _)| name.to_string())
         .collect();
 
@@ -126,7 +149,7 @@ async fn test_invalid_vault_name() {
     let namespace: JsValue = "test_namespace".into();
     let data: JsValue = "test_data".into();
     let invalid_names = vec![
-        "", 
+        "",
         " ",
         "\t",
         "\n",
@@ -139,13 +162,19 @@ async fn test_invalid_vault_name() {
 
     for name in invalid_names {
         let invalid_name: JsValue = name.into();
-        let result = create_vault_with_name(invalid_name.clone(), password.clone(), namespace.clone(), data.clone()).await;
+        let result = create_vault_with_name(
+            invalid_name.clone(),
+            password.clone(),
+            namespace.clone(),
+            data.clone(),
+        )
+        .await;
         assert!(
             result.is_err(),
             "Should fail with invalid vault name: '{}', but succeeded",
             name
         );
-        
+
         if let Ok(_) = result {
             let _ = remove_vault_with_name(name).await;
         }
@@ -162,19 +191,34 @@ async fn test_duplicate_vault_creation() {
     let data1: JsValue = "test_data1".into();
     let data2: JsValue = "test_data2".into();
 
-    create_vault_with_name(vault_name.clone(), password.clone(), namespace.clone(), data1)
-        .await
-        .expect("Failed to create first vault");
+    create_vault_with_name(
+        vault_name.clone(),
+        password.clone(),
+        namespace.clone(),
+        data1,
+    )
+    .await
+    .expect("Failed to create first vault");
 
-    create_vault_with_name(vault_name.clone(), password.clone(), namespace.clone(), data2)
-        .await
-        .expect("Failed to create second vault");
+    create_vault_with_name(
+        vault_name.clone(),
+        password.clone(),
+        namespace.clone(),
+        data2,
+    )
+    .await
+    .expect("Failed to create second vault");
 
-    let read_data = read_from_vault_with_name("duplicate_test", password.clone(), namespace.clone())
-        .await
-        .expect("Failed to read vault");
-    
-    assert_eq!(read_data.as_string().unwrap(), "test_data2", "Data should be overwritten");
+    let read_data =
+        read_from_vault_with_name("duplicate_test", password.clone(), namespace.clone())
+            .await
+            .expect("Failed to read vault");
+
+    assert_eq!(
+        read_data.as_string().unwrap(),
+        "test_data2",
+        "Data should be overwritten"
+    );
 
     remove_vault_with_name("duplicate_test")
         .await
@@ -212,16 +256,14 @@ async fn test_concurrent_vault_operations() {
 
     let mut create_futures = Vec::new();
     for i in 0..3 {
-        let future = create_vault(
-            passwords[i].clone(),
-            namespaces[i].clone(),
-            data[i].clone(),
-        );
+        let future = create_vault(passwords[i].clone(), namespaces[i].clone(), data[i].clone());
         create_futures.push(future);
     }
 
     for future in create_futures {
-        future.await.expect("Failed to create vault in concurrent operation");
+        future
+            .await
+            .expect("Failed to create vault in concurrent operation");
     }
 
     cleanup_all_vaults().await;
@@ -249,9 +291,13 @@ async fn test_empty_data() {
     let namespace: JsValue = "test_namespace".into();
     let data: JsValue = "".into();
 
-    create_vault(password.clone(), namespace.clone(), data.clone()).await.expect("Failed to create vault with empty data");
+    create_vault(password.clone(), namespace.clone(), data.clone())
+        .await
+        .expect("Failed to create vault with empty data");
 
-    let read_data = read_from_vault(password.clone(), namespace.clone()).await.expect("Failed to read from vault with empty data");
+    let read_data = read_from_vault(password.clone(), namespace.clone())
+        .await
+        .expect("Failed to read from vault with empty data");
     assert_eq!(read_data.as_string().unwrap(), "");
 
     cleanup_all_vaults().await;
@@ -274,13 +320,19 @@ async fn test_special_characters_in_vault_name() {
 
     for name in invalid_names {
         let invalid_name: JsValue = name.into();
-        let result = create_vault_with_name(invalid_name.clone(), password.clone(), namespace.clone(), data.clone()).await;
+        let result = create_vault_with_name(
+            invalid_name.clone(),
+            password.clone(),
+            namespace.clone(),
+            data.clone(),
+        )
+        .await;
         assert!(
             result.is_err(),
             "Should fail with invalid vault name: '{}', but succeeded",
             name
         );
-        
+
         if let Ok(_) = result {
             let _ = remove_vault_with_name(name).await;
         }
@@ -310,7 +362,9 @@ async fn test_concurrent_vault_creation() {
     }
 
     for future in create_futures {
-        future.await.expect("Failed to create vault in concurrent operation");
+        future
+            .await
+            .expect("Failed to create vault in concurrent operation");
     }
 
     cleanup_all_vaults().await;
@@ -324,7 +378,10 @@ async fn test_read_non_existent_namespace() {
     let namespace: JsValue = "non_existent_namespace".into();
 
     let result = read_from_vault(password, namespace).await;
-    assert!(result.is_err(), "Reading from a non-existent namespace should fail");
+    assert!(
+        result.is_err(),
+        "Reading from a non-existent namespace should fail"
+    );
 
     cleanup_all_vaults().await;
 }
@@ -337,14 +394,23 @@ async fn test_list_namespaces_in_empty_vault() {
     let namespace: JsValue = "initial_namespace".into();
     let data: JsValue = "initial_data".into();
 
-    create_vault(password.clone(), namespace.clone(), data.clone()).await.expect("Failed to create initial vault");
+    create_vault(password.clone(), namespace.clone(), data.clone())
+        .await
+        .expect("Failed to create initial vault");
 
-    remove_from_vault(password.clone(), namespace.clone()).await.expect("Failed to remove initial namespace");
+    remove_from_vault(password.clone(), namespace.clone())
+        .await
+        .expect("Failed to remove initial namespace");
 
-    let listed = list_namespaces(password).await.expect("Failed to list namespaces");
+    let listed = list_namespaces(password)
+        .await
+        .expect("Failed to list namespaces");
     let listed_namespaces: Vec<String> = from_value(listed).expect("Failed to convert namespaces");
 
-    assert!(listed_namespaces.is_empty(), "Namespaces list should be empty");
+    assert!(
+        listed_namespaces.is_empty(),
+        "Namespaces list should be empty"
+    );
 
     cleanup_all_vaults().await;
 }
@@ -357,9 +423,13 @@ async fn test_large_data_payload() {
     let namespace: JsValue = "test_namespace".into();
     let large_data: JsValue = "a".repeat(10_000_000).into(); // 10 MB of data
 
-    create_vault(password.clone(), namespace.clone(), large_data.clone()).await.expect("Failed to create vault with large data");
+    create_vault(password.clone(), namespace.clone(), large_data.clone())
+        .await
+        .expect("Failed to create vault with large data");
 
-    let read_data = read_from_vault(password.clone(), namespace.clone()).await.expect("Failed to read from vault with large data");
+    let read_data = read_from_vault(password.clone(), namespace.clone())
+        .await
+        .expect("Failed to read from vault with large data");
     assert_eq!(read_data.as_string().unwrap(), "a".repeat(10_000_000));
 
     cleanup_all_vaults().await;
@@ -373,7 +443,9 @@ async fn test_concurrent_read_operations() {
     let namespace: JsValue = "test_namespace".into();
     let data: JsValue = "test_data".into();
 
-    create_vault(password.clone(), namespace.clone(), data.clone()).await.expect("Failed to create vault");
+    create_vault(password.clone(), namespace.clone(), data.clone())
+        .await
+        .expect("Failed to create vault");
 
     let mut read_futures = Vec::new();
     for _ in 0..3 {
@@ -382,7 +454,9 @@ async fn test_concurrent_read_operations() {
     }
 
     for future in read_futures {
-        let read_data = future.await.expect("Failed to read from vault concurrently");
+        let read_data = future
+            .await
+            .expect("Failed to read from vault concurrently");
         assert_eq!(read_data.as_string().unwrap(), "test_data");
     }
 
