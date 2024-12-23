@@ -54,6 +54,9 @@ enum VaultError {
     SerializationError { message: &'static str },
     JsError(String),
     DataExpired,
+    NamespaceAlreadyExists,
+    VaultAlreadyExists,
+    VaultNotFound,
 }
 
 impl fmt::Display for VaultError {
@@ -67,6 +70,9 @@ impl fmt::Display for VaultError {
             }
             VaultError::JsError(msg) => write!(f, "JavaScript Error: {}", msg),
             VaultError::DataExpired => write!(f, "Data has expired"),
+            VaultError::NamespaceAlreadyExists => write!(f, "Namespace already exists"),
+            VaultError::VaultAlreadyExists => write!(f, "Vault already exists"),
+            VaultError::VaultNotFound => write!(f, "Vault not found"),
         }
     }
 }
@@ -202,113 +208,51 @@ fn validate_namespace(namespace: &str) -> Result<(), VaultError> {
 }
 
 #[wasm_bindgen]
-pub async fn create_vault(
-    password: JsValue,
-    namespace: JsValue,
-    data: JsValue,
-) -> Result<(), JsValue> {
-    let namespace_str: String = from_value(namespace.clone())?;
-    validate_namespace(&namespace_str)?;
-    create_vault_with_name(JsValue::from_str("default"), password, namespace, data).await
-}
-
-#[wasm_bindgen]
 pub async fn upsert_vault(
-    password: JsValue,
-    namespace: JsValue,
-    data: JsValue,
-) -> Result<(), JsValue> {
-    let namespace_str: String = from_value(namespace.clone())?;
-    validate_namespace(&namespace_str)?;
-    upsert_vault_with_name("default", password, namespace, data, None).await
-}
-
-#[wasm_bindgen]
-pub async fn upsert_vault_with_name(
     vault_name: &str,
     password: JsValue,
     namespace: JsValue,
     data: JsValue,
     expires_in_seconds: Option<i64>,
+    replace_if_exists: bool,
 ) -> Result<(), JsValue> {
     let namespace_str: String = from_value(namespace.clone())?;
-    validate_namespace(&namespace_str)?;
-    let password: String = from_value(password)?;
-    let namespace: String = from_value(namespace)?;
+    let password_str: String = from_value(password.clone())?;
 
-    let data_json = from_value::<serde_json::Value>(data)?;
-    let data_bytes = serde_json::to_vec(&data_json)
-        .map_err(|e| JsValue::from_str(&format!("Failed to serialize data: {:?}", e)))?;
+    check_password(vault_name, &password_str).await?;
+    validate_namespace(&namespace_str)?;
 
     let (file_handle, mut vault) = match read_vault_with_name(vault_name).await {
         Ok((handle, existing_vault)) => {
-            log("Vault file found. Will add/update the existing vault...");
+            if existing_vault.namespaces.contains_key(&namespace_str) {
+                if !replace_if_exists {
+                    return Err(VaultError::NamespaceAlreadyExists.into());
+                }
+            }
             (handle, existing_vault)
         }
-        Err(VaultError::IoError { .. }) => {
-            log("No existing vault found. Creating a new vault...");
-            let mut salt = [0u8; 32];
-            OsRng.fill_bytes(&mut salt);
 
-            let vault = Vault {
-                namespaces: HashMap::new(),
-                salt,
-            };
-            let file_handle = get_or_create_file_handle_with_name(vault_name).await?;
-            (file_handle, vault)
+        Err(VaultError::IoError { .. }) => {
+            return Err(VaultError::VaultNotFound.into());
         }
+
         Err(e) => return Err(e.into()),
     };
 
-    let mut nonce_bytes = [0u8; 12];
-    OsRng.fill_bytes(&mut nonce_bytes);
-
-    let key_bytes = derive_key(password.as_bytes(), &vault.salt)?;
-    let cipher_key = Key::from_slice(&key_bytes);
-    let cipher = ChaCha20Poly1305::new(cipher_key);
-    let nonce = Nonce::from_slice(&nonce_bytes);
-
-    let encrypted_data = cipher
-        .encrypt(nonce, data_bytes.as_ref())
-        .map_err(|e| JsValue::from_str(&format!("Encryption failed: {:?}", e)))?;
-
-    let expiration = expires_in_seconds.map(|seconds| {
-        let now = js_sys::Date::now() as i64 / 1000;
-        Expiration {
-            expires_at: now + seconds,
-        }
-    });
-
-    if let Some(exp) = &expiration {
-        log(&format!(
-            "Setting expiration for namespace '{}' to timestamp {}",
-            namespace, exp.expires_at
-        ));
+    if replace_if_exists {
+        vault.namespaces.remove(&namespace_str); // Remove existing data
     }
 
-    vault.namespaces.insert(
-        namespace,
-        EncryptedNamespace {
-            data: encrypted_data,
-            nonce: nonce_bytes,
-            expiration,
-        },
-    );
-
+    insert_namespace_data(&mut vault, password, namespace, data, expires_in_seconds).await?;
+    
     save_vault(&file_handle, vault).await?;
 
     Ok(())
 }
 
-#[wasm_bindgen]
-pub async fn remove_from_vault(password: JsValue, namespace: JsValue) -> Result<(), JsValue> {
-    let namespace_str: String = from_value(namespace.clone())?;
-    validate_namespace(&namespace_str)?;
-    remove_from_vault_with_name("default", password, namespace).await
-}
 
 #[wasm_bindgen]
-pub async fn remove_from_vault_with_name(
+pub async fn remove_from_vault(
     vault_name: &str,
     password: JsValue,
     namespace: JsValue,
@@ -317,21 +261,10 @@ pub async fn remove_from_vault_with_name(
     validate_namespace(&namespace_str)?;
     let password: String = from_value(password)?;
     let namespace: String = from_value(namespace)?;
+    
+    check_password(&vault_name, &password).await?;
 
     let (file_handle, mut vault) = read_vault_with_name(vault_name).await?;
-
-    let key_bytes = derive_key(password.as_bytes(), &vault.salt)?;
-    let cipher_key = Key::from_slice(&key_bytes);
-    let cipher = ChaCha20Poly1305::new(cipher_key);
-
-    if let Some((_, sample_enc)) = vault.namespaces.iter().next() {
-        let nonce = Nonce::from_slice(&sample_enc.nonce);
-        time_it!("Password verification decryption", {
-            cipher
-                .decrypt(nonce, sample_enc.data.as_ref())
-                .map_err(|_| VaultError::InvalidPassword)?
-        });
-    }
 
     if vault.namespaces.remove(&namespace).is_none() {
         return Err(VaultError::NamespaceNotFound.into());
@@ -342,14 +275,7 @@ pub async fn remove_from_vault_with_name(
 }
 
 #[wasm_bindgen]
-pub async fn read_from_vault(password: JsValue, namespace: JsValue) -> Result<JsValue, JsValue> {
-    let namespace_str: String = from_value(namespace.clone())?;
-    validate_namespace(&namespace_str)?;
-    read_from_vault_with_name("default", password, namespace).await
-}
-
-#[wasm_bindgen]
-pub async fn read_from_vault_with_name(
+pub async fn read_from_vault(
     vault_name: &str,
     password: JsValue,
     namespace: JsValue,
@@ -435,12 +361,7 @@ pub async fn read_from_vault_with_name(
 }
 
 #[wasm_bindgen]
-pub async fn list_namespaces(password: JsValue) -> Result<JsValue, JsValue> {
-    list_namespaces_with_name("default", password).await
-}
-
-#[wasm_bindgen]
-pub async fn list_namespaces_with_name(
+pub async fn list_namespaces(
     vault_name: &str,
     password: JsValue,
 ) -> Result<JsValue, JsValue> {
@@ -462,20 +383,7 @@ pub async fn list_namespaces_with_name(
         log(&format!("Namespace found: {}", key));
     }
 
-    let key_bytes = derive_key(password.as_bytes(), &vault.salt)?;
-    let cipher_key = Key::from_slice(&key_bytes);
-    let cipher = ChaCha20Poly1305::new(cipher_key);
-
-    if let Some((_, first_encrypted)) = vault.namespaces.iter().next() {
-        time_it!("Password verification decryption", {
-            cipher
-                .decrypt(
-                    Nonce::from_slice(&first_encrypted.nonce),
-                    first_encrypted.data.as_ref(),
-                )
-                .map_err(|_| VaultError::InvalidPassword)?
-        });
-    }
+    check_password(&vault_name, &password).await?;
 
     let namespaces: Vec<String> = vault.namespaces.keys().cloned().collect();
 
@@ -484,12 +392,10 @@ pub async fn list_namespaces_with_name(
 }
 
 #[wasm_bindgen]
-pub async fn remove_vault() -> Result<(), JsValue> {
-    remove_vault_with_name("default").await
-}
+pub async fn remove_vault(vault_name: &str, password: JsValue) -> Result<(), JsValue> {
+    let password: String = from_value(password)?;
+    check_password(vault_name, &password).await?;
 
-#[wasm_bindgen]
-pub async fn remove_vault_with_name(vault_name: &str) -> Result<(), JsValue> {
     let _lock = acquire_vault_lock(vault_name).await?;
 
     let root = get_root_directory_handle().await?;
@@ -865,31 +771,41 @@ async fn acquire_vault_lock(vault_name: &str) -> Result<Lock, VaultError> {
 }
 
 #[wasm_bindgen]
-pub async fn create_vault_with_name(
+pub async fn create_vault(
     vault_name: JsValue,
     password: JsValue,
     namespace: JsValue,
     data: JsValue,
+    expires_in_seconds: Option<i64>,
 ) -> Result<(), JsValue> {
     let vault_name: String = from_value(vault_name)?;
     validate_vault_name(&vault_name)?;
 
     let _lock = acquire_vault_lock(&vault_name).await?;
-    upsert_vault_with_name(&vault_name, password, namespace, data, None).await
+
+    if let Ok(_) = read_vault_with_name(&vault_name).await {
+        return Err(VaultError::VaultAlreadyExists.into());
+    }
+
+    let namespace_str: String = from_value(namespace.clone())?;
+    validate_namespace(&namespace_str)?;
+
+    let file_handle = get_or_create_file_handle_with_name(&vault_name).await?;
+    let mut salt = [0u8; 32];
+    OsRng.fill_bytes(&mut salt);
+
+    let mut vault = Vault {
+        namespaces: HashMap::new(),
+        salt,
+    };
+
+    insert_namespace_data(&mut vault, password, namespace, data, expires_in_seconds).await?;
+    save_vault(&file_handle, vault).await?;
+
+    Ok(())
 }
 
-#[wasm_bindgen]
-pub async fn export_vault(password: JsValue) -> Result<JsValue, JsValue> {
-    export_vault_with_name("default", password).await
-}
-
-#[wasm_bindgen]
-pub async fn export_vault_with_name(
-    vault_name: &str,
-    password: JsValue,
-) -> Result<JsValue, JsValue> {
-    let password: String = from_value(password)?;
-
+async fn check_password(vault_name: &str, password: &str) -> Result<Vault, VaultError> {
     let (_, vault) = match read_vault_with_name(vault_name).await {
         Ok(result) => result,
         Err(VaultError::IoError { .. }) => {
@@ -913,6 +829,17 @@ pub async fn export_vault_with_name(
             )
             .map_err(|_| VaultError::InvalidPassword)?;
     }
+    Ok(vault)
+}
+
+#[wasm_bindgen]
+pub async fn export_vault(
+    vault_name: &str,
+    password: JsValue,
+) -> Result<JsValue, JsValue> {
+    let password: String = from_value(password)?;
+
+    let vault = check_password(&vault_name, &password).await?;
 
     // Create binary format with magic number "VAULT1"
     let magic = b"VAULT1";
@@ -944,7 +871,7 @@ pub async fn export_vault_with_name(
 }
 
 #[wasm_bindgen]
-pub async fn import_vault_with_name(
+pub async fn import_vault(
     vault_name: &str,
     password: JsValue,
     data: JsValue,
@@ -992,43 +919,12 @@ pub async fn import_vault_with_name(
         }
     })?;
 
-    if let Some((_, first_encrypted)) = imported_vault.namespaces.iter().next() {
-        let key_bytes = derive_key(password.as_bytes(), &imported_vault.salt)?;
-        let cipher_key = Key::from_slice(&key_bytes);
-        let cipher = ChaCha20Poly1305::new(cipher_key);
-
-        cipher
-            .decrypt(
-                Nonce::from_slice(&first_encrypted.nonce),
-                first_encrypted.data.as_ref(),
-            )
-            .map_err(|_| VaultError::InvalidPassword)?;
-    }
+    check_password(&vault_name, &password).await?;
 
     let file_handle = get_or_create_file_handle_with_name(vault_name).await?;
     save_vault(&file_handle, imported_vault).await?;
 
     Ok(())
-}
-
-#[wasm_bindgen]
-pub async fn import_vault(password: JsValue, data: JsValue) -> Result<(), JsValue> {
-    import_vault_with_name("default", password, data).await
-}
-
-#[wasm_bindgen]
-pub async fn create_vault_with_expiration(
-    vault_name: JsValue,
-    password: JsValue,
-    namespace: JsValue,
-    data: JsValue,
-    expires_in_seconds: Option<i64>,
-) -> Result<(), JsValue> {
-    let vault_name: String = from_value(vault_name)?;
-    validate_vault_name(&vault_name)?;
-
-    let _lock = acquire_vault_lock(&vault_name).await?;
-    upsert_vault_with_name(&vault_name, password, namespace, data, expires_in_seconds).await
 }
 
 static CLEANUP_INTERVAL: AtomicI64 = AtomicI64::new(0);
@@ -1054,5 +950,57 @@ pub async fn force_cleanup_vault(vault_name: &str) -> Result<(), JsValue> {
     let _lock = acquire_vault_lock(vault_name).await?; // Acquire lock before cleanup
     let (file_handle, mut vault) = read_vault_with_name(vault_name).await?;
     cleanup_expired_data(&mut vault, &file_handle).await?;
+    Ok(())
+}
+
+async fn insert_namespace_data(
+    vault: &mut Vault,
+    password: JsValue,
+    namespace: JsValue,
+    data: JsValue,
+    expires_in_seconds: Option<i64>,
+) -> Result<(), JsValue> {
+    let password: String = from_value(password)?;
+    let namespace: String = from_value(namespace)?;
+
+    let data_json = from_value::<serde_json::Value>(data)?;
+    let data_bytes = serde_json::to_vec(&data_json)
+        .map_err(|e| JsValue::from_str(&format!("Failed to serialize data: {:?}", e)))?;
+
+    let mut nonce_bytes = [0u8; 12];
+    OsRng.fill_bytes(&mut nonce_bytes);
+
+    let key_bytes = derive_key(password.as_bytes(), &vault.salt)?;
+    let cipher_key = Key::from_slice(&key_bytes);
+    let cipher = ChaCha20Poly1305::new(cipher_key);
+    let nonce = Nonce::from_slice(&nonce_bytes);
+
+    let encrypted_data = cipher
+        .encrypt(nonce, data_bytes.as_ref())
+        .map_err(|e| JsValue::from_str(&format!("Encryption failed: {:?}", e)))?;
+
+    let expiration = expires_in_seconds.map(|seconds| {
+        let now = js_sys::Date::now() as i64 / 1000;
+        Expiration {
+            expires_at: now + seconds,
+        }
+    });
+
+    if let Some(exp) = &expiration {
+        log(&format!(
+            "Setting expiration for namespace '{}' to timestamp {}",
+            namespace, exp.expires_at
+        ));
+    }
+
+    vault.namespaces.insert(
+        namespace,
+        EncryptedNamespace {
+            data: encrypted_data,
+            nonce: nonce_bytes,
+            expiration,
+        },
+    );
+
     Ok(())
 }

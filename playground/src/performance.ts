@@ -52,39 +52,42 @@ export async function runPerformanceTest(iterations: number = 10, dataSizeMb: nu
 
   for (let i = 0; i < iterations; i++) {
     onProgress?.(i);
-    const namespace = `test_${i}`;
+    const namespace = `test_${i}` + Date.now().toString();
 
     blockThread(50);
 
     const createStart = performance.now();
-    await worker.createVault('test123', namespace, largeData);
+    const vaultName = 'default-performance' + Date.now().toString();
+    await worker.createVault(vaultName, 'test123', namespace, largeData);
     results.worker.create += performance.now() - createStart;
 
     const readStart = performance.now();
-    await worker.readFromVault('test123', namespace);
+    await worker.readFromVault(vaultName, 'test123', namespace)
     results.worker.read += performance.now() - readStart;
 
     const updateStart = performance.now();
-    await worker.upsertVault('test123', namespace, { ...largeData, updated: true });
+    await worker.upsertVault(vaultName, 'test123', namespace + Date.now().toString(), { ...largeData, updated: true });
     results.worker.update += performance.now() - updateStart;
   }
 
   for (let i = 0; i < iterations; i++) {
     onProgress?.(i + iterations);
-    const namespace = `direct_${i}`;
+    const namespace = `direct_${i}` + Date.now().toString();
 
     blockThread(50);
 
     const createStart = performance.now();
-    await create_vault('test123', namespace, largeData);
+    const vaultName = 'default-performance' + Date.now().toString();
+
+    await create_vault(vaultName, 'test123', namespace, largeData);
     results.direct.create += performance.now() - createStart;
 
     const readStart = performance.now();
-    await read_from_vault('test123', namespace);
+    await read_from_vault(vaultName, 'test123', namespace);
     results.direct.read += performance.now() - readStart;
 
-    const updateStart = performance.now();
-    await upsert_vault('test123', namespace, { ...largeData, updated: true });
+    const updateStart = performance.now();    
+    await upsert_vault(vaultName, 'test123', namespace + Date.now().toString(), { ...largeData, updated: true }, undefined, false);
     results.direct.update += performance.now() - updateStart;
   }
 

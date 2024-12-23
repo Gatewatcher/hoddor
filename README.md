@@ -1,6 +1,8 @@
 # Hoddor Browser Vault
 
-A secure browser-based vault implementation using WebAssembly (Rust) that provides encrypted storage capabilities with support for multiple data types, including JSON & Binary Data.
+A cutting-edge browser-based vault built with WebAssembly (Rust) that ensures your data remains private and secure by encrypting it directly on the client side. The backend has no access to the decryption keys, offering a truly zero-knowledge implementation for modern web applications.
+
+This solution provides encrypted storage capabilities with robust support for multiple data types, including JSON and binary data, while ensuring that all sensitive operations occur exclusively on the user’s device.
 
 ## Table of Contents
 
@@ -16,17 +18,37 @@ A secure browser-based vault implementation using WebAssembly (Rust) that provid
 - [Maintainers](#maintainers)
 - [Code of Conduct](#code-of-conduct)
 
-## Features
+### Key Features
 
-- 🔒 Secure encryption using ChaCha20Poly1305
-- 🔑 Password-based key derivation using Argon2id
-- 📦 Support for multiple vaults and namespaces
-- 📄 JSON data storage
-- 🎥 Chunked video storage and streaming 
-- 🖼️ Image storage with Base64 encoding
-- 🔄 Import/Export vault functionality
-- 👷 Web Worker support for better performance
-- 🔒 Concurrency protection using Web Locks API
+- 🔒 **End-to-End Encryption**: Data is encrypted using **ChaCha20Poly1305** entirely on the client side. The backend never has access to raw data or decryption keys.
+  
+- 🔑 **Password-Based Key Derivation**: Utilizes **Argon2id** to generate cryptographically secure keys from user-provided passwords.
+
+- 📦 **Multi-Vault and Namespace Support**: Allows segregation of data into multiple vaults for organized and secure data storage.
+
+- 📄 **Flexible Data Formats**: Handles structured data like JSON and arbitrary binary data to meet diverse storage needs.
+
+- ⚡ **Encrypted Browser Cache**: Serves as a high-performance encrypted cache, securely storing temporary data on the client side to optimize application performance without compromising privacy.
+
+- 🔗 **Bridge Between Segmented Appliances**: Enables secure and private data exchange between isolated systems by acting as a zero-knowledge intermediary, keeping data encrypted in transit and at rest.
+
+- 🎥 **Chunked Video Storage & Streaming**: Efficiently stores and streams large video files without sacrificing security.
+
+- 🖼️ **Secure Image Storage**: Uses **Base64 encoding** for convenient storage of image assets within the encrypted vault.
+
+- 🔄 **Import/Export Functionality**: Allows users to securely transfer encrypted data between devices or applications.
+
+- 👷 **Web Worker Integration**: Offloads heavy encryption and decryption tasks to web workers for smooth, non-blocking performance.
+
+- 🔒 **Concurrency Protection**: Ensures safe and consistent data access using the **Web Locks API**.
+
+- ⏳ **Data Expiration**: Configurable automatic data deletion ensures efficient storage management and enhanced privacy.
+
+- 🗂️ **Origin-Scoped Storage**: Leverages the **Origin Private File System (OPFS)** to store encrypted data locally on the user’s device, isolating data by web origin to prevent cross-site leakage.
+
+### Built for Privacy-First Applications
+This solution is ideal for building **zero-knowledge systems** where user privacy is paramount. The backend serves solely as a storage and synchronization medium, with all sensitive encryption and decryption logic confined to the client side. This ensures that sensitive information never leaves the user's control, empowering developers to build **compliant, privacy-focused, and performant web applications.**
+
 
 ## Prerequisites
 

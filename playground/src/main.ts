@@ -28,13 +28,13 @@ async function storeImage(password: string, imageBytes: Uint8Array) {
     console.log('Storing image with length:', numberArray.length);
 
     try {
-      await remove_from_vault(password, namespace).catch(() => { });
+      await remove_from_vault('default', password, namespace).catch(() => { });
     } catch (e) {
       console.warn('Failed to remove old image data:', e);
     }
 
     try {
-      await upsert_vault(password, namespace, numberArray);
+      await upsert_vault('default', password, namespace, numberArray);
     } catch (e) {
       console.error('Error in storeImage:', e);
       throw e;
@@ -49,7 +49,7 @@ async function storeImage(password: string, imageBytes: Uint8Array) {
 async function displayStoredImage(password: string) {
   try {
     const namespace = 'image_storage_v3';
-    const retrievedData = await read_from_vault(password, namespace);
+    const retrievedData = await read_from_vault('default', password, namespace);
 
     const dataArray = Array.isArray(retrievedData) ? retrievedData : Array.from(retrievedData as any);
     const uint8Array = new Uint8Array(dataArray);
@@ -72,7 +72,7 @@ async function displayStoredImage(password: string) {
 }
 
 async function storeVideo(password: string, videoFile: File) {
-  const chunkSize = 1024 * 1024; // 1MB
+  const chunkSize = 1024 * 1024;
   const reader = new FileReader();
   let offset = 0;
 
@@ -92,16 +92,16 @@ async function storeVideo(password: string, videoFile: File) {
       fileName: videoFile.name,
       lastModified: videoFile.lastModified
     });
-    await vault.upsertVault(password, 'test_video_meta', Array.from(new TextEncoder().encode(metadata)));
+    await vault.upsertVault('default', password, 'test_video_meta', Array.from(new TextEncoder().encode(metadata)));
 
     const firstChunk = videoFile.slice(0, chunkSize);
     const firstChunkData = await readChunk(firstChunk);
-    await vault.upsertVault(password, 'test_video_0', Array.from(firstChunkData));
+    await vault.upsertVault('default', password, 'test_video_0', Array.from(firstChunkData));
 
     while (offset < videoFile.size) {
       const chunk = videoFile.slice(offset, offset + chunkSize);
       const chunkData = await readChunk(chunk);
-      await vault.upsertVault(password, `test_video_${offset}`, Array.from(chunkData));
+      await vault.upsertVault('default', password, `test_video_${offset}`, Array.from(chunkData));
       offset += chunkSize;
       const progress = Math.round((offset / videoFile.size) * 100);
       console.log(`Upload progress: ${progress}%`);
@@ -117,7 +117,7 @@ async function storeVideo(password: string, videoFile: File) {
 async function displayStoredVideo(password: string) {
   try {
     // 1) Read metadata
-    const metadataRaw = await read_from_vault(password, 'test_video_meta');
+    const metadataRaw = await read_from_vault('default', password, 'test_video_meta');
     const metadataText = new TextDecoder().decode(new Uint8Array(metadataRaw as number[]));
     const metadata = JSON.parse(metadataText);
 
@@ -127,7 +127,7 @@ async function displayStoredVideo(password: string) {
     // 2) Read chunks
     for (let offset = 0; offset < metadata.size; offset += chunkSize) {
       const chunkNamespace = `test_video_${offset}`;
-      const chunkData = await read_from_vault(password, chunkNamespace);
+      const chunkData = await read_from_vault('default', password, chunkNamespace);
       chunks.push(new Uint8Array(chunkData as number[]));
 
       const progress = Math.round((offset / metadata.size) * 100);
@@ -236,7 +236,7 @@ const exportButton = document.createElement('button');
 exportButton.textContent = 'Export Vault';
 exportButton.onclick = async () => {
   try {
-    const vaultData = await vault.exportVault(PASSWORD);
+    const vaultData = await vault.exportVault('default', PASSWORD);
     const blob = new Blob([vaultData], { type: 'application/octet-stream' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -268,13 +268,13 @@ importInput.onchange = async (e) => {
     const arrayBuffer = await file.arrayBuffer();
     const uint8Array = new Uint8Array(arrayBuffer);
     console.log('Importing vault data of size:', uint8Array.length, 'bytes');
-    
+
     if (uint8Array.length > 6) {
       const header = new TextDecoder().decode(uint8Array.slice(0, 6));
       console.log('Detected format:', header === 'VAULT1' ? 'Binary vault format' : 'Legacy format');
     }
 
-    await vault.importVault(PASSWORD, uint8Array);
+    await vault.importVault('default', PASSWORD, uint8Array);
     alert('Vault imported successfully');
     location.reload();
   } catch (error) {
@@ -292,7 +292,7 @@ const removeVaultButton = document.createElement('button');
 removeVaultButton.textContent = 'Remove Vault';
 removeVaultButton.onclick = async () => {
   try {
-    await remove_vault();
+    await remove_vault('default', PASSWORD);
     alert('Vault removed successfully');
   } catch (error) {
     console.error('Failed to remove vault:', error);
@@ -310,17 +310,17 @@ expirationTestButton.onclick = async () => {
 
   try {
     const testData = { message: "This data will expire soon!" };
-    await vault.upsertVaultWithName("expiration_test", PASSWORD, "test_namespace", testData, 5n);
+    await vault.createVault("expiration_test", PASSWORD, "test_namespace", testData, 5n);
     console.log("Created data with 5 second expiration");
-    
-    const initialData = await vault.readFromVaultWithName("expiration_test", PASSWORD, "test_namespace");
+
+    const initialData = await vault.readFromVault("expiration_test", PASSWORD, "test_namespace");
     statusDiv.textContent = "Initial read successful: " + JSON.stringify(Object.fromEntries(initialData));
-    
+
     // Try reading every second for 10 seconds
     for (let i = 0; i < 10; i++) {
       await new Promise(resolve => setTimeout(resolve, 1000));
       try {
-        const data = await vault.readFromVaultWithName("expiration_test", PASSWORD, "test_namespace");
+        const data = await vault.readFromVault("expiration_test", PASSWORD, "test_namespace");
         statusDiv.textContent = `${i + 1}s: Data still accessible: ${JSON.stringify(Object.fromEntries(data))}`;
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
@@ -368,9 +368,9 @@ async function storeUserData(password: string, userData: UserData) {
     console.log('Storing user data:', userData);
 
     try {
-      await upsert_vault(password, namespace, userData);
+      await upsert_vault('default', password, namespace, userData);
     } catch (e) {
-      await upsert_vault(password, namespace, userData);
+      await upsert_vault('default', password, namespace, userData);
     }
     console.log('User data stored successfully');
   } catch (e) {
@@ -382,7 +382,7 @@ async function storeUserData(password: string, userData: UserData) {
 async function retrieveUserData(password: string): Promise<UserData | null> {
   try {
     const namespace = 'user_data_v1';
-    const retrievedData = await read_from_vault(password, namespace);
+    const retrievedData = await read_from_vault('default', password, namespace);
     console.log('Retrieved user data:', retrievedData);
     return retrievedData as UserData;
   } catch (error) {
@@ -446,15 +446,18 @@ run().catch(console.error);
 
 async function main() {
   try {
-    await vault.createVault(PASSWORD, 'test', { foo: 'bar' });
-
-    await vault.readFromVault(PASSWORD, 'test');
-    const namespaces = await vault.listNamespaces(PASSWORD);
+    await vault.createVault('default', PASSWORD, 'test', { foo: 'bar' });
+    await vault.readFromVault('default', PASSWORD, 'test');
+  } catch (e) {
+    console.log(e);
+  }
+  try {
+    const namespaces = await vault.listNamespaces('default', PASSWORD);
     console.log('Available namespaces:', namespaces);
 
     const vaults = await list_vaults();
     console.log('Available vaults:', vaults);
-    
+
   } catch (error) {
     console.error('Error:', error);
   }

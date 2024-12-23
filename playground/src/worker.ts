@@ -4,10 +4,6 @@ import init, {
   remove_from_vault,
   upsert_vault,
   list_namespaces,
-  create_vault_with_name,
-  read_from_vault_with_name,
-  remove_from_vault_with_name,
-  upsert_vault_with_name,
   list_vaults,
   export_vault,
   import_vault,
@@ -32,47 +28,32 @@ self.onmessage = async (message) => {
     let result
     switch (type) {
       case 'create_vault':
-        await create_vault(payload.password, payload.namespace, payload.data)
+        await create_vault(payload.vaultName, payload.password, payload.namespace, payload.data, payload.expiresInSeconds)
         result = { success: true }
         break
       case 'read_from_vault':        
-        result = await read_from_vault(payload.password, payload.namespace)
+        result = await read_from_vault(payload.vaultName, payload.password, payload.namespace)
         break
       case 'upsert_vault':
-        await upsert_vault(payload.password, payload.namespace, payload.data)
+        await upsert_vault(payload.vaultName, payload.password, payload.namespace, payload.data, payload.expiresInSeconds, payload.replaceIfExists)
         result = { success: true }
         break
       case 'remove_from_vault':
-        await remove_from_vault(payload.password, payload.namespace)
+        await remove_from_vault( payload.vaultName, payload.password, payload.namespace)
         result = { success: true }
         break
       case 'list_namespaces':
-        result = await list_namespaces(payload.password)
-        break
-      case 'create_vault_with_name':
-        await create_vault_with_name(payload.vaultName, payload.password, payload.namespace, payload.data)
-        result = { success: true }
-        break
-      case 'read_from_vault_with_name':        
-        result = await read_from_vault_with_name(payload.vaultName, payload.password, payload.namespace)
-        break
-      case 'upsert_vault_with_name':
-        await upsert_vault_with_name(payload.vaultName, payload.password, payload.namespace, payload.data, payload.expiration)
-        result = { success: true }
-        break
-      case 'remove_vault_with_name':
-        await remove_from_vault_with_name(payload.vaultName, payload.password, payload.namespace)
-        result = { success: true }
+        result = await list_namespaces( payload.vaultName, payload.password)
         break
       case 'list_vaults':
         result = await list_vaults()
         break
       case 'export_vault':
-        result = await export_vault(payload.password)
+        result = await export_vault(payload.vaultName, payload.password)
         break
       case 'import_vault':
         try {
-          await import_vault(payload.password, payload.data)
+          await import_vault(payload.vaultName, payload.password, payload.data)
           result = { success: true }
         } catch (e) {
           console.error('Import error:', e);
