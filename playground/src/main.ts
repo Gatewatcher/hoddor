@@ -414,7 +414,7 @@ async function testUserData() {
 async function run() {
   try {
     await init();
-    set_debug_mode(false);
+    set_debug_mode(true);
 
     const password = PASSWORD;
 

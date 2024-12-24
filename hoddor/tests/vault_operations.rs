@@ -2,12 +2,12 @@
 
 extern crate wasm_bindgen_test;
 use hoddor::*;
-use serde_wasm_bindgen::from_value;
-use wasm_bindgen::JsValue;
-use wasm_bindgen_test::*;
 use lazy_static::lazy_static;
+use serde_wasm_bindgen::from_value;
 use std::collections::HashMap;
 use std::sync::RwLock;
+use wasm_bindgen::JsValue;
+use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_browser);
 
@@ -16,7 +16,10 @@ lazy_static! {
 }
 
 fn store_password(vault_name: &str, password: &str) {
-    VAULT_PASSWORDS.write().unwrap().insert(vault_name.to_string(), password.to_string());
+    VAULT_PASSWORDS
+        .write()
+        .unwrap()
+        .insert(vault_name.to_string(), password.to_string());
 }
 
 fn get_password(vault_name: &str) -> Option<String> {
@@ -46,22 +49,21 @@ async fn cleanup_all_vaults() {
     // assert!(remaining_list.is_empty(), "Some vaults were not cleaned up: {:?}", remaining_list);
 }
 
-
 #[wasm_bindgen_test]
-async fn test_vault_crud_operations() {    
+async fn test_vault_crud_operations() {
     let password: JsValue = "test_password123".into();
     let namespace: JsValue = "test_namespace".into();
     let data: JsValue = "test_data".into();
 
     store_password("default", &password.as_string().unwrap());
     cleanup_all_vaults().await;
-    
+
     create_vault(
         JsValue::from_str("default"),
         password.clone(),
         namespace.clone(),
         data.clone(),
-        None
+        None,
     )
     .await
     .expect("Failed to create vault");
@@ -77,10 +79,13 @@ async fn test_vault_crud_operations() {
         namespace.clone(),
         "updated_test_data".into(),
         None,
-        false
+        false,
     )
     .await;
-    assert!(result.is_err(), "Should not be able to update existing namespace");
+    assert!(
+        result.is_err(),
+        "Should not be able to update existing namespace"
+    );
 
     let new_namespace: JsValue = "test_namespace2".into();
     let updated_data: JsValue = "updated_test_data".into();
@@ -90,7 +95,7 @@ async fn test_vault_crud_operations() {
         new_namespace.clone(),
         updated_data.clone(),
         None,
-        false
+        false,
     )
     .await
     .expect("Failed to create new namespace");
@@ -114,7 +119,7 @@ async fn test_list_namespaces() {
     // Create the initial vault with the first namespace
     let first_ns: JsValue = namespaces[0].into();
     let data: JsValue = "test_data".into();
-    
+
     store_password("default", "test_password123");
     cleanup_all_vaults().await;
 
@@ -123,16 +128,23 @@ async fn test_list_namespaces() {
         password.clone(),
         first_ns,
         data.clone(),
-        None
+        None,
     )
     .await
     .expect("Failed to create initial vault");
 
     for ns in &namespaces[1..] {
         let ns_value: JsValue = (*ns).into();
-        upsert_vault("default", password.clone(), ns_value, data.clone(), None, false)
-            .await
-            .expect("Failed to add namespace to vault");
+        upsert_vault(
+            "default",
+            password.clone(),
+            ns_value,
+            data.clone(),
+            None,
+            false,
+        )
+        .await
+        .expect("Failed to add namespace to vault");
     }
 
     let listed = list_namespaces("default", password.clone())
@@ -167,7 +179,7 @@ async fn test_invalid_password() {
         password.clone(),
         namespace.clone(),
         data,
-        None
+        None,
     )
     .await
     .expect("Failed to create vault");
@@ -196,18 +208,15 @@ async fn test_list_vaults() {
         let namespace: JsValue = (*ns).into();
         let data: JsValue = (*data).into();
 
-        store_password(&vault_name.as_string().unwrap(), &password.as_string().unwrap());
+        store_password(
+            &vault_name.as_string().unwrap(),
+            &password.as_string().unwrap(),
+        );
         cleanup_all_vaults().await;
-        
-        create_vault(
-            vault_name,
-            password,
-            namespace,
-            data,
-            None
-        )
-        .await
-        .expect("Failed to create test vault");
+
+        create_vault(vault_name, password, namespace, data, None)
+            .await
+            .expect("Failed to create test vault");
     }
 
     let listed = list_vaults().await.expect("Failed to list vaults");
@@ -251,7 +260,7 @@ async fn test_invalid_vault_name() {
             password.clone(),
             namespace.clone(),
             data.clone(),
-            None
+            None,
         )
         .await;
         assert!(
@@ -278,14 +287,17 @@ async fn test_duplicate_vault_creation() {
     let data1: JsValue = "test_data1".into();
     let data2: JsValue = "test_data2".into();
 
-    store_password(&vault_name.as_string().unwrap(), &password.as_string().unwrap());
+    store_password(
+        &vault_name.as_string().unwrap(),
+        &password.as_string().unwrap(),
+    );
 
     create_vault(
         vault_name.clone(),
         password.clone(),
         namespace.clone(),
         data1.clone(),
-        None
+        None,
     )
     .await
     .expect("Failed to create first vault");
@@ -295,10 +307,13 @@ async fn test_duplicate_vault_creation() {
         password.clone(),
         namespace.clone(),
         data2.clone(),
-        None
+        None,
     )
     .await;
-    assert!(result.is_err(), "Should not be able to create duplicate vault");
+    assert!(
+        result.is_err(),
+        "Should not be able to create duplicate vault"
+    );
 
     let read_data = read_from_vault("duplicate_test", password.clone(), namespace.clone())
         .await
@@ -330,7 +345,7 @@ async fn test_special_characters_in_namespace() {
         password.clone(),
         namespace.clone(),
         data.clone(),
-        None
+        None,
     )
     .await
     .expect("Failed to create vault with special characters");
@@ -364,7 +379,7 @@ async fn test_concurrent_vault_operations() {
             passwords[i].clone(),
             namespaces[i].clone(),
             data[i].clone(),
-            None
+            None,
         );
         create_futures.push(future);
     }
@@ -391,7 +406,7 @@ async fn test_empty_namespace() {
         password.clone(),
         namespace.clone(),
         data.clone(),
-        None
+        None,
     )
     .await;
     assert!(result.is_err(), "Should fail with empty namespace");
@@ -412,7 +427,7 @@ async fn test_empty_data() {
         password.clone(),
         namespace.clone(),
         data.clone(),
-        None
+        None,
     )
     .await
     .expect("Failed to create vault with empty data");
@@ -447,7 +462,7 @@ async fn test_special_characters_in_vault_name() {
             password.clone(),
             namespace.clone(),
             data.clone(),
-            None
+            None,
         )
         .await;
         assert!(
@@ -479,20 +494,24 @@ async fn test_concurrent_vault_creation() {
             passwords[i].clone(),
             namespaces[i].clone(),
             data[i].clone(),
-            None
+            None,
         )
         .await
         .expect("Failed to create vault");
 
-        let vault_name_str = vault_names[i].as_string().expect("Vaultname should be a valid string");
-        let password_str = passwords[i].as_string().expect("Password should be a valid string");
+        let vault_name_str = vault_names[i]
+            .as_string()
+            .expect("Vaultname should be a valid string");
+        let password_str = passwords[i]
+            .as_string()
+            .expect("Password should be a valid string");
 
         store_password(&vault_name_str, &password_str);
     }
 
     let vault_name_strings: Vec<String> = (0..3).map(|i| format!("vault{}", i)).collect();
     let mut create_futures = Vec::new();
-    
+
     for i in 0..3 {
         let new_namespace: JsValue = format!("new_namespace{}", i).into();
         let future = upsert_vault(
@@ -501,11 +520,13 @@ async fn test_concurrent_vault_creation() {
             new_namespace.clone(),
             data[i].clone(),
             None,
-            false
+            false,
         );
         create_futures.push(future);
         let vault_name_str = &vault_name_strings[i];
-        let password_str = passwords[i].as_string().expect("Password should be a valid string");
+        let password_str = passwords[i]
+            .as_string()
+            .expect("Password should be a valid string");
 
         store_password(&vault_name_str, &password_str);
     }
@@ -550,7 +571,7 @@ async fn test_list_namespaces_in_empty_vault() {
         password.clone(),
         namespace.clone(),
         data.clone(),
-        None
+        None,
     )
     .await
     .expect("Failed to create initial vault");
@@ -588,7 +609,7 @@ async fn test_concurrent_read_operations() {
         password.clone(),
         namespace.clone(),
         data.clone(),
-        None
+        None,
     )
     .await
     .expect("Failed to create vault");
