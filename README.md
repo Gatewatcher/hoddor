@@ -73,12 +73,7 @@ cd playground
 npm install
 ```
 
-3. Install Rust dependencies:
-```bash
-cargo install wasm-pack watchexec
-```
-
-4. Start the playground server:
+3. Start the playground server:
 ```bash
 cd playground
 npm run dev
