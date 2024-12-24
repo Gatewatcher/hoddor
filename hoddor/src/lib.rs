@@ -239,10 +239,6 @@ pub async fn upsert_vault(
         Err(e) => return Err(e.into()),
     };
 
-    if replace_if_exists {
-        vault.namespaces.remove(&namespace_str); // Remove existing data
-    }
-
     insert_namespace_data(&mut vault, password, namespace, data, expires_in_seconds).await?;
     
     save_vault(&file_handle, vault).await?;
