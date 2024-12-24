@@ -1,13 +1,13 @@
 extern crate console_error_panic_hook;
 
 pub mod console;
-mod crypto;
+pub mod crypto;
 mod errors;
 mod file_system;
 mod global;
 mod lock;
 mod measure;
-mod vault;
+pub mod vault;
 
 use wasm_bindgen::prelude::*;
 

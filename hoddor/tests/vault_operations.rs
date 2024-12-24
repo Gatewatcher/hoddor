@@ -1,13 +1,13 @@
 #![cfg(target_arch = "wasm32")]
 
 extern crate wasm_bindgen_test;
-use hoddor::*;
 use lazy_static::lazy_static;
 use serde_wasm_bindgen::from_value;
 use std::collections::HashMap;
 use std::sync::RwLock;
 use wasm_bindgen::JsValue;
 use wasm_bindgen_test::*;
+use hoddor::vault::*;
 
 wasm_bindgen_test_configure!(run_in_browser);
 
