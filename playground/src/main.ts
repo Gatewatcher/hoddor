@@ -34,7 +34,7 @@ async function storeImage(password: string, imageBytes: Uint8Array) {
     }
 
     try {
-      await upsert_vault('default', password, namespace, numberArray);
+      await upsert_vault('default', password, namespace, numberArray, undefined, false);
     } catch (e) {
       console.error('Error in storeImage:', e);
       throw e;
@@ -92,16 +92,16 @@ async function storeVideo(password: string, videoFile: File) {
       fileName: videoFile.name,
       lastModified: videoFile.lastModified
     });
-    await vault.upsertVault('default', password, 'test_video_meta', Array.from(new TextEncoder().encode(metadata)));
+    await vault.upsertVault('default', password, 'test_video_meta', Array.from(new TextEncoder().encode(metadata)), BigInt(5 * 60000), true);
 
     const firstChunk = videoFile.slice(0, chunkSize);
     const firstChunkData = await readChunk(firstChunk);
-    await vault.upsertVault('default', password, 'test_video_0', Array.from(firstChunkData));
+    await vault.upsertVault('default', password, 'test_video_0', Array.from(firstChunkData), BigInt(5 * 60000), true);
 
     while (offset < videoFile.size) {
       const chunk = videoFile.slice(offset, offset + chunkSize);
       const chunkData = await readChunk(chunk);
-      await vault.upsertVault('default', password, `test_video_${offset}`, Array.from(chunkData));
+      await vault.upsertVault('default', password, `test_video_${offset}`, Array.from(chunkData), BigInt(5 * 60000), true);
       offset += chunkSize;
       const progress = Math.round((offset / videoFile.size) * 100);
       console.log(`Upload progress: ${progress}%`);
