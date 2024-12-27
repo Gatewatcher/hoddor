@@ -612,10 +612,7 @@ pub async fn export_vault(vault_name: &str, password: JsValue) -> Result<JsValue
 }
 
 #[wasm_bindgen]
-pub async fn import_vault(
-    vault_name: &str,
-    data: JsValue,
-) -> Result<(), JsValue> {
+pub async fn import_vault(vault_name: &str, data: JsValue) -> Result<(), JsValue> {
     let vault_bytes = if data.is_instance_of::<js_sys::Uint8Array>() {
         let array = js_sys::Uint8Array::from(data);
         array.to_vec()

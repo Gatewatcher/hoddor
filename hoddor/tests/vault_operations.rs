@@ -1,15 +1,15 @@
 #![cfg(target_arch = "wasm32")]
 
 extern crate wasm_bindgen_test;
+use gloo_timers::future::TimeoutFuture;
+use hoddor::console::log;
+use hoddor::vault::*;
 use lazy_static::lazy_static;
 use serde_wasm_bindgen::from_value;
 use std::collections::HashMap;
 use std::sync::RwLock;
 use wasm_bindgen::JsValue;
 use wasm_bindgen_test::*;
-use hoddor::vault::*;
-use hoddor::console::log;
-use gloo_timers::future::TimeoutFuture;
 
 wasm_bindgen_test_configure!(run_in_browser);
 
@@ -644,7 +644,7 @@ async fn test_data_expiration() {
     let expires_in_seconds = Some(1);
 
     store_password(vault_name, &password.as_string().expect("must be a string"));
-    
+
     create_vault(
         JsValue::from_str(vault_name),
         password.clone(),
@@ -667,10 +667,7 @@ async fn test_data_expiration() {
     TimeoutFuture::new(1100).await;
 
     let expired_result = read_from_vault(vault_name, password.clone(), namespace.clone()).await;
-    assert!(
-        expired_result.is_err(),
-        "Reading expired data should fail"
-    );
+    assert!(expired_result.is_err(), "Reading expired data should fail");
 
     cleanup_all_vaults().await;
 }
