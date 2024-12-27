@@ -274,7 +274,7 @@ importInput.onchange = async (e) => {
       console.log('Detected format:', header === 'VAULT1' ? 'Binary vault format' : 'Legacy format');
     }
 
-    await vault.importVault('default', PASSWORD, uint8Array);
+    await vault.importVault('default', uint8Array);
     alert('Vault imported successfully');
     location.reload();
   } catch (error) {

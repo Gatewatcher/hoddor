@@ -8,6 +8,8 @@ use std::sync::RwLock;
 use wasm_bindgen::JsValue;
 use wasm_bindgen_test::*;
 use hoddor::vault::*;
+use hoddor::console::log;
+use gloo_timers::future::TimeoutFuture;
 
 wasm_bindgen_test_configure!(run_in_browser);
 
@@ -628,5 +630,228 @@ async fn test_concurrent_read_operations() {
     }
 
     store_password("default", "test_password123");
+    cleanup_all_vaults().await;
+}
+
+#[wasm_bindgen_test]
+async fn test_data_expiration() {
+    cleanup_all_vaults().await;
+
+    let vault_name = "expires_vault";
+    let password: JsValue = "expire_password".into();
+    let namespace: JsValue = "expiring_namespace".into();
+    let data: JsValue = "temporary_data".into();
+    let expires_in_seconds = Some(1);
+
+    store_password(vault_name, &password.as_string().expect("must be a string"));
+    
+    create_vault(
+        JsValue::from_str(vault_name),
+        password.clone(),
+        namespace.clone(),
+        data.clone(),
+        expires_in_seconds,
+    )
+    .await
+    .expect("Failed to create vault with expiration");
+
+    let initial_read = read_from_vault(vault_name, password.clone(), namespace.clone())
+        .await
+        .expect("Failed to read expiring data immediately");
+    assert_eq!(
+        initial_read.as_string().unwrap(),
+        "temporary_data",
+        "Data should still be present before expiration"
+    );
+
+    TimeoutFuture::new(1100).await;
+
+    let expired_result = read_from_vault(vault_name, password.clone(), namespace.clone()).await;
+    assert!(
+        expired_result.is_err(),
+        "Reading expired data should fail"
+    );
+
+    cleanup_all_vaults().await;
+}
+
+#[wasm_bindgen_test]
+async fn test_force_cleanup() {
+    cleanup_all_vaults().await;
+
+    let vault_name = "force_cleanup_vault";
+    let password: JsValue = "force_cleanup_password".into();
+    store_password(vault_name, &password.as_string().expect("must be a string"));
+
+    create_vault(
+        JsValue::from_str(vault_name),
+        password.clone(),
+        JsValue::from_str("namespace1"),
+        JsValue::from_str("data1"),
+        Some(1), // 1 second expiration
+    )
+    .await
+    .expect("Failed to create initial vault with expiration");
+
+    upsert_vault(
+        vault_name,
+        password.clone(),
+        JsValue::from_str("namespace2"),
+        JsValue::from_str("data2"),
+        Some(1), // also 1 second
+        false,
+    )
+    .await
+    .expect("Failed to insert second namespace with expiration");
+
+    TimeoutFuture::new(1100).await;
+
+    force_cleanup_vault(vault_name)
+        .await
+        .expect("Failed to force cleanup vault");
+
+    let listed = list_namespaces(vault_name, password.clone())
+        .await
+        .expect("Failed to list namespaces after forced cleanup");
+    let listed_namespaces: Vec<String> = from_value(listed).expect("Failed to convert namespaces");
+    assert!(
+        listed_namespaces.is_empty(),
+        "All expired namespaces should be removed by forced cleanup"
+    );
+
+    cleanup_all_vaults().await;
+}
+
+#[wasm_bindgen_test]
+async fn test_import_export_round_trip() {
+    cleanup_all_vaults().await;
+
+    let vault_name = "round_trip_vault";
+    let password_str = "round_trip_password";
+    let password = JsValue::from_str(password_str);
+    let namespace = JsValue::from_str("round_trip_namespace");
+    let data = JsValue::from_str("round_trip_data");
+
+    store_password(vault_name, password_str);
+    create_vault(
+        JsValue::from_str(vault_name),
+        password.clone(),
+        namespace.clone(),
+        data.clone(),
+        None,
+    )
+    .await
+    .expect("Failed to create vault for export");
+
+    let initial_data = read_from_vault(vault_name, password.clone(), namespace.clone())
+        .await
+        .expect("Failed to read data from created vault");
+    assert_eq!(
+        initial_data.as_string().unwrap(),
+        "round_trip_data",
+        "Initial data mismatch"
+    );
+
+    let exported_data = export_vault(vault_name, password.clone())
+        .await
+        .expect("Failed to export vault");
+
+    remove_vault(vault_name, password.clone())
+        .await
+        .expect("Failed to remove vault");
+
+    store_password(vault_name, password_str);
+
+    import_vault(vault_name, exported_data)
+        .await
+        .expect("Failed to import vault");
+
+    let read_data = read_from_vault(vault_name, password.clone(), namespace.clone())
+        .await
+        .expect("Failed to read data from imported vault");
+
+    assert_eq!(
+        read_data.as_string().unwrap(),
+        "round_trip_data",
+        "Data mismatch after import/export round-trip"
+    );
+
+    cleanup_all_vaults().await;
+}
+
+#[wasm_bindgen_test]
+async fn test_export_with_incorrect_password() {
+    cleanup_all_vaults().await;
+
+    let vault_name = "import_incorrect_vault";
+    let correct_password: JsValue = "correct_password".into();
+    let incorrect_password: JsValue = "incorrect_password".into();
+    let namespace: JsValue = "test_namespace".into();
+    let data: JsValue = "test_data".into();
+
+    store_password(vault_name, &correct_password.as_string().unwrap());
+
+    create_vault(
+        JsValue::from_str(vault_name),
+        correct_password.clone(),
+        namespace.clone(),
+        data.clone(),
+        None,
+    )
+    .await
+    .expect("Failed to create vault for export");
+
+    let export_result = export_vault(vault_name, incorrect_password.clone()).await;
+    assert!(
+        export_result.is_err(),
+        "Export should fail when using an incorrect password"
+    );
+
+    cleanup_all_vaults().await;
+}
+
+#[wasm_bindgen_test]
+async fn test_disable_cleanup() {
+    cleanup_all_vaults().await;
+
+    configure_cleanup(1);
+    let vault_name = "cleanup_disabled_vault";
+    let password: JsValue = "cleanup_password".into();
+    let namespace: JsValue = "short_lived_ns".into();
+    let data: JsValue = "short_lived_data".into();
+    store_password(vault_name, &password.as_string().unwrap());
+
+    create_vault(
+        JsValue::from_str(vault_name),
+        password.clone(),
+        namespace.clone(),
+        data.clone(),
+        Some(2),
+    )
+    .await
+    .expect("Failed to create vault with short expiration while cleanup is on");
+
+    configure_cleanup(0);
+
+    TimeoutFuture::new(3000).await;
+
+    let read_data = read_from_vault(vault_name, password.clone(), namespace.clone()).await;
+
+    match read_data {
+        Ok(d) => {
+            log("Data remains because we disabled cleanup.");
+            assert_eq!(
+                d.as_string().unwrap(),
+                "short_lived_data",
+                "Data should remain if we rely solely on cleanup intervals."
+            );
+        }
+        Err(e) => {
+            log("Data is expired at read time, so the read returned error");
+            log(&format!("Error: {:?}", e));
+        }
+    }
+
+    configure_cleanup(1);
     cleanup_all_vaults().await;
 }

@@ -64,6 +64,12 @@ features = [
     'LockOptions',
 ]
 
+[dependencies.gloo-timers]
+version = "0.3.0"
+features = [
+    'futures'
+]
+
 [dev-dependencies]
 wasm-bindgen-test = "0.3.34"
 
