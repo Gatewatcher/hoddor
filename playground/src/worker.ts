@@ -53,7 +53,7 @@ self.onmessage = async (message) => {
         break
       case 'import_vault':
         try {
-          await import_vault(payload.vaultName, payload.password, payload.data)
+          await import_vault(payload.vaultName, payload.data)
           result = { success: true }
         } catch (e) {
           console.error('Import error:', e);

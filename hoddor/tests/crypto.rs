@@ -3,8 +3,8 @@
 extern crate wasm_bindgen_test;
 use hoddor::crypto::derive_key;
 use wasm_bindgen::prelude::*;
-use wasm_bindgen_test::*;
 use wasm_bindgen_futures::{future_to_promise, JsFuture};
+use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_browser);
 
@@ -35,7 +35,8 @@ fn test_derive_key_basic() {
 #[wasm_bindgen_test]
 fn test_derive_key_uniqueness() {
     let password = JsValue::from_str("same_password");
-    let pass_bytes = get_password_bytes(password.clone()).expect("Failed to retrieve password bytes");
+    let pass_bytes =
+        get_password_bytes(password.clone()).expect("Failed to retrieve password bytes");
     let key1 = derive_key(&pass_bytes, b"default_salt1").expect("Failed to derive key1");
     let key2 = derive_key(&pass_bytes, b"default_salt2").expect("Failed to derive key2");
     assert_ne!(
@@ -48,24 +49,26 @@ fn test_derive_key_uniqueness() {
 fn test_derive_key_empty_password() {
     let empty_password = JsValue::from_str("");
     let pass_bytes = get_password_bytes(empty_password).expect("Failed to retrieve password bytes");
-    let key = derive_key(&pass_bytes, b"any_salt")
-        .expect("Failed to derive key from empty password");
+    let key =
+        derive_key(&pass_bytes, b"any_salt").expect("Failed to derive key from empty password");
     assert_eq!(key.len(), 32, "Derived key should still be 32 bytes long");
 }
 
 #[wasm_bindgen_test]
 fn test_derive_key_long_password() {
     let long_password = JsValue::from_str(&"a".repeat(1000));
-    let pass_bytes = get_password_bytes(long_password.clone()).expect("Failed to retrieve password bytes");
-    let key = derive_key(&pass_bytes, b"long_salt")
-        .expect("Failed to derive key from long password");
+    let pass_bytes =
+        get_password_bytes(long_password.clone()).expect("Failed to retrieve password bytes");
+    let key =
+        derive_key(&pass_bytes, b"long_salt").expect("Failed to derive key from long password");
     assert_eq!(key.len(), 32, "Derived key should be 32 bytes");
 }
 
 #[wasm_bindgen_test]
 fn test_derive_key_unicode_password() {
     let unicode_password = JsValue::from_str("パスワード123!@#");
-    let pass_bytes = get_password_bytes(unicode_password.clone()).expect("Failed to retrieve password bytes");
+    let pass_bytes =
+        get_password_bytes(unicode_password.clone()).expect("Failed to retrieve password bytes");
     let key = derive_key(&pass_bytes, b"unicode_salt")
         .expect("Failed to derive key from unicode password");
     assert_eq!(key.len(), 32, "Derived key should be 32 bytes long");
@@ -74,18 +77,19 @@ fn test_derive_key_unicode_password() {
 #[wasm_bindgen_test]
 fn test_derive_key_whitespace_password() {
     let whitespace_password = JsValue::from_str("   spaces   tabs\t\t\tnewlines\n\n\n   ");
-    let pass_bytes = get_password_bytes(whitespace_password.clone()).expect("Failed to retrieve password bytes");
-    let key = derive_key(&pass_bytes, b"salt_with_whitespace")
-        .expect("Failed to derive key");
+    let pass_bytes =
+        get_password_bytes(whitespace_password.clone()).expect("Failed to retrieve password bytes");
+    let key = derive_key(&pass_bytes, b"salt_with_whitespace").expect("Failed to derive key");
     assert_eq!(key.len(), 32, "Derived key should be 32 bytes long");
 }
 
 #[wasm_bindgen_test]
 fn test_derive_key_null_character_password() {
     let null_char_password = JsValue::from_str("pass\0word\0with\0nulls");
-    let pass_bytes = get_password_bytes(null_char_password.clone()).expect("Failed to retrieve password bytes");
-    let key = derive_key(&pass_bytes, b"null_salt")
-        .expect("Failed to derive key with null characters");
+    let pass_bytes =
+        get_password_bytes(null_char_password.clone()).expect("Failed to retrieve password bytes");
+    let key =
+        derive_key(&pass_bytes, b"null_salt").expect("Failed to derive key with null characters");
     assert_eq!(key.len(), 32, "Derived key should be 32 bytes long");
 }
 
@@ -136,7 +140,7 @@ fn test_derive_key_salt_too_short() {
     let pass_bytes = get_password_bytes(password).expect("Failed to retrieve password bytes");
 
     let result = derive_key(&pass_bytes, b"a");
-    
+
     match result {
         Ok(_) => panic!("Expected SaltTooShort error, but derive_key succeeded"),
         Err(e) => {

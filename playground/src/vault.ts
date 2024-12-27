@@ -61,8 +61,8 @@ export class VaultWorker {
     return response;
   }
 
-  async importVault(vaultName: string, password: string, data: Uint8Array): Promise<void> {
-    await this.send('import_vault', { vaultName, password, data });
+  async importVault(vaultName: string, data: Uint8Array): Promise<void> {
+    await this.send('import_vault', { vaultName, data });
   }
 
   async configureCleanup(intervalSeconds: number): Promise<void> {

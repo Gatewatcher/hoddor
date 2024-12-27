@@ -612,13 +612,7 @@ pub async fn export_vault(vault_name: &str, password: JsValue) -> Result<JsValue
 }
 
 #[wasm_bindgen]
-pub async fn import_vault(
-    vault_name: &str,
-    password: JsValue,
-    data: JsValue,
-) -> Result<(), JsValue> {
-    let password: String = from_value(password)?;
-
+pub async fn import_vault(vault_name: &str, data: JsValue) -> Result<(), JsValue> {
     let vault_bytes = if data.is_instance_of::<js_sys::Uint8Array>() {
         let array = js_sys::Uint8Array::from(data);
         array.to_vec()
@@ -660,9 +654,23 @@ pub async fn import_vault(
         }
     })?;
 
-    check_password(vault_name, &password).await?;
+    match read_vault_with_name(vault_name).await {
+        Ok(_) => {
+            return Err(VaultError::VaultAlreadyExists.into());
+        }
+        Err(VaultError::IoError { .. }) => {
+            log(&format!(
+                "No existing vault named '{}'; proceeding with import.",
+                vault_name
+            ));
+        }
+        Err(e) => {
+            return Err(e.into());
+        }
+    };
 
-    let file_handle = get_or_create_file_handle_with_name(vault_name).await?;
+    let filename = get_vault_filename(vault_name);
+    let file_handle = get_or_create_file_handle_with_name(&filename).await?;
     save_vault(&file_handle, imported_vault).await?;
 
     Ok(())
