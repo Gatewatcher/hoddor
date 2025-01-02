@@ -3,7 +3,7 @@ extern crate console_error_panic_hook;
 pub mod console;
 pub mod crypto;
 mod errors;
-mod file_system;
+pub mod file_system;
 mod global;
 mod lock;
 mod measure;

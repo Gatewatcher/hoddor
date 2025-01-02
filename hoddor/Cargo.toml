@@ -49,6 +49,8 @@ features = [
     'FileSystemFileHandle',
     'FileSystemHandle',
     'FileSystemGetFileOptions',
+    'FileSystemGetDirectoryOptions',
+    'FileSystemRemoveOptions',
     'FileSystemSyncAccessHandle',
     'WritableStreamDefaultWriter',
     'Blob',

@@ -1,7 +1,10 @@
 use crate::console::*;
 use crate::crypto::derive_key;
 use crate::errors::VaultError;
-use crate::file_system::{get_or_create_file_handle_with_name, get_root_directory_handle};
+use crate::file_system::{
+    get_or_create_directory_handle, get_or_create_file_handle_in_directory,
+    get_root_directory_handle, remove_directory_with_contents, remove_file_from_directory,
+};
 use crate::lock::acquire_vault_lock;
 use crate::measure::get_performance;
 use crate::measure::time_it;
@@ -18,14 +21,11 @@ use chacha20poly1305::{
     ChaCha20Poly1305, Key, Nonce,
 };
 
-use web_sys::{self, FileSystemFileHandle, FileSystemGetFileOptions};
+use web_sys::{self, FileSystemDirectoryHandle};
 
 use argon2::password_hash::rand_core::OsRng;
 
 use rand::RngCore;
-
-use std::future::Future;
-use std::pin::Pin;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 struct Expiration {
@@ -33,22 +33,46 @@ struct Expiration {
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
-struct EncryptedNamespace {
+struct NamespaceData {
     data: Vec<u8>,
     nonce: [u8; 12],
     expiration: Option<Expiration>,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
-struct Vault {
-    namespaces: HashMap<String, EncryptedNamespace>,
+struct VaultMetadata {
     salt: [u8; 32],
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+struct Vault {
+    metadata: VaultMetadata,
+    namespaces: HashMap<String, NamespaceData>,
+}
+
+fn get_vault_dirname(vault_name: &str) -> String {
+    vault_name.to_string()
+}
+
+fn get_metadata_filename() -> String {
+    "metadata.json".to_string()
+}
+
+fn get_namespace_filename(namespace: &str) -> String {
+    format!("{}.ns", namespace)
 }
 
 fn validate_namespace(namespace: &str) -> Result<(), VaultError> {
     if namespace.trim().is_empty() {
         return Err(VaultError::IoError {
             message: "Namespace cannot be empty or whitespace only",
+        });
+    }
+
+    let invalid_chars = ['/', '\\', '<', '>', ':', '"', '|', '?', '*'];
+    if namespace.chars().any(|c| invalid_chars.contains(&c)) {
+        return Err(VaultError::IoError {
+            message: "Namespace contains invalid characters",
         });
     }
     Ok(())
@@ -69,7 +93,7 @@ pub async fn upsert_vault(
     check_password(vault_name, &password_str).await?;
     validate_namespace(&namespace_str)?;
 
-    let (file_handle, mut vault) = match read_vault_with_name(vault_name).await {
+    let (dir_handle, mut vault) = match read_vault_with_name(vault_name).await {
         Ok((handle, existing_vault)) => {
             if existing_vault.namespaces.contains_key(&namespace_str) && !replace_if_exists {
                 return Err(VaultError::NamespaceAlreadyExists.into());
@@ -86,7 +110,7 @@ pub async fn upsert_vault(
 
     insert_namespace_data(&mut vault, password, namespace, data, expires_in_seconds).await?;
 
-    save_vault(&file_handle, vault).await?;
+    save_vault(&dir_handle, vault).await?;
 
     Ok(())
 }
@@ -104,13 +128,16 @@ pub async fn remove_from_vault(
 
     check_password(vault_name, &password).await?;
 
-    let (file_handle, mut vault) = read_vault_with_name(vault_name).await?;
+    let (dir_handle, mut vault) = read_vault_with_name(vault_name).await?;
 
     if vault.namespaces.remove(&namespace).is_none() {
         return Err(VaultError::NamespaceNotFound.into());
     }
 
-    save_vault(&file_handle, vault).await?;
+    let namespace_filename = get_namespace_filename(&namespace);
+    remove_file_from_directory(&dir_handle, &namespace_filename).await?;
+
+    save_vault(&dir_handle, vault).await?;
     Ok(())
 }
 
@@ -135,7 +162,7 @@ pub async fn read_from_vault(
             message: "Invalid namespace format",
         })?;
 
-        let (file_handle, mut vault) = match read_vault_with_name(vault_name).await {
+        let (dir_handle, mut vault) = match read_vault_with_name(vault_name).await {
             Ok(result) => result,
             Err(VaultError::IoError { .. }) => {
                 return Err(VaultError::NamespaceNotFound.into());
@@ -152,13 +179,13 @@ pub async fn read_from_vault(
             let now = js_sys::Date::now() as i64 / 1000;
             if now >= expiration.expires_at {
                 vault.namespaces.remove(&namespace);
-                save_vault(&file_handle, vault.clone()).await?;
+                save_vault(&dir_handle, vault.clone()).await?;
                 return Err(VaultError::DataExpired.into());
             }
         }
 
         let key_bytes = time_it!("Key derivation", {
-            derive_key(password.as_bytes(), &vault.salt)?
+            derive_key(password.as_bytes(), &vault.metadata.salt)?
         });
 
         let cipher_key = Key::from_slice(&key_bytes);
@@ -236,225 +263,17 @@ pub async fn remove_vault(vault_name: &str, password: JsValue) -> Result<(), JsV
     let _lock = acquire_vault_lock(vault_name).await?;
 
     let root = get_root_directory_handle().await?;
-    let filename = get_vault_filename(vault_name);
+    let dirname = get_vault_dirname(vault_name);
 
-    let _remove_result = JsFuture::from(root.remove_entry(&filename))
-        .await
-        .map_err(|_| VaultError::IoError {
-            message: "Failed to remove vault file",
-        })?;
+    remove_directory_with_contents(&root, &dirname).await?;
 
-    log(&format!("Vault file {} removed successfully", filename));
     Ok(())
-}
-
-async fn read_vault_with_name(
-    vault_name: &str,
-) -> Result<(FileSystemFileHandle, Vault), VaultError> {
-    time_it!("Total read_vault", {
-        let root = time_it!("Getting root directory", {
-            get_root_directory_handle().await?
-        });
-
-        let filename = get_vault_filename(vault_name);
-        let options = FileSystemGetFileOptions::new();
-        let file_handle = time_it!("Getting file handle", {
-            JsFuture::from(root.get_file_handle_with_options(&filename, &options))
-                .await
-                .map_err(|_| VaultError::IoError {
-                    message: "Failed to get file handle",
-                })?
-                .unchecked_into::<FileSystemFileHandle>()
-        });
-
-        let file = time_it!("Getting file", {
-            JsFuture::from(file_handle.get_file())
-                .await
-                .map_err(|_| VaultError::IoError {
-                    message: "Failed to get file",
-                })?
-        });
-
-        let file = web_sys::File::from(file);
-
-        // If the file is empty, create a new vault with a fresh salt.
-        if file.size() == 0f64 {
-            let mut salt = [0u8; 32];
-            OsRng.fill_bytes(&mut salt);
-            return Ok((
-                file_handle,
-                Vault {
-                    namespaces: HashMap::new(),
-                    salt,
-                },
-            ));
-        }
-
-        // Read the file's data into memory
-        let array_buffer = time_it!("Reading array buffer", {
-            JsFuture::from(file.array_buffer())
-                .await
-                .map_err(|_| VaultError::IoError {
-                    message: "Failed to get array buffer",
-                })?
-        });
-
-        let uint8_array = js_sys::Uint8Array::new(&array_buffer);
-        let bytes = uint8_array.to_vec();
-
-        log(&format!("Read vault data size: {} bytes", bytes.len()));
-
-        // Deserialize the vault from JSON
-        let vault = time_it!("Deserializing vault", {
-            serde_json::from_slice(&bytes).map_err(|e| {
-                log(&format!("Deserialization error: {:?}", e));
-                VaultError::SerializationError {
-                    message: "Failed to deserialize vault",
-                }
-            })?
-        });
-
-        let (file_handle, mut vault) = (file_handle, vault);
-
-        check_and_cleanup(&mut vault, &file_handle).await?;
-
-        Ok((file_handle, vault))
-    })
-}
-
-async fn save_vault(
-    file_handle: &FileSystemFileHandle,
-    mut vault: Vault,
-) -> Result<(), VaultError> {
-    let vault_name = file_handle.name();
-    let _lock = acquire_vault_lock(&vault_name).await?;
-
-    if let Some(_perf) = get_performance() {
-        time("save_vault");
-    }
-
-    let cleanup_future: Pin<Box<dyn Future<Output = Result<(), VaultError>>>> =
-        Box::pin(check_and_cleanup(&mut vault, file_handle));
-    cleanup_future.await?;
-
-    let result = time_it!("Total save_vault", {
-        let json_bytes = time_it!("Serializing vault", {
-            serde_json::to_vec(&vault).map_err(|_| VaultError::SerializationError {
-                message: "Failed to serialize vault to JSON",
-            })?
-        });
-
-        let writable = time_it!("Creating writable", {
-            JsFuture::from(file_handle.create_writable())
-                .await
-                .map_err(|_| VaultError::IoError {
-                    message: "Failed to create writable",
-                })?
-        });
-
-        let write_method = js_sys::Reflect::get(&writable, &"write".into())?;
-        let write_fn = write_method
-            .dyn_ref::<js_sys::Function>()
-            .ok_or(VaultError::IoError {
-                message: "Failed to get write function",
-            })?;
-
-        time_it!("Writing data", {
-            let uint8_array = js_sys::Uint8Array::from(&json_bytes[..]);
-            let write_promise = write_fn.call1(&writable, &uint8_array)?;
-            JsFuture::from(write_promise.unchecked_into::<js_sys::Promise>()).await?
-        });
-
-        log(&format!(
-            "Writing vault data size: {} bytes",
-            json_bytes.len()
-        ));
-
-        let close_val = js_sys::Reflect::get(&writable, &"close".into())?;
-        let close_fn = close_val
-            .dyn_ref::<js_sys::Function>()
-            .ok_or(VaultError::IoError {
-                message: "Failed to convert close to function",
-            })?;
-
-        let promise = close_fn.call0(&writable)?;
-        JsFuture::from(promise.unchecked_into::<js_sys::Promise>()).await?;
-
-        Ok(())
-    });
-
-    if get_performance().is_some() {
-        timeEnd("save_vault");
-    }
-
-    result
-}
-
-async fn cleanup_expired_data(
-    vault: &mut Vault,
-    file_handle: &FileSystemFileHandle,
-) -> Result<bool, VaultError> {
-    let vault_name = file_handle.name();
-    let _lock = acquire_vault_lock(&vault_name).await?;
-
-    let now = js_sys::Date::now() as i64 / 1000;
-    let mut data_removed = false;
-
-    let expired_namespaces: Vec<String> = vault
-        .namespaces
-        .iter()
-        .filter_map(|(namespace, encrypted)| {
-            if let Some(expiration) = &encrypted.expiration {
-                if now >= expiration.expires_at {
-                    Some(namespace.clone())
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
-        })
-        .collect();
-
-    for namespace in expired_namespaces {
-        vault.namespaces.remove(&namespace);
-        data_removed = true;
-        log(&format!("Removed expired namespace: {}", namespace));
-    }
-
-    Ok(data_removed)
-}
-
-async fn check_and_cleanup(
-    vault: &mut Vault,
-    file_handle: &FileSystemFileHandle,
-) -> Result<(), VaultError> {
-    let interval = CLEANUP_INTERVAL.load(Ordering::SeqCst);
-    if interval > 0 {
-        let now = js_sys::Date::now() as i64 / 1000;
-        let last = LAST_CLEANUP.load(Ordering::SeqCst);
-
-        if now - last >= interval {
-            let vault_name = file_handle.name();
-            let _lock = acquire_vault_lock(&vault_name).await?; // Acquire lock before cleanup
-
-            if cleanup_expired_data(vault, file_handle).await? {
-                // No need to acquire lock here as save_vault already does it
-                save_vault(file_handle, vault.clone()).await?;
-                LAST_CLEANUP.store(now, Ordering::SeqCst);
-            }
-        }
-    }
-    Ok(())
-}
-
-fn get_vault_filename(vault_name: &str) -> String {
-    format!("vault_{}.dat", vault_name)
 }
 
 #[wasm_bindgen]
 pub async fn list_vaults() -> Result<JsValue, JsValue> {
     let root = get_root_directory_handle().await?;
+    log("Listing vaults from root directory");
 
     let entries_val = js_sys::Reflect::get(&root, &JsValue::from_str("entries"))?;
     let entries_fn = entries_val
@@ -485,17 +304,14 @@ pub async fn list_vaults() -> Result<JsValue, JsValue> {
             .dyn_into::<js_sys::Array>()
         {
             if let Some(name) = value.get(0).as_string() {
-                if name.starts_with("vault_") && name.ends_with(".dat") {
-                    let vault_name = name
-                        .trim_start_matches("vault_")
-                        .trim_end_matches(".dat")
-                        .to_string();
-                    vault_names.push(vault_name);
-                }
+                let vault_name = name;
+                log(&format!("Found vault: {}", vault_name));
+                vault_names.push(vault_name);
             }
         }
     }
 
+    log(&format!("Found {} vaults in total", vault_names.len()));
     Ok(to_value(&vault_names)?)
 }
 
@@ -527,42 +343,54 @@ pub async fn create_vault(
 
     let _lock = acquire_vault_lock(&vault_name).await?;
 
-    if (read_vault_with_name(&vault_name).await).is_ok() {
-        return Err(VaultError::VaultAlreadyExists.into());
-    }
-
     let namespace_str: String = from_value(namespace.clone())?;
     validate_namespace(&namespace_str)?;
 
-    let filename = get_vault_filename(&vault_name);
-    let file_handle = get_or_create_file_handle_with_name(&filename).await?;
+    let dirname = get_vault_dirname(&vault_name);
+    log(&format!("Checking if vault directory exists: {}", dirname));
+
+    let root = get_root_directory_handle().await?;
+    if JsFuture::from(root.get_directory_handle(&dirname))
+        .await
+        .is_ok()
+    {
+        log(&format!("Vault directory already exists: {}", dirname));
+        return Err(VaultError::VaultAlreadyExists.into());
+    }
+    log(&format!(
+        "Vault directory does not exist, creating it: {}",
+        dirname
+    ));
+
+    let dir_handle = get_or_create_directory_handle(&dirname).await?;
     let mut salt = [0u8; 32];
     OsRng.fill_bytes(&mut salt);
 
     let mut vault = Vault {
+        metadata: VaultMetadata { salt },
         namespaces: HashMap::new(),
-        salt,
     };
 
     insert_namespace_data(&mut vault, password, namespace, data, expires_in_seconds).await?;
-    save_vault(&file_handle, vault).await?;
+    save_vault(&dir_handle, vault).await?;
 
+    log(&format!("Vault created successfully: {}", dirname));
     Ok(())
 }
 
 async fn check_password(vault_name: &str, password: &str) -> Result<Vault, VaultError> {
     let (_, vault) = match read_vault_with_name(vault_name).await {
-        Ok(result) => result,
+        Ok((handle, existing_vault)) => (handle, existing_vault),
+
         Err(VaultError::IoError { .. }) => {
-            return Err(VaultError::IoError {
-                message: "Vault not found",
-            });
+            return Err(VaultError::VaultNotFound);
         }
+
         Err(e) => return Err(e),
     };
 
     if let Some((_, first_encrypted)) = vault.namespaces.iter().next() {
-        let key_bytes = derive_key(password.as_bytes(), &vault.salt)?;
+        let key_bytes = derive_key(password.as_bytes(), &vault.metadata.salt)?;
         let cipher_key = Key::from_slice(&key_bytes);
         let cipher = ChaCha20Poly1305::new(cipher_key);
 
@@ -669,9 +497,306 @@ pub async fn import_vault(vault_name: &str, data: JsValue) -> Result<(), JsValue
         }
     };
 
-    let filename = get_vault_filename(vault_name);
-    let file_handle = get_or_create_file_handle_with_name(&filename).await?;
-    save_vault(&file_handle, imported_vault).await?;
+    let dir_handle = get_or_create_directory_handle(&get_vault_dirname(vault_name)).await?;
+    save_vault(&dir_handle, imported_vault).await?;
+
+    Ok(())
+}
+
+async fn read_vault_with_name(
+    vault_name: &str,
+) -> Result<(FileSystemDirectoryHandle, Vault), VaultError> {
+    let root = get_root_directory_handle().await?;
+    let dirname = get_vault_dirname(vault_name);
+
+    let dir_handle = JsFuture::from(root.get_directory_handle(&dirname))
+        .await
+        .map_err(|_| VaultError::IoError {
+            message: "Failed to get directory handle",
+        })?
+        .unchecked_into::<FileSystemDirectoryHandle>();
+
+    let metadata_handle =
+        get_or_create_file_handle_in_directory(&dir_handle, &get_metadata_filename()).await?;
+
+    let file = JsFuture::from(metadata_handle.get_file())
+        .await
+        .map_err(|_| VaultError::IoError {
+            message: "Failed to get metadata file",
+        })?;
+
+    let metadata_text = JsFuture::from(file.unchecked_into::<web_sys::File>().text())
+        .await
+        .map_err(|_| VaultError::IoError {
+            message: "Failed to read metadata file",
+        })?
+        .as_string()
+        .ok_or(VaultError::IoError {
+            message: "Failed to convert metadata to string",
+        })?;
+
+    let metadata: VaultMetadata =
+        serde_json::from_str(&metadata_text).map_err(|_| VaultError::SerializationError {
+            message: "Failed to deserialize metadata",
+        })?;
+
+    let mut vault = Vault {
+        metadata,
+        namespaces: HashMap::new(),
+    };
+
+    let entries_val = js_sys::Reflect::get(&dir_handle, &JsValue::from_str("entries"))?;
+    let entries_fn = entries_val
+        .dyn_ref::<js_sys::Function>()
+        .ok_or(VaultError::IoError {
+            message: "entries is not a function",
+        })?;
+
+    let iterator = entries_fn.call0(&dir_handle)?;
+
+    loop {
+        let next_val = js_sys::Reflect::get(&iterator, &JsValue::from_str("next"))?;
+        let next_fn = next_val
+            .dyn_ref::<js_sys::Function>()
+            .ok_or(VaultError::IoError {
+                message: "next is not a function",
+            })?;
+
+        let next_result =
+            JsFuture::from(next_fn.call0(&iterator)?.dyn_into::<js_sys::Promise>()?).await?;
+
+        let done = js_sys::Reflect::get(&next_result, &JsValue::from_str("done"))?
+            .as_bool()
+            .unwrap_or(true);
+
+        if done {
+            break;
+        }
+
+        if let Ok(value) = js_sys::Reflect::get(&next_result, &JsValue::from_str("value"))?
+            .dyn_into::<js_sys::Array>()
+        {
+            if let Some(name) = value.get(0).as_string() {
+                if name.ends_with(".ns") {
+                    let namespace = name.trim_end_matches(".ns").to_string();
+                    let file_handle =
+                        get_or_create_file_handle_in_directory(&dir_handle, &name).await?;
+
+                    let file = JsFuture::from(file_handle.get_file()).await.map_err(|_| {
+                        VaultError::IoError {
+                            message: "Failed to get namespace file",
+                        }
+                    })?;
+
+                    let namespace_text =
+                        JsFuture::from(file.unchecked_into::<web_sys::File>().text())
+                            .await
+                            .map_err(|_| VaultError::IoError {
+                                message: "Failed to read namespace file",
+                            })?
+                            .as_string()
+                            .ok_or(VaultError::IoError {
+                                message: "Failed to convert namespace data to string",
+                            })?;
+
+                    let namespace_data: NamespaceData = serde_json::from_str(&namespace_text)
+                        .map_err(|_| VaultError::SerializationError {
+                            message: "Failed to deserialize namespace data",
+                        })?;
+
+                    vault.namespaces.insert(namespace, namespace_data);
+                }
+            }
+        }
+    }
+
+    Ok((dir_handle, vault))
+}
+
+async fn save_vault(
+    dir_handle: &FileSystemDirectoryHandle,
+    vault: Vault,
+) -> Result<(), VaultError> {
+    let metadata_handle =
+        get_or_create_file_handle_in_directory(dir_handle, &get_metadata_filename())
+            .await
+            .map_err(VaultError::from)?;
+
+    let metadata_json =
+        serde_json::to_string(&vault.metadata).map_err(|_| VaultError::IoError {
+            message: "Failed to serialize vault metadata",
+        })?;
+
+    let writer = JsFuture::from(metadata_handle.create_writable())
+        .await
+        .map_err(|_| VaultError::IoError {
+            message: "Failed to create writable",
+        })?;
+
+    let promise = writer
+        .unchecked_ref::<web_sys::FileSystemWritableFileStream>()
+        .write_with_str(&metadata_json)
+        .map_err(|_| VaultError::IoError {
+            message: "Failed to create Promise for writing metadata",
+        })?;
+
+    JsFuture::from(promise)
+        .await
+        .map_err(|_| VaultError::IoError {
+            message: "Failed to write metadata",
+        })?;
+
+    JsFuture::from(
+        writer
+            .unchecked_ref::<web_sys::FileSystemWritableFileStream>()
+            .close(),
+    )
+    .await
+    .map_err(|_| VaultError::IoError {
+        message: "Failed to close writer",
+    })?;
+
+    for (namespace, data) in vault.namespaces {
+        let file_handle =
+            get_or_create_file_handle_in_directory(dir_handle, &get_namespace_filename(&namespace))
+                .await?;
+        let namespace_json = serde_json::to_string(&data).map_err(|_| VaultError::IoError {
+            message: "Failed to serialize namespace data",
+        })?;
+
+        let writer = JsFuture::from(file_handle.create_writable())
+            .await
+            .map_err(|_| VaultError::IoError {
+                message: "Failed to create writable",
+            })?;
+
+        match writer
+            .unchecked_ref::<web_sys::FileSystemWritableFileStream>()
+            .write_with_str(&namespace_json)
+        {
+            Ok(promise) => {
+                JsFuture::from(promise)
+                    .await
+                    .map_err(|_| VaultError::IoError {
+                        message: "Failed to write namespace data",
+                    })?;
+            }
+            Err(_) => {
+                return Err(VaultError::IoError {
+                    message: "Failed to create Promise for writing namespace data",
+                });
+            }
+        }
+
+        JsFuture::from(
+            writer
+                .unchecked_ref::<web_sys::FileSystemWritableFileStream>()
+                .close(),
+        )
+        .await
+        .map_err(|_| VaultError::IoError {
+            message: "Failed to close writer",
+        })?;
+    }
+
+    Ok(())
+}
+
+async fn cleanup_expired_data(
+    vault: &mut Vault,
+    dir_handle: &FileSystemDirectoryHandle,
+) -> Result<bool, VaultError> {
+    let now = js_sys::Date::now() as i64 / 1000;
+    let mut data_removed = false;
+
+    let expired_namespaces: Vec<String> = vault
+        .namespaces
+        .iter()
+        .filter_map(|(namespace, encrypted)| {
+            if let Some(expiration) = &encrypted.expiration {
+                if now >= expiration.expires_at {
+                    Some(namespace.clone())
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    for namespace in expired_namespaces {
+        let filename = get_namespace_filename(&namespace);
+        let _ = remove_file_from_directory(dir_handle, &filename).await;
+
+        vault.namespaces.remove(&namespace);
+        data_removed = true;
+        log(&format!("Removed expired namespace: {}", namespace));
+    }
+
+    Ok(data_removed)
+}
+
+#[wasm_bindgen]
+pub async fn force_cleanup_vault(vault_name: &str) -> Result<(), JsValue> {
+    let _lock = acquire_vault_lock(vault_name).await?; // Acquire lock before cleanup
+    let (file_handle, mut vault) = read_vault_with_name(vault_name).await?;
+    cleanup_expired_data(&mut vault, &file_handle).await?;
+    Ok(())
+}
+
+async fn insert_namespace_data(
+    vault: &mut Vault,
+    password: JsValue,
+    namespace: JsValue,
+    data: JsValue,
+    expires_in_seconds: Option<i64>,
+) -> Result<(), JsValue> {
+    let password: String = from_value(password)?;
+    let namespace_str: String = from_value(namespace)?;
+
+    let data_json = from_value::<serde_json::Value>(data)?;
+    let data_bytes =
+        serde_json::to_vec(&data_json).map_err(|_| VaultError::SerializationError {
+            message: "Failed to serialize data",
+        })?;
+
+    let key_bytes = derive_key(password.as_bytes(), &vault.metadata.salt)?;
+    let cipher_key = Key::from_slice(&key_bytes);
+    let cipher = ChaCha20Poly1305::new(cipher_key);
+
+    let mut nonce_bytes = [0u8; 12];
+    OsRng.fill_bytes(&mut nonce_bytes);
+    let nonce = Nonce::from_slice(&nonce_bytes);
+
+    let encrypted_data =
+        cipher
+            .encrypt(nonce, data_bytes.as_ref())
+            .map_err(|_| VaultError::IoError {
+                message: "Encryption failed",
+            })?;
+
+    let expiration = if let Some(seconds) = expires_in_seconds {
+        if seconds <= 0 {
+            None
+        } else {
+            let now = js_sys::Date::now() as i64 / 1000;
+            Some(Expiration {
+                expires_at: now + seconds,
+            })
+        }
+    } else {
+        None
+    };
+
+    vault.namespaces.insert(
+        namespace_str,
+        NamespaceData {
+            data: encrypted_data,
+            nonce: nonce_bytes,
+            expiration,
+        },
+    );
 
     Ok(())
 }
@@ -692,64 +817,4 @@ pub fn configure_cleanup(interval_seconds: i64) {
         log("Disabling automatic cleanup");
         CLEANUP_INTERVAL.store(0, Ordering::SeqCst);
     }
-}
-
-#[wasm_bindgen]
-pub async fn force_cleanup_vault(vault_name: &str) -> Result<(), JsValue> {
-    let _lock = acquire_vault_lock(vault_name).await?; // Acquire lock before cleanup
-    let (file_handle, mut vault) = read_vault_with_name(vault_name).await?;
-    cleanup_expired_data(&mut vault, &file_handle).await?;
-    Ok(())
-}
-
-async fn insert_namespace_data(
-    vault: &mut Vault,
-    password: JsValue,
-    namespace: JsValue,
-    data: JsValue,
-    expires_in_seconds: Option<i64>,
-) -> Result<(), JsValue> {
-    let password: String = from_value(password)?;
-    let namespace: String = from_value(namespace)?;
-
-    let data_json = from_value::<serde_json::Value>(data)?;
-    let data_bytes = serde_json::to_vec(&data_json)
-        .map_err(|e| JsValue::from_str(&format!("Failed to serialize data: {:?}", e)))?;
-
-    let mut nonce_bytes = [0u8; 12];
-    OsRng.fill_bytes(&mut nonce_bytes);
-
-    let key_bytes = derive_key(password.as_bytes(), &vault.salt)?;
-    let cipher_key = Key::from_slice(&key_bytes);
-    let cipher = ChaCha20Poly1305::new(cipher_key);
-    let nonce = Nonce::from_slice(&nonce_bytes);
-
-    let encrypted_data = cipher
-        .encrypt(nonce, data_bytes.as_ref())
-        .map_err(|e| JsValue::from_str(&format!("Encryption failed: {:?}", e)))?;
-
-    let expiration = expires_in_seconds.map(|seconds| {
-        let now = js_sys::Date::now() as i64 / 1000;
-        Expiration {
-            expires_at: now + seconds,
-        }
-    });
-
-    if let Some(exp) = &expiration {
-        log(&format!(
-            "Setting expiration for namespace '{}' to timestamp {}",
-            namespace, exp.expires_at
-        ));
-    }
-
-    vault.namespaces.insert(
-        namespace,
-        EncryptedNamespace {
-            data: encrypted_data,
-            nonce: nonce_bytes,
-            expiration,
-        },
-    );
-
-    Ok(())
 }
