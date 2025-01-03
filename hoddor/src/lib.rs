@@ -6,7 +6,7 @@ mod errors;
 pub mod file_system;
 mod global;
 mod lock;
-mod measure;
+pub mod measure;
 pub mod vault;
 
 use wasm_bindgen::prelude::*;
