@@ -18,32 +18,7 @@ use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_browser);
 
-async fn cleanup_all_vaults() {
-    let vaults = list_vaults().await.unwrap_or_else(|_| JsValue::from("[]"));
-    let vault_list: Vec<String> = from_value(vaults).unwrap_or_default();
-    log(&format!("Found {} vaults to clean up", vault_list.len()));
-
-    let root = get_root_directory_handle()
-        .await
-        .expect("Failed to get root directory");
-
-    for vault_name in vault_list {
-        if let Err(e) = remove_directory_with_contents(&root, &vault_name).await {
-            log(&format!(
-                "Failed to remove vault directory {}: {:?}",
-                vault_name, e
-            ));
-        }
-    }
-
-    let remaining_vaults = list_vaults().await.unwrap_or_else(|_| JsValue::from("[]"));
-    let remaining_list: Vec<String> = from_value(remaining_vaults).unwrap_or_default();
-    assert!(
-        remaining_list.is_empty(),
-        "Some vaults were not cleaned up: {:?}",
-        remaining_list
-    );
-}
+mod test_utils;
 
 #[wasm_bindgen_test]
 async fn test_vault_crud_operations() {
@@ -51,7 +26,7 @@ async fn test_vault_crud_operations() {
     let namespace: JsValue = "test_namespace".into();
     let data: JsValue = "test_data".into();
 
-    cleanup_all_vaults().await;
+    test_utils::cleanup_all_vaults().await;
     create_vault(
         JsValue::from_str("default"),
         password.clone(),
@@ -62,7 +37,7 @@ async fn test_vault_crud_operations() {
     .await
     .expect("Failed to create vault");
 
-    cleanup_all_vaults().await;
+    test_utils::cleanup_all_vaults().await;
 }
 
 #[wasm_bindgen_test]
@@ -73,7 +48,7 @@ async fn test_list_namespaces() {
     let first_ns: JsValue = namespaces[0].into();
     let data: JsValue = "test_data".into();
 
-    cleanup_all_vaults().await;
+    test_utils::cleanup_all_vaults().await;
 
     create_vault(
         JsValue::from_str("default"),
@@ -112,7 +87,7 @@ async fn test_list_namespaces() {
         );
     }
 
-    cleanup_all_vaults().await;
+    test_utils::cleanup_all_vaults().await;
 }
 
 #[wasm_bindgen_test]
@@ -122,7 +97,7 @@ async fn test_invalid_password() {
     let namespace: JsValue = "test_namespace".into();
     let data: JsValue = "test_data".into();
 
-    cleanup_all_vaults().await;
+    test_utils::cleanup_all_vaults().await;
 
     create_vault(
         JsValue::from_str("default-2"),
@@ -137,7 +112,7 @@ async fn test_invalid_password() {
     let result = read_from_vault("default-2", wrong_password.clone(), namespace.clone()).await;
     assert!(result.is_err(), "Should fail with wrong password");
 
-    cleanup_all_vaults().await;
+    test_utils::cleanup_all_vaults().await;
 }
 
 #[wasm_bindgen_test]
@@ -171,12 +146,12 @@ async fn test_list_vaults() {
         assert!(listed_vaults.contains(name), "Missing vault: {}", name);
     }
 
-    cleanup_all_vaults().await;
+    test_utils::cleanup_all_vaults().await;
 }
 
 #[wasm_bindgen_test]
 async fn test_invalid_vault_name() {
-    cleanup_all_vaults().await;
+    test_utils::cleanup_all_vaults().await;
 
     let password: JsValue = "test_password123".into();
     let namespace: JsValue = "test_namespace".into();
@@ -214,12 +189,12 @@ async fn test_invalid_vault_name() {
         }
     }
 
-    cleanup_all_vaults().await;
+    test_utils::cleanup_all_vaults().await;
 }
 
 #[wasm_bindgen_test]
 async fn test_duplicate_vault_creation() {
-    cleanup_all_vaults().await;
+    test_utils::cleanup_all_vaults().await;
 
     let vault_name: JsValue = "duplicate_test".into();
     let password: JsValue = "test_password123".into();
@@ -267,7 +242,7 @@ async fn test_duplicate_vault_creation() {
 
 #[wasm_bindgen_test]
 async fn test_special_characters_in_namespace() {
-    cleanup_all_vaults().await;
+    test_utils::cleanup_all_vaults().await;
 
     let password: JsValue = "test_password123".into();
     let namespace: JsValue = "test-namespace_#$+[]()".into();
@@ -293,12 +268,12 @@ async fn test_special_characters_in_namespace() {
         .await
         .expect("Failed to remove vault with special characters");
 
-    cleanup_all_vaults().await;
+    test_utils::cleanup_all_vaults().await;
 }
 
 #[wasm_bindgen_test]
 async fn test_concurrent_vault_operations() {
-    cleanup_all_vaults().await;
+    test_utils::cleanup_all_vaults().await;
 
     let passwords: Vec<JsValue> = (0..3).map(|i| format!("password{}", i).into()).collect();
     let namespaces: Vec<JsValue> = (0..3).map(|i| format!("namespace{}", i).into()).collect();
@@ -322,12 +297,12 @@ async fn test_concurrent_vault_operations() {
         result.expect("Failed to create vault in concurrent operation");
     }
 
-    cleanup_all_vaults().await;
+    test_utils::cleanup_all_vaults().await;
 }
 
 #[wasm_bindgen_test]
 async fn test_empty_namespace() {
-    cleanup_all_vaults().await;
+    test_utils::cleanup_all_vaults().await;
 
     let password: JsValue = "test_password123".into();
     let namespace: JsValue = "".into();
@@ -343,12 +318,12 @@ async fn test_empty_namespace() {
     .await;
     assert!(result.is_err(), "Should fail with empty namespace");
 
-    cleanup_all_vaults().await;
+    test_utils::cleanup_all_vaults().await;
 }
 
 #[wasm_bindgen_test]
 async fn test_empty_data() {
-    cleanup_all_vaults().await;
+    test_utils::cleanup_all_vaults().await;
 
     let password: JsValue = "test_password123".into();
     let namespace: JsValue = "test_namespace".into();
@@ -369,12 +344,12 @@ async fn test_empty_data() {
         .expect("Failed to read from vault with empty data");
     assert_eq!(read_data.as_string().unwrap(), "");
 
-    cleanup_all_vaults().await;
+    test_utils::cleanup_all_vaults().await;
 }
 
 #[wasm_bindgen_test]
 async fn test_special_characters_in_vault_name() {
-    cleanup_all_vaults().await;
+    test_utils::cleanup_all_vaults().await;
 
     let password: JsValue = "test_password123".into();
     let namespace: JsValue = "test_namespace".into();
@@ -408,12 +383,12 @@ async fn test_special_characters_in_vault_name() {
         }
     }
 
-    cleanup_all_vaults().await;
+    test_utils::cleanup_all_vaults().await;
 }
 
 #[wasm_bindgen_test]
 async fn test_concurrent_vault_creation() {
-    cleanup_all_vaults().await;
+    test_utils::cleanup_all_vaults().await;
 
     let vault_names: Vec<JsValue> = (0..3).map(|i| format!("vault{}", i).into()).collect();
     let passwords: Vec<JsValue> = (0..3).map(|i| format!("password{}", i).into()).collect();
@@ -463,12 +438,12 @@ async fn test_concurrent_vault_creation() {
         result.expect("Failed to create namespace in concurrent operation");
     }
 
-    cleanup_all_vaults().await;
+    test_utils::cleanup_all_vaults().await;
 }
 
 #[wasm_bindgen_test]
 async fn test_read_non_existent_namespace() {
-    cleanup_all_vaults().await;
+    test_utils::cleanup_all_vaults().await;
 
     let password: JsValue = "test_password123".into();
     let namespace: JsValue = "non_existent_namespace".into();
@@ -479,7 +454,7 @@ async fn test_read_non_existent_namespace() {
         "Reading from a non-existent namespace should fail"
     );
 
-    cleanup_all_vaults().await;
+    test_utils::cleanup_all_vaults().await;
 }
 
 #[wasm_bindgen_test]
@@ -488,7 +463,7 @@ async fn test_list_namespaces_in_empty_vault() {
     let namespace: JsValue = "initial_namespace".into();
     let data: JsValue = "initial_data".into();
 
-    cleanup_all_vaults().await;
+    test_utils::cleanup_all_vaults().await;
 
     create_vault(
         JsValue::from_str("default"),
@@ -514,7 +489,7 @@ async fn test_list_namespaces_in_empty_vault() {
         "Namespaces list should be empty"
     );
 
-    cleanup_all_vaults().await;
+    test_utils::cleanup_all_vaults().await;
 }
 
 #[wasm_bindgen_test]
@@ -523,7 +498,7 @@ async fn test_concurrent_read_operations() {
     let namespace: JsValue = "test_namespace".into();
     let data: JsValue = "test_data".into();
 
-    cleanup_all_vaults().await;
+    test_utils::cleanup_all_vaults().await;
 
     create_vault(
         JsValue::from_str("default"),
@@ -547,12 +522,12 @@ async fn test_concurrent_read_operations() {
         assert_eq!(read_data.as_string().unwrap(), "test_data");
     }
 
-    cleanup_all_vaults().await;
+    test_utils::cleanup_all_vaults().await;
 }
 
 #[wasm_bindgen_test]
 async fn test_data_expiration() {
-    cleanup_all_vaults().await;
+    test_utils::cleanup_all_vaults().await;
 
     let vault_name = "expires_vault";
     let password: JsValue = "expire_password".into();
@@ -584,12 +559,12 @@ async fn test_data_expiration() {
     let expired_result = read_from_vault(vault_name, password.clone(), namespace.clone()).await;
     assert!(expired_result.is_err(), "Reading expired data should fail");
 
-    cleanup_all_vaults().await;
+    test_utils::cleanup_all_vaults().await;
 }
 
 #[wasm_bindgen_test]
 async fn test_force_cleanup() {
-    cleanup_all_vaults().await;
+    test_utils::cleanup_all_vaults().await;
 
     let vault_name = "force_cleanup_vault";
     let password: JsValue = "force_cleanup_password".into();
@@ -632,12 +607,12 @@ async fn test_force_cleanup() {
         "All expired namespaces should be removed by forced cleanup"
     );
 
-    cleanup_all_vaults().await;
+    test_utils::cleanup_all_vaults().await;
 }
 
 #[wasm_bindgen_test]
 async fn test_import_export_round_trip() {
-    cleanup_all_vaults().await;
+    test_utils::cleanup_all_vaults().await;
 
     let vault_name = "round_trip_vault";
     let password_str = "round_trip_password";
@@ -686,12 +661,12 @@ async fn test_import_export_round_trip() {
         "Data mismatch after import/export round-trip"
     );
 
-    cleanup_all_vaults().await;
+    test_utils::cleanup_all_vaults().await;
 }
 
 #[wasm_bindgen_test]
 async fn test_export_with_incorrect_password() {
-    cleanup_all_vaults().await;
+    test_utils::cleanup_all_vaults().await;
 
     let vault_name = "import_incorrect_vault";
     let correct_password: JsValue = "correct_password".into();
@@ -715,12 +690,12 @@ async fn test_export_with_incorrect_password() {
         "Export should fail when using an incorrect password"
     );
 
-    cleanup_all_vaults().await;
+    test_utils::cleanup_all_vaults().await;
 }
 
 #[wasm_bindgen_test]
 async fn test_disable_cleanup() {
-    cleanup_all_vaults().await;
+    test_utils::cleanup_all_vaults().await;
 
     configure_cleanup(1);
     let vault_name = "cleanup_disabled_vault";
@@ -760,12 +735,12 @@ async fn test_disable_cleanup() {
     }
 
     configure_cleanup(1);
-    cleanup_all_vaults().await;
+    test_utils::cleanup_all_vaults().await;
 }
 
 #[wasm_bindgen_test]
 async fn test_concurrent_upserts_different_namespaces() {
-    cleanup_all_vaults().await;
+    test_utils::cleanup_all_vaults().await;
 
     let vault_name = "concurrent_diff_ns_vault";
     let password_str = "diff_ns_password";
@@ -841,7 +816,7 @@ async fn test_concurrent_upserts_different_namespaces() {
         }
     }
 
-    cleanup_all_vaults().await;
+    test_utils::cleanup_all_vaults().await;
 }
 
 #[wasm_bindgen_test]
@@ -851,7 +826,7 @@ async fn test_upsert_with_replace() {
     let initial_data: JsValue = "initial_data".into();
     let updated_data: JsValue = "updated_data".into();
 
-    cleanup_all_vaults().await;
+    test_utils::cleanup_all_vaults().await;
 
     create_vault(
         JsValue::from_str("default"),
@@ -879,7 +854,7 @@ async fn test_upsert_with_replace() {
         .expect("Failed to read data");
     assert_eq!(read_data, updated_data, "Data was not updated correctly");
 
-    cleanup_all_vaults().await;
+    test_utils::cleanup_all_vaults().await;
 }
 
 #[wasm_bindgen_test]
@@ -888,7 +863,7 @@ async fn test_namespace_removal_validation() {
     let namespace: JsValue = "test_namespace".into();
     let data: JsValue = "test_data".into();
 
-    cleanup_all_vaults().await;
+    test_utils::cleanup_all_vaults().await;
 
     create_vault(
         JsValue::from_str("default"),
@@ -916,7 +891,7 @@ async fn test_namespace_removal_validation() {
         "Should not be able to read removed namespace"
     );
 
-    cleanup_all_vaults().await;
+    test_utils::cleanup_all_vaults().await;
 }
 
 #[wasm_bindgen_test]
@@ -925,7 +900,7 @@ async fn test_multiple_expired_namespaces() {
     let data: JsValue = "test_data".into();
     let namespaces = vec!["ns1", "ns2", "ns3"];
 
-    cleanup_all_vaults().await;
+    test_utils::cleanup_all_vaults().await;
 
     for ns in &namespaces {
         let ns_value: JsValue = (*ns).into();
@@ -968,7 +943,7 @@ async fn test_multiple_expired_namespaces() {
         "All namespaces should be expired and removed"
     );
 
-    cleanup_all_vaults().await;
+    test_utils::cleanup_all_vaults().await;
 }
 
 #[wasm_bindgen_test]
@@ -979,7 +954,7 @@ async fn test_large_data_payload() {
     let large_data = "x".repeat(1024 * 1024);
     let data: JsValue = large_data.clone().into();
 
-    cleanup_all_vaults().await;
+    test_utils::cleanup_all_vaults().await;
 
     create_vault(
         JsValue::from_str("default"),
@@ -1001,7 +976,7 @@ async fn test_large_data_payload() {
         "Large data was not preserved correctly"
     );
 
-    cleanup_all_vaults().await;
+    test_utils::cleanup_all_vaults().await;
 }
 
 #[wasm_bindgen_test]
@@ -1010,7 +985,7 @@ async fn test_unicode_namespace() {
     let namespace: JsValue = "测试_namespace_🔒".into();
     let data: JsValue = "test_data".into();
 
-    cleanup_all_vaults().await;
+    test_utils::cleanup_all_vaults().await;
 
     create_vault(
         JsValue::from_str("default"),
@@ -1036,7 +1011,7 @@ async fn test_unicode_namespace() {
         "Data in Unicode namespace was not preserved correctly"
     );
 
-    cleanup_all_vaults().await;
+    test_utils::cleanup_all_vaults().await;
 }
 
 #[wasm_bindgen_test]
@@ -1045,7 +1020,7 @@ async fn test_concurrent_data_integrity() {
     let base_namespace = "test_namespace";
     let base_data = "test_data";
 
-    cleanup_all_vaults().await;
+    test_utils::cleanup_all_vaults().await;
 
     create_vault(
         JsValue::from_str("default"),
@@ -1106,7 +1081,7 @@ async fn test_concurrent_data_integrity() {
         );
     }
 
-    cleanup_all_vaults().await;
+    test_utils::cleanup_all_vaults().await;
 }
 
 #[wasm_bindgen_test]
@@ -1115,7 +1090,7 @@ async fn test_concurrent_read_write_integrity() {
     let namespace: JsValue = "test_namespace".into();
     let initial_data: JsValue = "initial_data".into();
 
-    cleanup_all_vaults().await;
+    test_utils::cleanup_all_vaults().await;
 
     create_vault(
         JsValue::from_str("default"),
@@ -1170,7 +1145,7 @@ async fn test_concurrent_read_write_integrity() {
         );
     }
 
-    cleanup_all_vaults().await;
+    test_utils::cleanup_all_vaults().await;
 }
 
 #[wasm_bindgen_test]
@@ -1178,7 +1153,7 @@ async fn test_data_integrity_with_binary() {
     let password: JsValue = "test_password123".into();
     let namespace: JsValue = "binary_test".into();
 
-    cleanup_all_vaults().await;
+    test_utils::cleanup_all_vaults().await;
 
     let mut binary_data = Vec::new();
     for i in 0..256 {
@@ -1209,12 +1184,12 @@ async fn test_data_integrity_with_binary() {
 
     assert_eq!(read_bytes, binary_data, "Binary data corruption detected");
 
-    cleanup_all_vaults().await;
+    test_utils::cleanup_all_vaults().await;
 }
 
 #[wasm_bindgen_test]
 async fn test_concurrent_same_namespace_upserts() {
-    cleanup_all_vaults().await;
+    test_utils::cleanup_all_vaults().await;
 
     let vault_name = "concurrent_same_ns";
     let password: JsValue = "test_password123".into();
@@ -1268,5 +1243,5 @@ async fn test_concurrent_same_namespace_upserts() {
         "Last-write-wins expectation not met for concurrent upserts"
     );
 
-    cleanup_all_vaults().await;
+    test_utils::cleanup_all_vaults().await;
 }
