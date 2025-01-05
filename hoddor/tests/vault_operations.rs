@@ -4,8 +4,7 @@ extern crate wasm_bindgen_test;
 use futures_util::future;
 use gloo_timers::future::TimeoutFuture;
 use hoddor::{
-    console::log,
-    file_system::{get_root_directory_handle, remove_directory_with_contents},
+    console,
     vault::{
         configure_cleanup, create_vault, export_vault, force_cleanup_vault, import_vault,
         list_namespaces, list_vaults, read_from_vault, remove_from_vault, remove_vault,
@@ -721,7 +720,7 @@ async fn test_disable_cleanup() {
 
     match read_data {
         Ok(d) => {
-            log("Data remains because we disabled cleanup.");
+            console::log("Data remains because we disabled cleanup.");
             assert_eq!(
                 d.as_string().unwrap(),
                 "short_lived_data",
@@ -729,8 +728,8 @@ async fn test_disable_cleanup() {
             );
         }
         Err(e) => {
-            log("Data is expired at read time, so the read returned error");
-            log(&format!("Error: {:?}", e));
+            console::log("Data is expired at read time, so the read returned error");
+            console::log(&format!("Error: {:?}", e));
         }
     }
 
@@ -760,7 +759,7 @@ async fn test_concurrent_upserts_different_namespaces() {
     for i in 1..6 {
         let ns = format!("namespace{}", i);
         let dt = format!("data{}", i);
-        log(&format!("Preparing upsert for namespace '{}'", ns));
+        console::log(&format!("Preparing upsert for namespace '{}'", ns));
         tasks.push(upsert_vault(
             vault_name,
             password.clone(),
@@ -774,7 +773,7 @@ async fn test_concurrent_upserts_different_namespaces() {
     let results = future::join_all(tasks).await;
     for (i, result) in results.into_iter().enumerate() {
         if let Err(e) = result {
-            log(&format!("Upsert #{} failed with error: {:?}", i, e));
+            console::log(&format!("Upsert #{} failed with error: {:?}", i, e));
         }
     }
 
@@ -782,10 +781,10 @@ async fn test_concurrent_upserts_different_namespaces() {
         .await
         .expect("Failed to list namespaces");
     let ns_array = js_sys::Array::from(&namespaces);
-    log(&format!("Found {} namespaces:", ns_array.length()));
+    console::log(&format!("Found {} namespaces:", ns_array.length()));
     for i in 0..ns_array.length() {
         if let Some(ns) = ns_array.get(i).as_string() {
-            log(&format!("  - {}", ns));
+            console::log(&format!("  - {}", ns));
         }
     }
 
@@ -811,7 +810,7 @@ async fn test_concurrent_upserts_different_namespaces() {
                 );
             }
             Err(e) => {
-                log(&format!("Read failed for namespace '{}': {:?}", ns, e));
+                console::log(&format!("Read failed for namespace '{}': {:?}", ns, e));
             }
         }
     }
@@ -1042,17 +1041,38 @@ async fn test_concurrent_data_integrity() {
         let data_value: JsValue = data.into();
         let password = password.clone();
 
-        futures.push(upsert_vault(
-            "default",
-            password.clone(),
-            ns_value,
-            data_value,
-            None,
-            false,
-        ));
+        futures.push(async move {
+            let mut retries = 3;
+            while retries > 0 {
+                match upsert_vault(
+                    "default",
+                    password.clone(),
+                    ns_value.clone(),
+                    data_value.clone(),
+                    None,
+                    false,
+                )
+                .await
+                {
+                    Ok(_) => return Ok(()),
+                    Err(e) => {
+                        retries -= 1;
+                        if retries > 0 {
+                            TimeoutFuture::new(50).await;
+                        } else {
+                            return Err(e);
+                        }
+                    }
+                }
+            }
+            Ok(())
+        });
     }
 
-    future::join_all(futures).await;
+    let results = future::join_all(futures).await;
+    for result in results {
+        result.expect("Concurrent operation failed");
+    }
 
     let listed = list_namespaces("default", password.clone())
         .await

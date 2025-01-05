@@ -12,58 +12,85 @@ default = ["console_error_panic_hook"]
 
 [dependencies]
 lazy_static = "1.4"
-once_cell = "1.10.0"
-wasm-bindgen = "0.2.84"
+once_cell = "1.20.2"
+wasm-bindgen = "0.2.89"
 console_error_panic_hook = { version = "0.1.7", optional = true }
 wasm-bindgen-futures = { version = "0.4", features = ["futures-core-03-stream"] }
 
-serde = { version = "1.0", features = ["derive"] }
+serde = { version = "1.0.217", features = ["derive", "rc"] }
 serde-wasm-bindgen = "0.3"
-serde_json = "1.0"
+serde_json = "1.0.134"
 
 argon2 = "0.5.3"
 rand_core = { version = "0.6.4", features = ["std"] }
-getrandom = { version = "0.2.15", features = ["js"] }
+getrandom = { version = "0.2.12", features = ["js"] }
 chacha20poly1305 = "0.10.1"
 rand = "0.8.5"
 
-js-sys = "0.3.76"
+js-sys = "0.3.66"
 
 # --- HMAC + SHA2 for vault integrity ---
 hmac = "0.12.1"
 sha2 = "0.10.8"
 
 base64 = "0.21.7"
-futures-util = "0.3.31"  # Add futures-util crate
+futures-util = "0.3.31"
+futures = "0.3.31"
+parking_lot = "0.12.3"
+hex = "0.4.3"
+futures-channel = "0.3.31"
 
 [dependencies.web-sys]
-version = "0.3.64"
+version = "0.3.76"
 features = [
+    "Window",
+    "Document",
+    "HtmlElement",
+    "Node",
+    "Text",
+    "console",
+    "RtcPeerConnection",
+    "RtcConfiguration",
+    "RtcDataChannel",
+    "RtcDataChannelInit",
+    "RtcSessionDescriptionInit",
+    "RtcSdpType",
+    "MessageEvent",
+    "ErrorEvent",
+    "Performance",
+    "RtcPeerConnectionIceEvent",
+    "RtcIceCandidate",
+    "RtcIceCandidateInit",
+    "WebSocket",
+    "BinaryType",
+    "Blob",
+    "Navigator",
     "Lock",
     "LockManager",
-    "console",
-    'Window',
-    'Performance',
-    'StorageManager',
-    'FileSystemDirectoryHandle',
-    'FileSystemFileHandle',
-    'FileSystemHandle',
-    'FileSystemGetFileOptions',
-    'FileSystemGetDirectoryOptions',
-    'FileSystemRemoveOptions',
-    'FileSystemSyncAccessHandle',
-    'WritableStreamDefaultWriter',
-    'Blob',
-    'File',
-    'TextDecoder',
-    'WorkerGlobalScope',
-    'Window',
-    'Navigator',
-    'WorkerNavigator',
-    'Storage',
-    'FileSystemWritableFileStream',
-    'WritableStream',
-    'LockOptions',
+    "LockOptions",
+    "StorageManager",
+    "FileSystemDirectoryHandle",
+    "FileSystemFileHandle",
+    "FileSystemHandle",
+    "FileSystemGetFileOptions",
+    "FileSystemGetDirectoryOptions",
+    "FileSystemRemoveOptions",
+    "FileSystemSyncAccessHandle",
+    "WritableStreamDefaultWriter",
+    "File",
+    "TextDecoder",
+    "WorkerGlobalScope",
+    "WorkerNavigator",
+    "Storage",
+    "FileSystemWritableFileStream",
+    "WritableStream",
+    "RtcSignalingState",
+    "RtcIceConnectionState",
+    "RtcIceGatheringState",
+    "RtcPeerConnectionState",
+    "RtcDataChannelState",
+    "RtcIceServer",
+    "RtcDataChannelEvent"
 ]
 
 [dependencies.gloo-timers]

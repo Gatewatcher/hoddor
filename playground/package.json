@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "RUSTFLAGS='--cfg=web_sys_unstable_apis' concurrently \"cd ../hoddor && watchexec -w src -- wasm-pack build --target web\" \"vite\"",
+    "dev": "RUSTFLAGS='--cfg=web_sys_unstable_apis' concurrently \"cd ../hoddor && watchexec -w src -- wasm-pack build --target web\" \"cd ../server && watchexec -w src -- cargo run\" \"vite\"",
     "build": "RUSTFLAGS='--cfg=web_sys_unstable_apis' tsc && vite build",
     "preview": "vite preview"
   },

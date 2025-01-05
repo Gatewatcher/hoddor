@@ -10,4 +10,10 @@ extern "C" {
 
     #[wasm_bindgen(js_namespace = console)]
     pub fn timeEnd(s: &str);
+
+    #[wasm_bindgen(js_namespace = console)]
+    pub fn error(s: &str);
+
+    #[wasm_bindgen(js_namespace = console)]
+    pub fn warn(s: &str);
 }

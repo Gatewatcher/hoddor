@@ -1,9 +1,15 @@
 import './style.css';
-import init, { set_debug_mode, upsert_vault, read_from_vault, remove_from_vault, remove_vault, list_vaults } from '../../hoddor/pkg/hoddor.js';
+import init, { set_debug_mode, upsert_vault, read_from_vault, remove_from_vault, remove_vault, list_vaults, enable_sync, connect_to_peer, add_peer, create_vault } from '../../hoddor/pkg/hoddor.js';
 import { VaultWorker } from './vault';
 import { runPerformanceTest } from './performance';
 
+const BASE_URL = 'http://localhost:8080';
 const PASSWORD = 'password123';
+const STUN_SERVERS = [
+  'stun:stun1.l.google.com:19302',
+  'stun:stun2.l.google.com:19302',
+];
+
 const vault = new VaultWorker();
 
 async function fetchImageAsBytes(url: string): Promise<Uint8Array> {
@@ -165,6 +171,21 @@ async function displayStoredVideo(password: string) {
 const fileInput = document.createElement('input');
 fileInput.type = 'file';
 fileInput.accept = 'video/*';
+fileInput.style.display = 'none';
+
+const importInput = document.createElement('input');
+importInput.type = 'file';
+importInput.accept = '*';
+importInput.style.display = 'none';
+
+const fileButton = document.createElement('button');
+fileButton.textContent = 'Select Video File';
+fileButton.onclick = () => fileInput.click();
+
+const importButton = document.createElement('button');
+importButton.textContent = 'Import Vault';
+importButton.onclick = () => importInput.click();
+
 fileInput.onchange = async (e) => {
   const file = (e.target as HTMLInputElement).files?.[0];
   if (file) {
@@ -172,7 +193,36 @@ fileInput.onchange = async (e) => {
     await displayStoredVideo(PASSWORD);
   }
 };
+
+importInput.onchange = async (e) => {
+  const file = (e.target as HTMLInputElement).files?.[0];
+  if (!file) return;
+
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    const uint8Array = new Uint8Array(arrayBuffer);
+    console.log('Importing vault data of size:', uint8Array.length, 'bytes');
+
+    if (uint8Array.length > 6) {
+      const header = new TextDecoder().decode(uint8Array.slice(0, 6));
+      console.log('Detected format:', header === 'VAULT1' ? 'Binary vault format' : 'Legacy format');
+    }
+
+    await vault.importVault('default', uint8Array);
+    alert('Vault imported successfully');
+    location.reload();
+  } catch (error) {
+    console.error('Failed to import vault:', error);
+    alert('Failed to import vault: ' + error);
+  } finally {
+    importInput.value = '';
+  }
+};
+
+document.body.appendChild(fileButton);
 document.body.appendChild(fileInput);
+document.body.appendChild(importButton);
+document.body.appendChild(importInput);
 
 const perfButton = document.createElement('button');
 perfButton.textContent = 'Run Performance Test';
@@ -251,43 +301,6 @@ exportButton.onclick = async () => {
 };
 document.body.appendChild(exportButton);
 
-const importInput = document.createElement('input');
-importInput.type = 'file';
-importInput.accept = '*'; // Accept all file types, not just .dat
-importInput.style.display = 'none';
-
-const importButton = document.createElement('button');
-importButton.textContent = 'Import Vault';
-importButton.onclick = () => importInput.click();
-
-importInput.onchange = async (e) => {
-  const file = (e.target as HTMLInputElement).files?.[0];
-  if (!file) return;
-
-  try {
-    const arrayBuffer = await file.arrayBuffer();
-    const uint8Array = new Uint8Array(arrayBuffer);
-    console.log('Importing vault data of size:', uint8Array.length, 'bytes');
-
-    if (uint8Array.length > 6) {
-      const header = new TextDecoder().decode(uint8Array.slice(0, 6));
-      console.log('Detected format:', header === 'VAULT1' ? 'Binary vault format' : 'Legacy format');
-    }
-
-    await vault.importVault('default', uint8Array);
-    alert('Vault imported successfully');
-    location.reload();
-  } catch (error) {
-    console.error('Failed to import vault:', error);
-    alert('Failed to import vault: ' + error);
-  } finally {
-    importInput.value = '';
-  }
-};
-
-document.body.appendChild(importButton);
-document.body.appendChild(importInput);
-
 const removeVaultButton = document.createElement('button');
 removeVaultButton.textContent = 'Remove Vault';
 removeVaultButton.onclick = async () => {
@@ -332,7 +345,7 @@ expirationTestButton.onclick = async () => {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     console.error('Expiration test failed:', errorMessage);
-    statusDiv.textContent = `Test failed: ${errorMessage}`;
+    statusText.textContent = `Test failed: ${errorMessage}`;
   }
 };
 document.body.appendChild(expirationTestButton);
@@ -368,9 +381,9 @@ async function storeUserData(password: string, userData: UserData) {
     console.log('Storing user data:', userData);
 
     try {
-      await upsert_vault('default', password, namespace, userData);
+      await upsert_vault('default', password, namespace, userData, undefined, false);
     } catch (e) {
-      await upsert_vault('default', password, namespace, userData);
+      await upsert_vault('default', password, namespace, userData, undefined, false);
     }
     console.log('User data stored successfully');
   } catch (e) {
@@ -444,6 +457,243 @@ async function run() {
 
 run().catch(console.error);
 
+interface TodoItem {
+  id: string;
+  text: string;
+  completed: boolean;
+  lastModified: number;
+}
+
+interface TodoList {
+  items: TodoItem[];
+  lastSync: number;
+}
+
+let cachedTodos: TodoList | null = null;
+const READ_INTERVAL = 1000;
+
+async function readTodoList(): Promise<TodoList> {
+  try {
+    const data = await read_from_vault('todos', PASSWORD, 'todo_list');
+    if (data) {
+      const todoData = new TextDecoder().decode(new Uint8Array(data as number[]));
+      const newTodos = JSON.parse(todoData);
+
+      if (!cachedTodos || JSON.stringify(newTodos) !== JSON.stringify(cachedTodos)) {
+        console.log('New todos received:', newTodos);
+        const todoContainer = document.querySelector('[data-todo-container]');
+        if (todoContainer) {
+          const inputContainer = todoContainer.querySelector('[data-input-container]');
+          const list = todoContainer.querySelector('[data-list]');
+          const waitingMessage = todoContainer.querySelector('[data-waiting-message]');
+          if (inputContainer && list && waitingMessage) {
+            inputContainer.style.display = 'flex';
+            list.style.display = 'block';
+            list.style.color = 'black';
+            waitingMessage.style.display = 'none';
+          }
+        }
+
+        cachedTodos = newTodos;
+        const syncStatus = document.querySelector('[data-sync-status]');
+        if (syncStatus) {
+          updateSyncStatus(syncStatus, cachedTodos.lastSync);
+        }
+      }
+
+      return newTodos;
+    }
+    return cachedTodos || { items: [], lastSync: Date.now() };
+  } catch (e) {
+    console.error('Error reading todo list:', e);
+    return cachedTodos || { items: [], lastSync: Date.now() };
+  }
+};
+
+async function writeTodoList(todos: TodoList) {
+  try {
+    const todoData = new TextEncoder().encode(JSON.stringify(todos));
+    await upsert_vault('todos', PASSWORD, 'todo_list', Array.from(todoData), undefined, true);
+    cachedTodos = todos;
+    const syncStatus = document.querySelector('[data-sync-status]');
+    if (syncStatus) {
+      updateSyncStatus(syncStatus, todos.lastSync);
+    }
+  } catch (e) {
+    console.error('Error writing todo list:', e);
+  }
+}
+
+function updateSyncStatus(element: HTMLElement, lastSyncTime: number) {
+  const timeSinceSync = Date.now() - lastSyncTime;
+  const secondsSinceSync = Math.floor(timeSinceSync / 1000);
+  element.style.color = 'black';
+  element.textContent = `Last synced: ${secondsSinceSync} seconds ago`;
+  element.style.backgroundColor = secondsSinceSync < 5 ? '#e8f5e9' : '#f0f0f0';
+}
+
+async function createTodoDemo() {
+  const container = document.createElement('div');
+  container.setAttribute('data-todo-container', '');
+  container.style.margin = '20px';
+  container.style.padding = '20px';
+  container.style.border = '1px solid #ccc';
+  container.style.borderRadius = '8px';
+  container.style.maxWidth = '600px';
+
+  const syncStatus = document.createElement('div');
+  syncStatus.setAttribute('data-sync-status', '');
+  syncStatus.style.marginBottom = '10px';
+  syncStatus.style.padding = '8px';
+  syncStatus.style.borderRadius = '4px';
+  syncStatus.style.backgroundColor = '#f0f0f0';
+  syncStatus.style.fontSize = '14px';
+  container.appendChild(syncStatus);
+
+  const waitingMessage = document.createElement('div');
+  waitingMessage.setAttribute('data-waiting-message', '');
+  waitingMessage.style.textAlign = 'center';
+  waitingMessage.style.padding = '20px';
+  waitingMessage.style.color = '#666';
+  waitingMessage.textContent = 'Connect to a peer to start collaborating on todos';
+  container.appendChild(waitingMessage);
+
+  const inputContainer = document.createElement('div');
+  inputContainer.setAttribute('data-input-container', '');
+  inputContainer.style.marginBottom = '20px';
+  inputContainer.style.display = 'flex';
+  inputContainer.style.gap = '10px';
+  inputContainer.style.display = 'none';
+
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.placeholder = 'Enter a new todo item';
+  input.style.flexGrow = '1';
+  input.style.padding = '8px';
+  input.style.borderRadius = '4px';
+  input.style.border = '1px solid #ccc';
+  inputContainer.appendChild(input);
+
+  const addButton = document.createElement('button');
+  addButton.textContent = 'Add Todo';
+  addButton.style.padding = '8px 16px';
+  addButton.style.backgroundColor = '#4CAF50';
+  addButton.style.color = 'white';
+  addButton.style.border = 'none';
+  addButton.style.borderRadius = '4px';
+  addButton.style.cursor = 'pointer';
+  inputContainer.appendChild(addButton);
+
+  container.appendChild(inputContainer);
+
+  const list = document.createElement('div');
+  list.setAttribute('data-list', '');
+  list.style.marginTop = '10px';
+  list.style.display = 'none';
+  container.appendChild(list);
+
+  async function renderTodoList() {
+    const todos = await readTodoList();
+    if (!todos) return;
+
+    const list = document.querySelector('[data-list]');
+    if (!list) return;
+    list.innerHTML = '';
+
+    todos.items.forEach((todo, index) => {
+      const item = document.createElement('div');
+      item.style.display = 'flex';
+      item.style.alignItems = 'center';
+      item.style.marginBottom = '10px';
+      item.style.padding = '10px';
+      item.style.backgroundColor = todo.completed ? '#e8f5e9' : '#fff';
+      item.style.borderRadius = '5px';
+      item.style.border = '1px solid #ccc';
+
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.checked = todo.completed;
+      checkbox.style.marginRight = '10px';
+      checkbox.addEventListener('change', async () => {
+        todos.items[index].completed = checkbox.checked;
+        todos.lastSync = Date.now();
+        await writeTodoList(todos);
+        await renderTodoList();
+      });
+
+      const text = document.createElement('span');
+      text.textContent = todo.text;
+      text.style.flexGrow = '1';
+      if (todo.completed) {
+        text.style.textDecoration = 'line-through';
+        text.style.color = '#666';
+      }
+
+      const deleteBtn = document.createElement('button');
+      deleteBtn.textContent = '';
+      deleteBtn.style.marginLeft = '10px';
+      deleteBtn.style.border = 'none';
+      deleteBtn.style.background = 'none';
+      deleteBtn.style.cursor = 'pointer';
+      deleteBtn.addEventListener('click', async () => {
+        todos.items.splice(index, 1);
+        todos.lastSync = Date.now();
+        await writeTodoList(todos);
+        await renderTodoList();
+      });
+
+      item.appendChild(checkbox);
+      item.appendChild(text);
+      item.appendChild(deleteBtn);
+      list.appendChild(item);
+    });
+  };
+
+  const todoAddButton = container.querySelector('button');
+  const todoInput = container.querySelector('input');
+  if (todoAddButton && todoInput) {
+    todoAddButton.addEventListener('click', async () => {
+      const text = todoInput.value.trim();
+      if (!text) return;
+
+      const todos = await readTodoList();
+      todos.items.push({
+        id: crypto.randomUUID(),
+        text,
+        completed: false,
+        lastModified: Date.now()
+      });
+      todos.lastSync = Date.now();
+
+      await writeTodoList(todos);
+      await renderTodoList();
+
+      todoInput.value = '';
+    });
+
+    todoInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        todoAddButton.click();
+      }
+    });
+  }
+
+  const syncInterval = window.setInterval(renderTodoList, READ_INTERVAL);
+
+  const cleanup = () => {
+    window.clearInterval(syncInterval);
+  };
+
+  (container as any)._cleanup = cleanup;
+  (container as any)._renderTodoList = renderTodoList;
+
+  document.body.appendChild(container);
+
+  await renderTodoList();
+
+  return container;
+}
+
 async function main() {
   try {
     await vault.createVault('default', PASSWORD, 'test', { foo: 'bar' });
@@ -461,6 +711,137 @@ async function main() {
   } catch (error) {
     console.error('Error:', error);
   }
+  await createTodoDemo();
 }
 
 main()
+
+async function addSyncButtons() {
+  const container = document.createElement('div');
+  container.style.margin = '20px';
+
+  const statusText = document.createElement('div');
+  statusText.style.marginBottom = '10px';
+  container.appendChild(statusText);
+
+  let localPeerId: string | null = null;
+  const myPeerId = document.createElement('div');
+  myPeerId.style.marginBottom = '10px';
+  container.appendChild(myPeerId);
+
+  const getPeerIdButton = document.createElement('button');
+  getPeerIdButton.textContent = 'Get my peer ID';
+  getPeerIdButton.style.marginRight = '10px';
+  container.appendChild(getPeerIdButton);
+
+  const connectButton = document.createElement('button');
+  connectButton.textContent = 'Connect';
+  container.appendChild(connectButton);
+
+  const peerIdInput = document.createElement('input');
+  peerIdInput.type = 'text';
+  peerIdInput.placeholder = 'Enter peer ID to connect to';
+  peerIdInput.style.marginLeft = '10px';
+  container.appendChild(peerIdInput);
+
+  getPeerIdButton.addEventListener('click', async () => {
+    try {
+      statusText.textContent = 'Getting auth token...';
+
+      const token = await getAuthToken();
+      const wsUrl = `ws://localhost:8080/ws?token=${token}`;
+
+      const randomVaultName = `peer_${Math.random().toString(36).substring(7)}`;
+      try {
+        const initialData = new TextEncoder().encode(JSON.stringify({ type: 'peer' }));
+        await create_vault(randomVaultName, PASSWORD, 'sync', Array.from(initialData), undefined);
+      } catch (e) {
+        if (!e.toString().includes('Vault already exists')) {
+          throw e;
+        }
+      }
+
+      statusText.textContent = 'Enabling sync...';
+      localPeerId = await enable_sync(randomVaultName, PASSWORD, wsUrl, STUN_SERVERS);
+      statusText.textContent = 'Sync enabled, ready to connect';
+
+      myPeerId.textContent = `My Peer ID: ${localPeerId}`;
+    } catch (e) {
+      console.error('Failed to enable sync:', e);
+      statusText.textContent = `Failed to enable sync: ${e}`;
+    }
+  });
+
+  connectButton.addEventListener('click', async () => {
+    const targetPeerId = peerIdInput.value.trim();
+    if (!targetPeerId) {
+      statusText.textContent = 'Please enter a peer ID';
+      return;
+    }
+
+    if (!localPeerId) {
+      statusText.textContent = 'Please get your peer ID first';
+      return;
+    }
+
+    try {
+      statusText.textContent = 'Getting auth token...';
+
+      const token = await getAuthToken();
+      const wsUrl = `ws://localhost:8080/ws?token=${token}`;
+
+      try {
+        const initialTodos = { items: [], lastSync: Date.now() };
+        const todoData = new TextEncoder().encode(JSON.stringify(initialTodos));
+        await create_vault('todos', PASSWORD, 'todo_list', Array.from(todoData), undefined);
+      } catch (e) {
+        if (!e.toString().includes('Vault already exists')) {
+          throw e;
+        }
+      }
+
+      statusText.textContent = 'Enabling sync...';
+      await enable_sync('todos', PASSWORD, wsUrl, STUN_SERVERS);
+
+      statusText.textContent = 'Connecting...';
+      await connect_to_peer('todos', PASSWORD, targetPeerId, wsUrl);
+
+      await add_peer('todos', PASSWORD, targetPeerId, 'todo_list', 'contributor');
+
+      statusText.textContent = `Connected to peer ${targetPeerId}`;
+
+      const todos = await readTodoList();
+      todos.lastSync = Date.now();
+      await writeTodoList(todos);
+
+      const todoContainer = document.querySelector('[data-todo-container]');
+      if (todoContainer) {
+        const renderTodoList = (todoContainer as any)._renderTodoList;
+        if (renderTodoList) {
+          await renderTodoList();
+        }
+      }
+    } catch (e) {
+      console.error('Failed to connect to peer:', e);
+      statusText.textContent = `Failed to connect: ${e}`;
+    }
+  });
+
+  document.body.appendChild(container);
+}
+
+async function getAuthToken(): Promise<string> {
+  const response = await fetch(`${BASE_URL}/token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' }
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to get auth token: ${response.status}`);
+  }
+
+  const { token } = await response.json();
+  return token;
+}
+
+addSyncButtons();

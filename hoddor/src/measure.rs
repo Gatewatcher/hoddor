@@ -25,6 +25,26 @@ pub fn get_performance() -> Option<Performance> {
     }
 }
 
+pub fn now() -> f64 {
+    #[cfg(target_arch = "wasm32")]
+    {
+        if let Some(window) = web_sys::window() {
+            if let Some(perf) = window.performance() {
+                return perf.now();
+            }
+        }
+        0.0
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        use std::time::{SystemTime, UNIX_EPOCH};
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as f64
+    }
+}
+
 #[macro_export]
 macro_rules! time_it {
     ($label:expr, $block:expr) => {{

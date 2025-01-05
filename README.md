@@ -86,9 +86,17 @@ npm run dev
 ## Testing
 
 To run the tests, use the following command:
+
+With chrome: 
 ```bash
 cd hoddor
 wasm-pack test --headless --chrome
+```
+
+With Firefox:
+```bash
+cd hoddor
+wasm-pack test --headless --firefox
 ```
 
 ## Contributing
