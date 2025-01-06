@@ -907,20 +907,8 @@ impl WebRtcPeer {
         ));
 
         let candidate_init = RtcIceCandidateInit::new(candidate_str);
-
-        if let Some(parts) = candidate_str
-            .split_whitespace()
-            .collect::<Vec<_>>()
-            .get(..12)
-        {
-            if let Some(ufrag_index) = parts.iter().position(|&x| x == "ufrag") {
-                if let Some(ufrag) = parts.get(ufrag_index + 1) {
-                    console::log(&format!("Found ufrag: {}", ufrag));
-                    candidate_init.set_sdp_mid(Some("0"));
-                    candidate_init.set_sdp_m_line_index(Some(0));
-                }
-            }
-        }
+        candidate_init.set_sdp_mid(Some("0"));
+        candidate_init.set_sdp_m_line_index(Some(0));
 
         match RtcIceCandidate::new(&candidate_init) {
             Ok(candidate) => {
