@@ -1,6 +1,7 @@
 [package]
-name = "server"
+name = "signaling_server"
 version = "0.1.0"
+authors = ["Gatewatcher Frontend Team <frontend@gatewatcher.com>"]
 edition = "2021"
 
 [dependencies]
