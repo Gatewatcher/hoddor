@@ -725,9 +725,7 @@ impl WebRtcPeer {
                                 peer_ref.handle_answer(&sdp).await?;
                                 Ok(())
                             }
-                            SignalingMessage::IceCandidate {
-                                candidate, ..
-                            } => {
+                            SignalingMessage::IceCandidate { candidate, .. } => {
                                 let peer_ref = peer_clone.borrow_mut();
                                 peer_ref.handle_ice_candidate(&candidate).await?;
                                 Ok(())

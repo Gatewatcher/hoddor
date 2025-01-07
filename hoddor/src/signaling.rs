@@ -153,7 +153,7 @@ impl SignalingClient {
 
     pub fn set_onopen<T>(&self, callback: &T) -> Result<(), JsValue>
     where
-        T: wasm_bindgen::JsCast + ?Sized,
+        T: wasm_bindgen::JsCast,
     {
         self.ws.set_onopen(Some(callback.unchecked_ref()));
         Ok(())
@@ -161,7 +161,7 @@ impl SignalingClient {
 
     pub fn set_onerror<T>(&self, callback: &T) -> Result<(), JsValue>
     where
-        T: wasm_bindgen::JsCast + ?Sized,
+        T: wasm_bindgen::JsCast,
     {
         self.ws.set_onerror(Some(callback.unchecked_ref()));
         Ok(())

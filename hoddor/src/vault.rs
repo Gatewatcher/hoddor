@@ -450,7 +450,7 @@ pub async fn create_vault(
 
     let _lock = acquire_vault_lock(&vault_name_str).await?;
 
-    if let Ok(_) = read_vault_with_name(&vault_name_str).await {
+    if (read_vault_with_name(&vault_name_str).await).is_ok() {
         return Err(VaultError::VaultAlreadyExists.into());
     }
 
@@ -1223,7 +1223,7 @@ pub async fn update_vault_from_sync(vault_name: &str, vault_data: &[u8]) -> Resu
 
     let (file_handle, mut current_vault) = match read_vault_with_name(vault_name).await {
         Ok((handle, vault)) => (handle, vault),
-        Err(VaultError::IoError { message }) if message == "Failed to get directory handle" => {
+        Err(VaultError::IoError { message: "Failed to get directory handle" }) => {
             console::log(&format!("Creating new vault {} for sync", vault_name));
 
             let dirname = get_vault_dirname(vault_name);
