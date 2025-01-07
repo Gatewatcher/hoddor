@@ -778,12 +778,7 @@ async function addSyncButtons() {
       statusText.textContent = 'Please enter a peer ID';
       return;
     }
-
-    if (!localPeerId) {
-      statusText.textContent = 'Please get your peer ID first';
-      return;
-    }
-
+    
     try {
       statusText.textContent = 'Getting auth token...';
 
