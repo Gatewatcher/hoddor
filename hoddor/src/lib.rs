@@ -2,18 +2,21 @@ extern crate console_error_panic_hook;
 
 pub mod console;
 pub mod crypto;
-mod errors;
+pub mod errors;
 pub mod file_system;
-mod global;
-mod lock;
+pub mod global;
+pub mod lock;
 pub mod measure;
+pub mod signaling;
+pub mod sync;
 pub mod vault;
+pub mod webrtc;
 
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen(start)]
-pub fn start() {
-    // Set a panic hook for clearer errors in the console.
+pub fn start_app() -> Result<(), JsValue> {
+    #[cfg(feature = "console_error_panic_hook")]
     console_error_panic_hook::set_once();
-    console::log("Worker started (File System Access API assumed available).");
+    Ok(())
 }

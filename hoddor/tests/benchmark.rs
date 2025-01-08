@@ -1,21 +1,13 @@
 #![cfg(target_arch = "wasm32")]
 
 extern crate wasm_bindgen_test;
-use futures_util::future;
-use gloo_timers::future::TimeoutFuture;
 use hoddor::{
-    console::log,
+    console,
     measure::get_performance,
-    vault::{
-        create_vault,
-        list_namespaces, list_vaults, read_from_vault, remove_from_vault, remove_vault,
-        upsert_vault,
-    },
+    vault::{create_vault, read_from_vault, remove_vault, upsert_vault},
 };
-use serde_wasm_bindgen::from_value;
 use wasm_bindgen::JsValue;
 use wasm_bindgen_test::*;
-use wasm_bindgen::JsCast;
 
 wasm_bindgen_test_configure!(run_in_browser);
 mod test_utils;
@@ -64,13 +56,9 @@ async fn performance_test_bulk_upserts() {
     let t4 = get_performance().unwrap().now();
     for i in 0..num_upserts {
         let namespace = format!("{}{}", namespace_base, i);
-        read_from_vault(
-            vault_name,
-            password.clone(),
-            JsValue::from_str(&namespace),
-        )
-        .await
-        .expect("Failed to read data in bulk");
+        read_from_vault(vault_name, password.clone(), JsValue::from_str(&namespace))
+            .await
+            .expect("Failed to read data in bulk");
     }
     let t5 = get_performance().unwrap().now();
     let read_time = t5 - t4;
@@ -79,19 +67,15 @@ async fn performance_test_bulk_upserts() {
         .await
         .expect("Failed to remove performance test vault");
 
-    log(&format!(
+    console::log(&format!(
         "Performance Report for Bulk Upserts:\n\
         Vault creation: {:.3}ms\n\
         Upserting {} namespaces: {:.3}ms\n\
         Reading {} namespaces: {:.3}ms\n",
-        vault_creation_time,
-        num_upserts,
-        upsert_time,
-        num_upserts,
-        read_time
+        vault_creation_time, num_upserts, upsert_time, num_upserts, read_time
     ));
 
-    log("Performance test for bulk upserts completed.");
+    console::log("Performance test for bulk upserts completed.");
 }
 
 #[wasm_bindgen_test]
@@ -137,15 +121,12 @@ async fn performance_test_large_data() {
         .await
         .expect("Failed to remove large data vault");
 
-    log(&format!(
+    console::log(&format!(
         "Performance Report for Large Data:\n\
         Vault creation with {} MB: {:.3}ms\n\
         Reading {} MB data: {:.3}ms\n",
-        data_size_mb,
-        vault_creation_time,
-        data_size_mb,
-        read_time
+        data_size_mb, vault_creation_time, data_size_mb, read_time
     ));
 
-    log("Performance test for large data completed.");
+    console::log("Performance test for large data completed.");
 }
