@@ -39,6 +39,8 @@ futures = "0.3.31"
 parking_lot = "0.12.3"
 hex = "0.4.3"
 futures-channel = "0.3.31"
+uuid = { version = "1.11.0", features = ["v4"] }
+base64urlsafedata = "0.5.1"
 
 [dependencies.web-sys]
 version = "0.3.76"
@@ -67,16 +69,17 @@ features = [
     "Navigator",
     "Lock",
     "LockManager",
-    "LockOptions",
+    "console",
+    "Window",
+    "Performance",
     "StorageManager",
     "FileSystemDirectoryHandle",
     "FileSystemFileHandle",
     "FileSystemHandle",
     "FileSystemGetFileOptions",
-    "FileSystemGetDirectoryOptions",
-    "FileSystemRemoveOptions",
     "FileSystemSyncAccessHandle",
     "WritableStreamDefaultWriter",
+    "Blob",
     "File",
     "TextDecoder",
     "WorkerGlobalScope",
@@ -84,13 +87,18 @@ features = [
     "Storage",
     "FileSystemWritableFileStream",
     "WritableStream",
-    "RtcSignalingState",
-    "RtcIceConnectionState",
-    "RtcIceGatheringState",
-    "RtcPeerConnectionState",
-    "RtcDataChannelState",
-    "RtcIceServer",
-    "RtcDataChannelEvent"
+    "LockOptions",
+    "RequestInit",
+    "RequestMode",
+    "Request",
+    "Headers",
+    "Response",
+    "CredentialCreationOptions",
+    "CredentialRequestOptions",
+    "CredentialsContainer",
+    "Navigator",
+    "PublicKeyCredential",
+    "PublicKeyCredentialCreationOptions"
 ]
 
 [dependencies.gloo-timers]

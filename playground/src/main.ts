@@ -282,6 +282,32 @@ perfButton.onclick = async () => {
 
 document.body.appendChild(perfButton);
 
+const Register = document.createElement('button');
+Register.textContent = 'Register';
+
+Register.onclick = async () => {
+  const username = prompt('Enter a username');
+  
+  if (username) {
+    await startRegistration(username);
+  }
+};
+
+document.body.appendChild(Register);
+
+const Authenticate = document.createElement('button');
+Authenticate.textContent = 'Authenticate';
+
+Authenticate.onclick = async () => {
+  const username = prompt('Enter a username');
+  
+  if (username) {
+    await startAuthentication(username);
+  }
+};
+
+document.body.appendChild(Authenticate);
+
 const exportButton = document.createElement('button');
 exportButton.textContent = 'Export Vault';
 exportButton.onclick = async () => {
@@ -389,6 +415,28 @@ async function storeUserData(password: string, userData: UserData) {
   } catch (e) {
     console.error('Failed to store user data:', e);
     throw e;
+  }
+}
+
+async function startRegistration(username: string) {
+  try {
+    await register(username);
+    
+    console.log('User registered successfully');
+  } catch (e) {
+    console.error('Failed to register user:', e);
+    // throw e;
+  }
+}
+
+async function startAuthentication(username: string) {
+  try {
+    await authenticate(username);
+    
+    console.log('User authenticated successfully');
+  } catch (e) {
+    console.error('Failed to authenticate user:', e);
+    // throw e;
   }
 }
 

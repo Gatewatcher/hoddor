@@ -54,3 +54,17 @@ impl From<VaultError> for JsValue {
         }
     }
 }
+
+pub enum AuthError {
+    IoError(String),
+    UsernameRequired
+}
+
+impl From<AuthError> for JsValue {
+    fn from(error: AuthError) -> Self {
+        match error {
+            AuthError::IoError(message) => JsValue::from_str(&format!("IO Error: {}", message)),
+            AuthError::UsernameRequired => JsValue::from_str("A username must be provided"),
+        }
+    }
+}
