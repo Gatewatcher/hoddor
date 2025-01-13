@@ -9,6 +9,8 @@ use web_sys::{
 
 use crate::console::*;
 
+static SECURE_ALGORITHM: &[i32; 3] = &[-7, -257, -8];
+
 pub fn webauthn_create(
     challenge: &[u8],
     user: PublicKeyCredentialUserEntity,
@@ -19,10 +21,10 @@ pub fn webauthn_create(
 
     let pk_options = PublicKeyCredentialCreationOptions::new(
         &Uint8Array::from(challenge),
-        &Array::of1(&PublicKeyCredentialParameters::new(
-            -7,
+        &SECURE_ALGORITHM.iter().map(|alg| PublicKeyCredentialParameters::new(
+            alg.clone(),
             PublicKeyCredentialType::PublicKey,
-        )),
+        )).collect::<Array>(),
         &rp_entity,
         &user,
     );

@@ -88,11 +88,6 @@ features = [
     "FileSystemWritableFileStream",
     "WritableStream",
     "LockOptions",
-    "RequestInit",
-    "RequestMode",
-    "Request",
-    "Headers",
-    "Response",
     "CredentialCreationOptions",
     "CredentialRequestOptions",
     "CredentialsContainer",
@@ -105,15 +100,9 @@ features = [
     "PublicKeyCredentialType",
     "PublicKeyCredentialRequestOptions",
     "PublicKeyCredentialDescriptor",
-    "Crypto",
-    "SubtleCrypto",
-    "CryptoKey",
     "AuthenticationExtensionsClientInputs",
-    "HkdfParams",
-    "AesKeyGenParams",
-    "EcKeyGenParams",
-    "AesGcmParams",
-    "UserVerificationRequirement"
+    "UserVerificationRequirement",
+    "Crypto"
 ]
 
 [dependencies.gloo-timers]
