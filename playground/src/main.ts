@@ -1,5 +1,5 @@
 import './style.css';
-import init, { set_debug_mode, upsert_vault, read_from_vault, remove_from_vault, remove_vault, list_vaults, enable_sync, connect_to_peer, add_peer, create_vault } from '../../hoddor/pkg/hoddor.js';
+import init, { set_debug_mode, upsert_vault, read_from_vault, remove_from_vault, remove_vault, list_vaults, register, authenticate, create_credential, get_credential } from '../../hoddor/pkg/hoddor.js';
 import { VaultWorker } from './vault';
 import { runPerformanceTest } from './performance';
 
@@ -420,7 +420,7 @@ async function storeUserData(password: string, userData: UserData) {
 
 async function startRegistration(username: string) {
   try {
-    await register(username);
+    await create_credential(username);
     
     console.log('User registered successfully');
   } catch (e) {
@@ -431,7 +431,7 @@ async function startRegistration(username: string) {
 
 async function startAuthentication(username: string) {
   try {
-    await authenticate(username);
+    await get_credential();
     
     console.log('User authenticated successfully');
   } catch (e) {

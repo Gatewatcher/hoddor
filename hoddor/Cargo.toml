@@ -98,7 +98,22 @@ features = [
     "CredentialsContainer",
     "Navigator",
     "PublicKeyCredential",
-    "PublicKeyCredentialCreationOptions"
+    "PublicKeyCredentialCreationOptions",
+    "PublicKeyCredentialUserEntity",
+    "PublicKeyCredentialRpEntity",
+    "PublicKeyCredentialParameters",
+    "PublicKeyCredentialType",
+    "PublicKeyCredentialRequestOptions",
+    "PublicKeyCredentialDescriptor",
+    "Crypto",
+    "SubtleCrypto",
+    "CryptoKey",
+    "AuthenticationExtensionsClientInputs",
+    "HkdfParams",
+    "AesKeyGenParams",
+    "EcKeyGenParams",
+    "AesGcmParams",
+    "UserVerificationRequirement"
 ]
 
 [dependencies.gloo-timers]

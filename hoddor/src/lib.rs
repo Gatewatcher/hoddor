@@ -1,5 +1,6 @@
 extern crate console_error_panic_hook;
 
+pub mod auth;
 pub mod console;
 pub mod crypto;
 pub mod errors;
