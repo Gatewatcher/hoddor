@@ -1,7 +1,8 @@
 import './style.css';
-import init, { set_debug_mode, upsert_vault, read_from_vault, remove_from_vault, remove_vault, list_vaults, register, authenticate, create_credential, get_credential } from '../../hoddor/pkg/hoddor.js';
+import init, { set_debug_mode, upsert_vault, read_from_vault, remove_from_vault, remove_vault, list_vaults, create_credential, get_credential } from '../../hoddor/pkg/hoddor.js';
 import { VaultWorker } from './vault';
 import { runPerformanceTest } from './performance';
+import { randomBytes } from "@noble/hashes/utils"
 
 const BASE_URL = 'http://localhost:8080';
 const PASSWORD = 'password123';
@@ -11,6 +12,7 @@ const STUN_SERVERS = [
 ];
 
 const vault = new VaultWorker();
+const nonce = randomBytes(16)
 
 async function fetchImageAsBytes(url: string): Promise<Uint8Array> {
   const response = await fetch(url);
@@ -302,7 +304,7 @@ Authenticate.onclick = async () => {
   const username = prompt('Enter a username');
   
   if (username) {
-    await startAuthentication(username);
+    await startAuthentication();
   }
 };
 
@@ -420,20 +422,22 @@ async function storeUserData(password: string, userData: UserData) {
 
 async function startRegistration(username: string) {
   try {
-    await create_credential(username);
-    
-    console.log('User registered successfully');
+    const create_credentials = await create_credential(username);
+    console.log('Registration: Create credential success:', create_credentials);
+
+    const get_credentials = await get_credential(nonce, new Uint8Array(create_credentials.rawId));
+    console.log('Registration: Get credential success:', get_credentials.getClientExtensionResults());
   } catch (e) {
     console.error('Failed to register user:', e);
     // throw e;
   }
 }
 
-async function startAuthentication(username: string) {
+async function startAuthentication() {
   try {
-    await get_credential();
+    const get_credentials = await get_credential(nonce);
     
-    console.log('User authenticated successfully');
+    console.log('Authentication: Get credential success:', get_credentials.getClientExtensionResults());
   } catch (e) {
     console.error('Failed to authenticate user:', e);
     // throw e;

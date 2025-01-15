@@ -20,8 +20,6 @@ fn gen_random<const N: usize>() -> Result<[u8; N], JsValue> {
 #[wasm_bindgen]
 pub async fn create_credential(
     name: &str,
-    rp_id: &str,
-    prf_salt: &Uint8Array,
     cred_id: Option<Uint8Array>,
 ) -> Result<PublicKeyCredential, JsValue> {
     log(&format!("Init credential creation"));
@@ -33,11 +31,9 @@ pub async fn create_credential(
         Some(cred_id) => cred_id.clone(),
     };
 
-    Ok(JsFuture::from(webauthn_create(
-        &challenge, name, rp_id, prf_salt, &cred_id,
-    )?)
-    .await?
-    .into())
+    Ok(JsFuture::from(webauthn_create(&challenge, name, &cred_id)?)
+        .await?
+        .into())
 }
 
 #[wasm_bindgen]
@@ -49,9 +45,7 @@ pub async fn get_credential(
 
     let challenge = Uint8Array::from(gen_random::<32>()?.as_slice());
 
-    Ok(
-        JsFuture::from(webauthn_get(&challenge, "localhost", prf_salt, cred_id)?)
-            .await?
-            .into(),
-    )
+    Ok(JsFuture::from(webauthn_get(&challenge, prf_salt, cred_id)?)
+        .await?
+        .into())
 }

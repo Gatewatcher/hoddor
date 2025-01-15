@@ -1,27 +1,31 @@
 use js_sys::{Array, ArrayBuffer, Object, Promise, Uint8Array};
 use wasm_bindgen::{JsCast, JsError, JsValue};
 use web_sys::{
-    AuthenticationExtensionsClientInputs, CredentialCreationOptions, CredentialRequestOptions,
-    PublicKeyCredentialCreationOptions, PublicKeyCredentialDescriptor,
-    PublicKeyCredentialParameters, PublicKeyCredentialRequestOptions, PublicKeyCredentialRpEntity,
-    PublicKeyCredentialType, PublicKeyCredentialUserEntity, UserVerificationRequirement, Window,
+    AuthenticationExtensionsClientInputs, AuthenticationExtensionsPrfInputs,
+    CredentialCreationOptions, CredentialRequestOptions, PublicKeyCredentialCreationOptions,
+    PublicKeyCredentialDescriptor, PublicKeyCredentialParameters,
+    PublicKeyCredentialRequestOptions, PublicKeyCredentialRpEntity, PublicKeyCredentialType,
+    PublicKeyCredentialUserEntity, UserVerificationRequirement, Window,
 };
 
 use crate::console::*;
 
+/// Secure algorithms recommendation:
+/// -8: Ed25519
+/// -7: ES256
+/// -257: RS256
+///
+/// https://www.iana.org/assignments/cose/cose.xhtml#algorithms
 static SECURE_ALGORITHM: &[i32; 3] = &[-7, -257, -8];
 
 pub fn webauthn_create(
     challenge: &Uint8Array,
     name: &str,
-    rp_id: &str,
-    prf_salt: &Uint8Array,
     cred_id: &Uint8Array,
 ) -> Result<Promise, JsError> {
     log(&format!("Create webauthn"));
 
     let pk_rp_entity = PublicKeyCredentialRpEntity::new(name);
-    pk_rp_entity.set_id(rp_id);
 
     let pk_user = PublicKeyCredentialUserEntity::new(name, name, cred_id);
 
@@ -37,7 +41,9 @@ pub fn webauthn_create(
         &pk_user,
     );
 
-    pk_options.set_extensions(&prf_extension_eval(&prf_salt.buffer()));
+    let extensions = AuthenticationExtensionsClientInputs::new();
+    extensions.set_prf(&AuthenticationExtensionsPrfInputs::new());
+    pk_options.set_extensions(&extensions);
 
     let cred_options = CredentialCreationOptions::new();
     cred_options.set_public_key(&pk_options);
@@ -51,7 +57,6 @@ pub fn webauthn_create(
 
 pub fn webauthn_get(
     challenge: &Uint8Array,
-    rp_id: &str,
     prf_salt: &Uint8Array,
     cred_id: Option<Uint8Array>,
 ) -> Result<Promise, JsError> {
@@ -71,7 +76,6 @@ pub fn webauthn_get(
         }
     };
 
-    pk_options.set_rp_id(&rp_id);
     pk_options.set_user_verification(UserVerificationRequirement::Required);
 
     pk_options.set_extensions(&prf_extension_eval(&prf_salt.buffer()));
