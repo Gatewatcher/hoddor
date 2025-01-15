@@ -78,6 +78,12 @@ features = [
     "FileSystemHandle",
     "FileSystemGetFileOptions",
     "FileSystemSyncAccessHandle",
+    "FileSystemGetDirectoryOptions",
+    "RtcIceGatheringState",
+    "RtcPeerConnectionState",
+    "RtcIceConnectionState",
+    "RtcDataChannelEvent",
+    "RtcDataChannelState",
     "WritableStreamDefaultWriter",
     "Blob",
     "File",
@@ -101,6 +107,7 @@ features = [
     "PublicKeyCredentialRequestOptions",
     "PublicKeyCredentialDescriptor",
     "AuthenticationExtensionsClientInputs",
+    "AuthenticationExtensionsClientOutputs",
     "UserVerificationRequirement",
     "Crypto"
 ]
