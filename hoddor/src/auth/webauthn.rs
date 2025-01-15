@@ -1,8 +1,8 @@
-use js_sys::{Array, ArrayBuffer, Object, Promise, Reflect, Uint8Array};
+use js_sys::{Array, ArrayBuffer, Object, Promise, Uint8Array};
 use wasm_bindgen::{JsCast, JsError, JsValue};
 use web_sys::{
     AuthenticationExtensionsClientInputs, CredentialCreationOptions, CredentialRequestOptions,
-    PublicKeyCredential, PublicKeyCredentialCreationOptions, PublicKeyCredentialDescriptor,
+    PublicKeyCredentialCreationOptions, PublicKeyCredentialDescriptor,
     PublicKeyCredentialParameters, PublicKeyCredentialRequestOptions, PublicKeyCredentialRpEntity,
     PublicKeyCredentialType, PublicKeyCredentialUserEntity, UserVerificationRequirement, Window,
 };
@@ -100,15 +100,6 @@ pub fn prf_extension_eval(salt: &ArrayBuffer) -> AuthenticationExtensionsClientI
         .dyn_into::<JsValue>()
         .unwrap(),
     )
-}
-
-pub fn prf_first_output(cred: &PublicKeyCredential) -> Result<Uint8Array, JsValue> {
-    let extensions: Object = cred.get_client_extension_results().dyn_into()?;
-    let prf_output: Result<Uint8Array, JsValue> = Reflect::get(&extensions, &"prf".into())
-        .and_then(|prf| Reflect::get(&prf, &"results".into()))
-        .and_then(|prf_results| Reflect::get(&prf_results, &"first".into()))
-        .map(|first| Uint8Array::new(&first));
-    prf_output
 }
 
 pub fn window() -> Window {
