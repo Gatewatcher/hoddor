@@ -39,8 +39,6 @@ futures = "0.3.31"
 parking_lot = "0.12.3"
 hex = "0.4.3"
 futures-channel = "0.3.31"
-uuid = { version = "1.11.0", features = ["v4"] }
-base64urlsafedata = "0.5.1"
 
 [dependencies.web-sys]
 version = "0.3.76"
@@ -69,21 +67,15 @@ features = [
     "Navigator",
     "Lock",
     "LockManager",
-    "console",
-    "Window",
-    "Performance",
+    "LockOptions",
     "StorageManager",
     "FileSystemDirectoryHandle",
     "FileSystemFileHandle",
     "FileSystemHandle",
     "FileSystemGetFileOptions",
-    "FileSystemSyncAccessHandle",
     "FileSystemGetDirectoryOptions",
-    "RtcIceGatheringState",
-    "RtcPeerConnectionState",
-    "RtcIceConnectionState",
-    "RtcDataChannelEvent",
-    "RtcDataChannelState",
+    "FileSystemRemoveOptions",
+    "FileSystemSyncAccessHandle",
     "WritableStreamDefaultWriter",
     "Blob",
     "File",
@@ -93,7 +85,11 @@ features = [
     "Storage",
     "FileSystemWritableFileStream",
     "WritableStream",
-    "LockOptions",
+    "RtcIceGatheringState",
+    "RtcPeerConnectionState",
+    "RtcIceConnectionState",
+    "RtcDataChannelEvent",
+    "RtcDataChannelState",
     "CredentialCreationOptions",
     "CredentialRequestOptions",
     "CredentialsContainer",
