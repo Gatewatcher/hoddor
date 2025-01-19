@@ -96,11 +96,8 @@ pub fn prf_extension_eval(salt: &Uint8Array) -> AuthenticationExtensionsClientIn
     AuthenticationExtensionsClientInputs::from(
         Object::from_entries(&Array::of1(&Array::of2(
             &"prf".into(),
-            &Object::from_entries(&Array::of1(&Array::of2(
-                &"eval".into(),
-                &prf_inputs(salt),
-            )))
-            .unwrap(),
+            &Object::from_entries(&Array::of1(&Array::of2(&"eval".into(), &prf_inputs(salt))))
+                .unwrap(),
         )))
         .unwrap()
         .dyn_into::<JsValue>()

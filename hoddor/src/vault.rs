@@ -1,5 +1,6 @@
 use crate::auth::crypto::derive_key_from_outputs;
 use crate::auth::get_credential;
+use crate::console::*;
 use crate::crypto::derive_key;
 use crate::errors::VaultError;
 use crate::file_system::{
@@ -11,11 +12,10 @@ use crate::measure::get_performance;
 use crate::measure::time_it;
 use crate::sync::{get_sync_manager, OperationType, SyncMessage};
 use crate::webrtc::{AccessLevel, WebRtcPeer};
+use js_sys::{Reflect, Uint8Array};
 use std::cell::RefCell;
 use std::rc::Rc;
-use js_sys::{Reflect, Uint8Array};
 use wasm_bindgen::prelude::*;
-use crate::console::*;
 
 use crate::console;
 use core::str;
@@ -293,10 +293,17 @@ pub async fn read_from_vault(
             }
         }
 
-        let passphrase: &[u8] = match get_credential(&Uint8Array::from(&vault.metadata.salt[..]), None).await {
-            Ok(eval) => &derive_key_from_outputs(Reflect::get(&eval.get_client_extension_results(), &JsValue::from_str("prf"))?.into())?,
-            Err(_) => &password.as_bytes(),
-        };
+        let passphrase: &[u8] =
+            match get_credential(&Uint8Array::from(&vault.metadata.salt[..]), None).await {
+                Ok(eval) => &derive_key_from_outputs(
+                    Reflect::get(
+                        &eval.get_client_extension_results(),
+                        &JsValue::from_str("prf"),
+                    )?
+                    .into(),
+                )?,
+                Err(_) => &password.as_bytes(),
+            };
 
         log(&format!("test: {:?}", passphrase));
 
@@ -502,10 +509,18 @@ async fn check_password(vault_name: &str, password: &str) -> Result<Vault, Vault
     };
 
     if let Some((_, first_encrypted)) = vault.namespaces.iter().next() {
-        let passphrase: &[u8] = match get_credential(&Uint8Array::from(&vault.metadata.salt[..]), None).await {
-            Ok(eval) => &derive_key_from_outputs(Reflect::get(&eval.get_client_extension_results(), &JsValue::from_str("prf"))?.into())?,
-            Err(_) => &password.as_bytes(),
-        };log(&format!("test: {:?}", passphrase));
+        let passphrase: &[u8] =
+            match get_credential(&Uint8Array::from(&vault.metadata.salt[..]), None).await {
+                Ok(eval) => &derive_key_from_outputs(
+                    Reflect::get(
+                        &eval.get_client_extension_results(),
+                        &JsValue::from_str("prf"),
+                    )?
+                    .into(),
+                )?,
+                Err(_) => &password.as_bytes(),
+            };
+        log(&format!("test: {:?}", passphrase));
         let key_bytes = derive_key(passphrase, &vault.metadata.salt)?;
         let cipher_key = Key::from_slice(&key_bytes);
         let cipher = ChaCha20Poly1305::new(cipher_key);
@@ -915,11 +930,18 @@ async fn insert_namespace_data(
             message: "Failed to serialize data",
         })?;
 
-    let passphrase: &[u8] = match get_credential(&Uint8Array::from(&vault.metadata.salt[..]), None).await {
-        Ok(eval) => &derive_key_from_outputs(Reflect::get(&eval.get_client_extension_results(), &JsValue::from_str("prf"))?.into())?,
-        Err(_) => &password.as_bytes(),
-    };
-    
+    let passphrase: &[u8] =
+        match get_credential(&Uint8Array::from(&vault.metadata.salt[..]), None).await {
+            Ok(eval) => &derive_key_from_outputs(
+                Reflect::get(
+                    &eval.get_client_extension_results(),
+                    &JsValue::from_str("prf"),
+                )?
+                .into(),
+            )?,
+            Err(_) => &password.as_bytes(),
+        };
+
     log(&format!("test: {:?}", passphrase));
 
     let key_bytes = derive_key(passphrase, &vault.metadata.salt)?;
