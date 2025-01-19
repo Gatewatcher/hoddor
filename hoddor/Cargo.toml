@@ -90,7 +90,24 @@ features = [
     "RtcPeerConnectionState",
     "RtcDataChannelState",
     "RtcIceServer",
-    "RtcDataChannelEvent"
+    "RtcDataChannelEvent",
+    "CredentialCreationOptions",
+    "CredentialRequestOptions",
+    "CredentialsContainer",
+    "PublicKeyCredential",
+    "PublicKeyCredentialType",
+    "PublicKeyCredentialCreationOptions",
+    "PublicKeyCredentialUserEntity",
+    "PublicKeyCredentialRpEntity",
+    "PublicKeyCredentialParameters",
+    "PublicKeyCredentialRequestOptions",
+    "PublicKeyCredentialDescriptor",
+    "AuthenticationExtensionsClientInputs",
+    "AuthenticationExtensionsClientOutputs",
+    "AuthenticationExtensionsPrfInputs",
+    "AuthenticationExtensionsPrfValues",
+    "UserVerificationRequirement",
+    "Crypto"
 ]
 
 [dependencies.gloo-timers]
