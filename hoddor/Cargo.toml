@@ -39,6 +39,7 @@ futures = "0.3.31"
 parking_lot = "0.12.3"
 hex = "0.4.3"
 futures-channel = "0.3.31"
+bech32 = "0.11.0"
 
 [dependencies.web-sys]
 version = "0.3.76"
@@ -105,6 +106,7 @@ features = [
     "AuthenticationExtensionsClientInputs",
     "AuthenticationExtensionsClientOutputs",
     "AuthenticationExtensionsPrfInputs",
+    "AuthenticationExtensionsPrfValues",
     "UserVerificationRequirement",
     "Crypto"
 ]

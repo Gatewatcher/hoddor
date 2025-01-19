@@ -1,4 +1,4 @@
-use js_sys::{Array, ArrayBuffer, Object, Promise, Uint8Array};
+use js_sys::{Array, Object, Promise, Uint8Array};
 use wasm_bindgen::{JsCast, JsError, JsValue};
 use web_sys::{
     AuthenticationExtensionsClientInputs, AuthenticationExtensionsPrfInputs,
@@ -9,6 +9,8 @@ use web_sys::{
 };
 
 use crate::console::*;
+
+use super::crypto::prf_inputs;
 
 /// Secure algorithms recommendation:
 /// -8: Ed25519
@@ -78,7 +80,7 @@ pub fn webauthn_get(
 
     pk_options.set_user_verification(UserVerificationRequirement::Required);
 
-    pk_options.set_extensions(&prf_extension_eval(&prf_salt.buffer()));
+    pk_options.set_extensions(&prf_extension_eval(prf_salt));
 
     let cred_options = CredentialRequestOptions::new();
     cred_options.set_public_key(&pk_options);
@@ -90,13 +92,13 @@ pub fn webauthn_get(
         .unwrap())
 }
 
-pub fn prf_extension_eval(salt: &ArrayBuffer) -> AuthenticationExtensionsClientInputs {
+pub fn prf_extension_eval(salt: &Uint8Array) -> AuthenticationExtensionsClientInputs {
     AuthenticationExtensionsClientInputs::from(
         Object::from_entries(&Array::of1(&Array::of2(
             &"prf".into(),
             &Object::from_entries(&Array::of1(&Array::of2(
                 &"eval".into(),
-                &Object::from_entries(&Array::of1(&Array::of2(&"first".into(), salt))).unwrap(),
+                &prf_inputs(salt),
             )))
             .unwrap(),
         )))

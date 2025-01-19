@@ -6,6 +6,7 @@ use webauthn::{webauthn_create, webauthn_get};
 
 use crate::console::*;
 pub mod webauthn;
+pub mod crypto;
 
 pub fn crypto() -> Result<Crypto, JsValue> {
     web_sys::window().ok_or(JsValue::UNDEFINED)?.crypto()
