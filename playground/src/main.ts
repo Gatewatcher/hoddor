@@ -1,8 +1,7 @@
 import './style.css';
-import init, { set_debug_mode, upsert_vault, read_from_vault, remove_from_vault, remove_vault, list_vaults, create_credential, get_credential } from '../../hoddor/pkg/hoddor.js';
+import init, { set_debug_mode, upsert_vault, read_from_vault, remove_from_vault, remove_vault, list_vaults, create_credential, get_credential, create_vault, enable_sync, connect_to_peer, add_peer } from '../../hoddor/pkg/hoddor.js';
 import { VaultWorker } from './vault';
 import { runPerformanceTest } from './performance';
-import { randomBytes } from "@noble/hashes/utils"
 
 const BASE_URL = 'http://localhost:8080';
 const PASSWORD = 'password123';
@@ -12,7 +11,6 @@ const STUN_SERVERS = [
 ];
 
 const vault = new VaultWorker();
-const nonce = randomBytes(16)
 
 async function fetchImageAsBytes(url: string): Promise<Uint8Array> {
   const response = await fetch(url);
@@ -419,6 +417,8 @@ async function storeUserData(password: string, userData: UserData) {
     throw e;
   }
 }
+
+const nonce = crypto.getRandomValues(new Uint8Array(32));
 
 async function startRegistration(username: string) {
   try {
