@@ -1,6 +1,5 @@
 extern crate console_error_panic_hook;
 
-pub mod auth;
 pub mod console;
 pub mod crypto;
 pub mod errors;
@@ -11,6 +10,7 @@ pub mod measure;
 pub mod signaling;
 pub mod sync;
 pub mod vault;
+pub mod webauthn;
 pub mod webrtc;
 
 use wasm_bindgen::prelude::*;

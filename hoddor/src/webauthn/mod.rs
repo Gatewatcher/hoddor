@@ -1,22 +1,11 @@
 use js_sys::Uint8Array;
 use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
 use wasm_bindgen_futures::JsFuture;
-use web_sys::{Crypto, PublicKeyCredential};
+use web_sys::PublicKeyCredential;
 use webauthn::{webauthn_create, webauthn_get};
 
-use crate::console::*;
-pub mod crypto;
+use crate::{console::*, crypto::gen_random};
 pub mod webauthn;
-
-pub fn crypto() -> Result<Crypto, JsValue> {
-    web_sys::window().ok_or(JsValue::UNDEFINED)?.crypto()
-}
-
-fn gen_random<const N: usize>() -> Result<[u8; N], JsValue> {
-    let mut result: [u8; N] = [0; N];
-    crypto()?.get_random_values_with_u8_array(&mut result)?;
-    Ok(result)
-}
 
 #[wasm_bindgen]
 pub async fn create_credential(
