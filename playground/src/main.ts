@@ -1,5 +1,5 @@
 import './style.css';
-import init, { set_debug_mode, upsert_vault, read_from_vault, remove_from_vault, remove_vault, list_vaults, enable_sync, connect_to_peer, add_peer, create_vault } from '../../hoddor/pkg/hoddor.js';
+import init, { set_debug_mode, upsert_vault, read_from_vault, remove_from_vault, remove_vault, list_vaults, create_credential, get_credential, create_vault, enable_sync, connect_to_peer, add_peer } from '../../hoddor/pkg/hoddor.js';
 import { VaultWorker } from './vault';
 import { runPerformanceTest } from './performance';
 
@@ -282,6 +282,32 @@ perfButton.onclick = async () => {
 
 document.body.appendChild(perfButton);
 
+const Register = document.createElement('button');
+Register.textContent = 'Register';
+
+Register.onclick = async () => {
+  const username = prompt('Enter a username');
+  
+  if (username) {
+    await startRegistration(username);
+  }
+};
+
+document.body.appendChild(Register);
+
+const Authenticate = document.createElement('button');
+Authenticate.textContent = 'Authenticate';
+
+Authenticate.onclick = async () => {
+  const username = prompt('Enter a username');
+  
+  if (username) {
+    await startAuthentication();
+  }
+};
+
+document.body.appendChild(Authenticate);
+
 const exportButton = document.createElement('button');
 exportButton.textContent = 'Export Vault';
 exportButton.onclick = async () => {
@@ -389,6 +415,32 @@ async function storeUserData(password: string, userData: UserData) {
   } catch (e) {
     console.error('Failed to store user data:', e);
     throw e;
+  }
+}
+
+const nonce = crypto.getRandomValues(new Uint8Array(32));
+
+async function startRegistration(username: string) {
+  try {
+    const create_credentials = await create_credential(username);
+    console.log('Registration: Create credential success:', create_credentials);
+
+    const get_credentials = await get_credential(nonce, new Uint8Array(create_credentials.rawId));
+    console.log('Registration: Get credential success:', get_credentials.getClientExtensionResults());
+  } catch (e) {
+    console.error('Failed to register user:', e);
+    // throw e;
+  }
+}
+
+async function startAuthentication() {
+  try {
+    const get_credentials = await get_credential(nonce);
+    
+    console.log('Authentication: Get credential success:', get_credentials.getClientExtensionResults());
+  } catch (e) {
+    console.error('Failed to authenticate user:', e);
+    // throw e;
   }
 }
 

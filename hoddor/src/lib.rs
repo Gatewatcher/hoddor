@@ -10,6 +10,7 @@ pub mod measure;
 pub mod signaling;
 pub mod sync;
 pub mod vault;
+pub mod webauthn;
 pub mod webrtc;
 
 use wasm_bindgen::prelude::*;

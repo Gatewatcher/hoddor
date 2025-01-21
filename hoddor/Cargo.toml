@@ -39,6 +39,7 @@ futures = "0.3.31"
 parking_lot = "0.12.3"
 hex = "0.4.3"
 futures-channel = "0.3.31"
+hkdf = "0.12.4"
 
 [dependencies.web-sys]
 version = "0.3.76"
@@ -90,7 +91,23 @@ features = [
     "RtcPeerConnectionState",
     "RtcDataChannelState",
     "RtcIceServer",
-    "RtcDataChannelEvent"
+    "RtcDataChannelEvent",
+    "CredentialCreationOptions",
+    "CredentialRequestOptions",
+    "CredentialsContainer",
+    "PublicKeyCredential",
+    "PublicKeyCredentialType",
+    "PublicKeyCredentialCreationOptions",
+    "PublicKeyCredentialUserEntity",
+    "PublicKeyCredentialRpEntity",
+    "PublicKeyCredentialParameters",
+    "PublicKeyCredentialRequestOptions",
+    "PublicKeyCredentialDescriptor",
+    "AuthenticationExtensionsClientInputs",
+    "AuthenticationExtensionsClientOutputs",
+    "AuthenticationExtensionsPrfInputs",
+    "AuthenticationExtensionsPrfValues",
+    "UserVerificationRequirement"
 ]
 
 [dependencies.gloo-timers]
