@@ -44,9 +44,7 @@ pub fn prf_inputs(nonce: &Uint8Array) -> AuthenticationExtensionsPrfValues {
     prf_inputs
 }
 
-pub fn derive_key_from_outputs(
-    prf_outputs: AuthenticationExtensionsPrfValues,
-) -> [u8; 32] {
+pub fn derive_key_from_outputs(prf_outputs: AuthenticationExtensionsPrfValues) -> [u8; 32] {
     let first = Uint8Array::new(&prf_outputs.get_first());
     let second = match prf_outputs.get_second() {
         None => Uint8Array::new(&Array::new()),
