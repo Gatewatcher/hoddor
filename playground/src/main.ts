@@ -1,5 +1,20 @@
 import './style.css';
-import init, { set_debug_mode, upsert_vault, read_from_vault, remove_from_vault, remove_vault, list_vaults, create_credential, get_credential, create_vault, enable_sync, connect_to_peer, add_peer } from '../../hoddor/pkg/hoddor.js';
+import init, {
+  set_debug_mode,
+  upsert_vault,
+  read_from_vault,
+  remove_from_vault,
+  remove_vault,
+  list_vaults,
+  enable_sync,
+  connect_to_peer,
+  add_peer,
+  create_vault,
+  vault_identity_from_passphrase,
+  generate_identity,
+  get_credential,
+  create_credential,
+} from '../../hoddor/pkg/hoddor.js';
 import { VaultWorker } from './vault';
 import { runPerformanceTest } from './performance';
 
@@ -32,15 +47,16 @@ async function storeImage(password: string, imageBytes: Uint8Array) {
     const namespace = 'image_storage_v3';
     const numberArray = Array.from(imageBytes);
     console.log('Storing image with length:', numberArray.length);
+    const identity = await vault_identity_from_passphrase(password, 'default');
 
     try {
-      await remove_from_vault('default', password, namespace).catch(() => { });
+      await remove_from_vault('default', identity, namespace).catch(() => { });
     } catch (e) {
       console.warn('Failed to remove old image data:', e);
     }
 
     try {
-      await upsert_vault('default', password, namespace, numberArray, undefined, false);
+      await upsert_vault('default', identity, namespace, numberArray, undefined, true);
     } catch (e) {
       console.error('Error in storeImage:', e);
       throw e;
@@ -55,7 +71,8 @@ async function storeImage(password: string, imageBytes: Uint8Array) {
 async function displayStoredImage(password: string) {
   try {
     const namespace = 'image_storage_v3';
-    const retrievedData = await read_from_vault('default', password, namespace);
+    const identity = await vault_identity_from_passphrase(password, 'default');
+    const retrievedData = await read_from_vault('default', identity, namespace);
 
     const dataArray = Array.isArray(retrievedData) ? retrievedData : Array.from(retrievedData as any);
     const uint8Array = new Uint8Array(dataArray);
@@ -81,6 +98,7 @@ async function storeVideo(password: string, videoFile: File) {
   const chunkSize = 1024 * 1024;
   const reader = new FileReader();
   let offset = 0;
+  const identity = await vault_identity_from_passphrase(password, 'default');
 
   const readChunk = (blob: Blob): Promise<Uint8Array> => {
     return new Promise((resolve, reject) => {
@@ -98,16 +116,16 @@ async function storeVideo(password: string, videoFile: File) {
       fileName: videoFile.name,
       lastModified: videoFile.lastModified
     });
-    await vault.upsertVault('default', password, 'test_video_meta', Array.from(new TextEncoder().encode(metadata)), BigInt(5 * 60000), true);
+    await vault.upsertVault('default', identity.toJSON(), 'test_video_meta', Array.from(new TextEncoder().encode(metadata)), BigInt(5 * 60000), true);
 
     const firstChunk = videoFile.slice(0, chunkSize);
     const firstChunkData = await readChunk(firstChunk);
-    await vault.upsertVault('default', password, 'test_video_0', Array.from(firstChunkData), BigInt(5 * 60000), true);
+    await vault.upsertVault('default', identity.toJSON(), 'test_video_0', Array.from(firstChunkData), BigInt(5 * 60000), true);
 
     while (offset < videoFile.size) {
       const chunk = videoFile.slice(offset, offset + chunkSize);
       const chunkData = await readChunk(chunk);
-      await vault.upsertVault('default', password, `test_video_${offset}`, Array.from(chunkData), BigInt(5 * 60000), true);
+      await vault.upsertVault('default', identity.toJSON(), `test_video_${offset}`, Array.from(chunkData), BigInt(5 * 60000), true);
       offset += chunkSize;
       const progress = Math.round((offset / videoFile.size) * 100);
       console.log(`Upload progress: ${progress}%`);
@@ -123,7 +141,8 @@ async function storeVideo(password: string, videoFile: File) {
 async function displayStoredVideo(password: string) {
   try {
     // 1) Read metadata
-    const metadataRaw = await read_from_vault('default', password, 'test_video_meta');
+    const identity = await vault_identity_from_passphrase(password, 'default');
+    const metadataRaw = await read_from_vault('default', identity, 'test_video_meta');
     const metadataText = new TextDecoder().decode(new Uint8Array(metadataRaw as number[]));
     const metadata = JSON.parse(metadataText);
 
@@ -133,7 +152,7 @@ async function displayStoredVideo(password: string) {
     // 2) Read chunks
     for (let offset = 0; offset < metadata.size; offset += chunkSize) {
       const chunkNamespace = `test_video_${offset}`;
-      const chunkData = await read_from_vault('default', password, chunkNamespace);
+      const chunkData = await read_from_vault('default', identity, chunkNamespace);
       chunks.push(new Uint8Array(chunkData as number[]));
 
       const progress = Math.round((offset / metadata.size) * 100);
@@ -311,8 +330,8 @@ document.body.appendChild(Authenticate);
 const exportButton = document.createElement('button');
 exportButton.textContent = 'Export Vault';
 exportButton.onclick = async () => {
-  try {
-    const vaultData = await vault.exportVault('default', PASSWORD);
+  try {    
+    const vaultData = await vault.exportVault('default');
     const blob = new Blob([vaultData], { type: 'application/octet-stream' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -331,7 +350,7 @@ const removeVaultButton = document.createElement('button');
 removeVaultButton.textContent = 'Remove Vault';
 removeVaultButton.onclick = async () => {
   try {
-    await remove_vault('default', PASSWORD);
+    await remove_vault('default');
     alert('Vault removed successfully');
   } catch (error) {
     console.error('Failed to remove vault:', error);
@@ -349,17 +368,30 @@ expirationTestButton.onclick = async () => {
 
   try {
     const testData = { message: "This data will expire soon!" };
-    await vault.createVault("expiration_test", PASSWORD, "test_namespace", testData, 5n);
+    const namespace = "expiration_test";
+    
+    // Create vault if it doesn't exist
+    try {
+      await vault.createVault(namespace);
+    } catch (e) {
+      console.log('Vault already exists');
+    }
+    
+    const identity = await vault_identity_from_passphrase(PASSWORD, namespace);
+    
+    // Store data with expiration
+    await vault.upsertVault(namespace, identity.toJSON(), namespace, testData, BigInt(5), true);
     console.log("Created data with 5 second expiration");
 
-    const initialData = await vault.readFromVault("expiration_test", PASSWORD, "test_namespace");
-    statusDiv.textContent = "Initial read successful: " + JSON.stringify(Object.fromEntries(initialData));
+    // Initial read
+    const initialData = await vault.readFromVault(namespace, identity.toJSON(), namespace);
+    statusDiv.textContent = "Initial read successful: " + JSON.stringify(initialData);
 
     // Try reading every second for 10 seconds
     for (let i = 0; i < 10; i++) {
       await new Promise(resolve => setTimeout(resolve, 1000));
       try {
-        const data = await vault.readFromVault("expiration_test", PASSWORD, "test_namespace");
+        const data = await vault.readFromVault(namespace, identity.toJSON(), namespace);
         statusDiv.textContent = `${i + 1}s: Data still accessible: ${JSON.stringify(Object.fromEntries(data))}`;
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
@@ -371,7 +403,7 @@ expirationTestButton.onclick = async () => {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     console.error('Expiration test failed:', errorMessage);
-    statusText.textContent = `Test failed: ${errorMessage}`;
+    statusDiv.textContent = `Test failed: ${errorMessage}`;
   }
 };
 document.body.appendChild(expirationTestButton);
@@ -405,11 +437,12 @@ async function storeUserData(password: string, userData: UserData) {
   try {
     const namespace = 'user_data_v1';
     console.log('Storing user data:', userData);
+    const identity = await vault_identity_from_passphrase(password, 'default');
 
     try {
-      await upsert_vault('default', password, namespace, userData, undefined, false);
+      await upsert_vault('default', identity, namespace, userData, undefined, true);
     } catch (e) {
-      await upsert_vault('default', password, namespace, userData, undefined, false);
+      await upsert_vault('default', identity, namespace, userData, undefined, true);
     }
     console.log('User data stored successfully');
   } catch (e) {
@@ -447,7 +480,8 @@ async function startAuthentication() {
 async function retrieveUserData(password: string): Promise<UserData | null> {
   try {
     const namespace = 'user_data_v1';
-    const retrievedData = await read_from_vault('default', password, namespace);
+    const identity = await vault_identity_from_passphrase(password, 'default');
+    const retrievedData = await read_from_vault('default', identity, namespace);
     console.log('Retrieved user data:', retrievedData);
     return retrievedData as UserData;
   } catch (error) {
@@ -526,7 +560,8 @@ const READ_INTERVAL = 1000;
 
 async function readTodoList(): Promise<TodoList> {
   try {
-    const data = await read_from_vault('todos', PASSWORD, 'todo_list');
+    const identity = await vault_identity_from_passphrase(PASSWORD, 'todos');
+    const data = await read_from_vault('todos', identity, 'todo_list');
     if (data) {
       const todoData = new TextDecoder().decode(new Uint8Array(data as number[]));
       const newTodos = JSON.parse(todoData);
@@ -565,7 +600,8 @@ async function readTodoList(): Promise<TodoList> {
 async function writeTodoList(todos: TodoList) {
   try {
     const todoData = new TextEncoder().encode(JSON.stringify(todos));
-    await upsert_vault('todos', PASSWORD, 'todo_list', Array.from(todoData), undefined, true);
+    const identity = await vault_identity_from_passphrase(PASSWORD, 'todos');
+    await upsert_vault('todos', identity, 'todo_list', Array.from(todoData), undefined, true);
     cachedTodos = todos;
     const syncStatus = document.querySelector('[data-sync-status]');
     if (syncStatus) {
@@ -748,13 +784,14 @@ async function createTodoDemo() {
 
 async function main() {
   try {
-    await vault.createVault('default', PASSWORD, 'test', { foo: 'bar' });
-    await vault.readFromVault('default', PASSWORD, 'test');
+    await vault.createVault('default');
+    const identity = await vault_identity_from_passphrase(PASSWORD, 'default');
+    await vault.readFromVault('default', identity, 'test');
   } catch (e) {
     console.log(e);
   }
   try {
-    const namespaces = await vault.listNamespaces('default', PASSWORD);
+    const namespaces = await vault.listNamespaces('default');
     console.log('Available namespaces:', namespaces);
 
     const vaults = await list_vaults();
@@ -804,9 +841,8 @@ async function addSyncButtons() {
       const wsUrl = `ws://localhost:8080/ws?token=${token}`;
 
       const randomVaultName = `peer_${Math.random().toString(36).substring(7)}`;
-      try {
-        const initialData = new TextEncoder().encode(JSON.stringify({ type: 'peer' }));
-        await create_vault(randomVaultName, PASSWORD, 'sync', Array.from(initialData), undefined);
+      try {        
+        await create_vault(randomVaultName);
       } catch (e) {
         if (!e.toString().includes('Vault already exists')) {
           throw e;
@@ -814,7 +850,8 @@ async function addSyncButtons() {
       }
 
       statusText.textContent = 'Enabling sync...';
-      localPeerId = await enable_sync(randomVaultName, PASSWORD, wsUrl, STUN_SERVERS);
+      const identity = await vault_identity_from_passphrase(PASSWORD, 'default');
+      localPeerId = await enable_sync(randomVaultName, identity, wsUrl, STUN_SERVERS);
       statusText.textContent = 'Sync enabled, ready to connect';
 
       myPeerId.textContent = `My Peer ID: ${localPeerId}`;
@@ -840,7 +877,9 @@ async function addSyncButtons() {
       try {
         const initialTodos = { items: [], lastSync: Date.now() };
         const todoData = new TextEncoder().encode(JSON.stringify(initialTodos));
-        await create_vault('todos', PASSWORD, 'todo_list', Array.from(todoData), undefined);
+        await create_vault('todos');
+        const identity = await vault_identity_from_passphrase(PASSWORD, 'todos');
+        await upsert_vault('todos', identity, 'todo_list', Array.from(todoData), undefined, true);
       } catch (e) {
         if (!e.toString().includes('Vault already exists')) {
           throw e;
@@ -848,12 +887,13 @@ async function addSyncButtons() {
       }
 
       statusText.textContent = 'Enabling sync...';
-      await enable_sync('todos', PASSWORD, wsUrl, STUN_SERVERS);
+      const identity = await vault_identity_from_passphrase(PASSWORD, 'todos');
+      await enable_sync('todos', identity, wsUrl, STUN_SERVERS);
 
       statusText.textContent = 'Connecting...';
-      await connect_to_peer('todos', PASSWORD, targetPeerId, wsUrl);
+      await connect_to_peer('todos', identity, targetPeerId, wsUrl);
 
-      await add_peer('todos', PASSWORD, targetPeerId, 'todo_list', 'contributor');
+      await add_peer('todos', identity, targetPeerId, 'todo_list', 'contributor');
 
       statusText.textContent = `Connected to peer ${targetPeerId}`;
 
@@ -892,3 +932,46 @@ async function getAuthToken(): Promise<string> {
 }
 
 addSyncButtons();
+
+const testIdentityButton = document.createElement('button');
+testIdentityButton.textContent = 'Test Identity Creation';
+testIdentityButton.onclick = async () => {
+  try {
+    // Create a new identity without passphrase
+    const identity = generate_identity();
+    console.log('Generated identity:', identity.public_key);
+    alert(`Generated new identity:\n\nPublic Key: ${identity.public_key}\nPrivate Key: ${identity.private_key}`);
+
+    // Store some test data
+    const testData = {
+      message: 'Hello from identity ' + identity.public_key,
+      timestamp: Date.now()
+    };
+
+    // Create vault if it doesn't exist
+    try {
+      await create_vault('default');
+    } catch (e) {
+      console.log('Vault already exists');
+    }
+
+    // Store data in vault
+    const namespace = 'identity_test';
+    await vault.upsertVault('default', identity.toJSON(), namespace, testData, undefined, true);
+    console.log('Data stored successfully');
+
+    // Read back the data
+    const readData = await vault.readFromVault('default', identity.toJSON(), namespace);
+    console.log('Read data:', readData);
+    
+    // Convert Map to object if needed
+    const dataObj = readData instanceof Map ? Object.fromEntries(readData) : readData;
+    
+    // Display data in alert
+    alert(`Retrieved Data:\n\n${JSON.stringify(dataObj, null, 2)}`);
+
+  } catch (e) {
+    console.error('Error in identity test:', e);
+  }
+};
+document.body.appendChild(testIdentityButton);

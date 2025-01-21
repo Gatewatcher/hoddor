@@ -1,5 +1,5 @@
 use crate::measure::now;
-use crate::vault::VaultMetadata;
+use crate::vault::{VaultMetadata, IdentitySalts};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use wasm_bindgen::JsValue;
@@ -27,12 +27,13 @@ pub enum OperationType {
     Update,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SyncMessage {
     pub operation: VaultOperation,
     pub vector_clock: HashMap<String, u64>,
     pub vault_name: String,
     pub vault_metadata: Option<VaultMetadata>,
+    pub identity_salts: Option<IdentitySalts>,
 }
 
 pub struct SyncManager {
@@ -118,12 +119,14 @@ impl SyncManager {
         vault_name: String,
         operation: VaultOperation,
         vault_metadata: Option<VaultMetadata>,
+        identity_salts: Option<IdentitySalts>,
     ) -> SyncMessage {
         SyncMessage {
             operation,
             vector_clock: self.vector_clock.clone(),
             vault_name,
             vault_metadata,
+            identity_salts,
         }
     }
 

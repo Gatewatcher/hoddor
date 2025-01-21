@@ -1,4 +1,4 @@
-use crate::crypto::derive_key;
+use crate::crypto::{encrypt_with_recipients, decrypt_with_identity, identity_from_passphrase, IdentityHandle};
 use crate::errors::VaultError;
 use crate::file_system::{
     get_or_create_directory_handle, get_or_create_file_handle_in_directory,
@@ -20,16 +20,11 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicI64, Ordering};
 use wasm_bindgen_futures::JsFuture;
 
-use chacha20poly1305::{
-    aead::{Aead, KeyInit},
-    ChaCha20Poly1305, Key, Nonce,
-};
-
 use web_sys::{self, FileSystemDirectoryHandle};
 
-use argon2::password_hash::rand_core::OsRng;
-
 use rand::RngCore;
+
+use argon2::password_hash::rand_core::OsRng;
 
 use futures_channel::mpsc::UnboundedReceiver;
 
@@ -41,19 +36,39 @@ struct Expiration {
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct NamespaceData {
     data: Vec<u8>,
-    nonce: [u8; 12],
     expiration: Option<Expiration>,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct VaultMetadata {
-    pub salt: [u8; 32],
     pub peer_id: Option<String>,
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+pub struct IdentitySalts {
+    salts: HashMap<String, [u8; 32]>,
+}
+
+impl IdentitySalts {
+    pub fn new() -> Self {
+        Self {
+            salts: HashMap::new(),
+        }
+    }
+
+    pub fn get_salt(&self, public_key: &str) -> Option<&[u8; 32]> {
+        self.salts.get(public_key)
+    }
+
+    pub fn set_salt(&mut self, public_key: String, salt: [u8; 32]) {
+        self.salts.insert(public_key, salt);
+    }
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct Vault {
     pub metadata: VaultMetadata,
+    pub identity_salts: IdentitySalts,
     pub namespaces: HashMap<String, NamespaceData>,
     pub sync_enabled: bool,
 }
@@ -86,20 +101,92 @@ fn validate_namespace(namespace: &str) -> Result<(), VaultError> {
     Ok(())
 }
 
+fn validate_passphrase(passphrase: &str) -> Result<(), VaultError> {
+    if passphrase.trim().is_empty() {
+        return Err(VaultError::JsError(
+            "Passphrase cannot be empty or whitespace".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+#[wasm_bindgen]
+pub async fn vault_identity_from_passphrase(
+    passphrase: &str,
+    vault_name: &str,
+) -> Result<IdentityHandle, JsValue> {
+    validate_passphrase(passphrase).map_err(|e| JsValue::from_str(&format!("{}", e)))?;
+    validate_vault_name(vault_name)?;
+
+    let dirname = get_vault_dirname(vault_name);
+    // Attempt to read the vault or create it if it doesn't exist
+    let (dir_handle, mut vault) = match read_vault_with_name(&dirname).await {
+        Ok(result) => result,
+        Err(_) => {
+            return Err(JsValue::from_str(&format!("Vault '{}' does not exist", vault_name)));
+        }
+    };
+
+    // Try to find an existing identity by iterating over stored salts
+    for (stored_pubkey, salt) in &vault.identity_salts.salts {
+        console::log(&format!("Checking stored public key: {}", stored_pubkey));
+        
+        // Validate salt length
+        if salt.len() != 32 {
+            console::error(&format!("Invalid salt length ({}) for public key: {}", salt.len(), stored_pubkey));
+            continue;
+        }
+
+        console::log(&format!("Using salt: {:?}", salt));
+        
+        match identity_from_passphrase(passphrase, salt).await {
+            Ok(identity) => {
+                console::log(&format!("Generated public key: {}", identity.public_key()));
+                if identity.public_key() == *stored_pubkey {
+                    console::log("Found matching identity");
+                    return Ok(identity);
+                } else {
+                    console::warn("Public key does not match stored salt");
+                }
+            }
+            Err(err) => {
+                console::warn(&format!(
+                    "Failed to generate identity with stored salt for public key {}: {:?}",
+                    stored_pubkey, err
+                ));
+            }
+        };
+    }
+
+    console::log("No matching identity found; generating new salt");
+    let mut new_salt = [0u8; 32];
+    OsRng.fill_bytes(&mut new_salt);
+
+    let identity = identity_from_passphrase(passphrase, &new_salt).await.map_err(|e| {
+        console::error(&format!("Failed to create new identity: {:?}", e));
+        JsValue::from_str(&format!("Failed to create new identity: {:?}", e))
+    })?;
+
+    // Store the new salt with the generated public key
+    vault.identity_salts.set_salt(identity.public_key(), new_salt);
+
+    save_vault(&dir_handle, vault).await.map_err(|e| {
+        console::error(&format!("Failed to save vault: {:?}", e));
+        JsValue::from_str(&format!("Failed to save vault: {:?}", e))
+    })?;
+
+    Ok(identity)
+}
+
 #[wasm_bindgen]
 pub async fn upsert_vault(
     vault_name: &str,
-    password: JsValue,
-    namespace: JsValue,
+    identity: IdentityHandle,
+    namespace: &str,
     data: JsValue,
     expires_in_seconds: Option<i64>,
     replace_if_exists: bool,
 ) -> Result<(), JsValue> {
-    let namespace_str: String = from_value(namespace.clone())?;
-    let password_str: String = from_value(password.clone())?;
-
-    validate_namespace(&namespace_str)?;
-
     let mut retries = 10;
     let mut delay = 50;
     let mut last_error = None;
@@ -121,22 +208,14 @@ pub async fn upsert_vault(
             }
         };
 
-        let namespace_str = namespace_str.clone();
-        let password_str = password_str.clone();
-        let vault_name = vault_name.to_string();
-
         let result = async {
-            let mut vault = match check_password(&vault_name, &password_str).await {
-                Ok(vault) => vault,
+            let mut vault = match read_vault_with_name(vault_name).await {
+                Ok((_, v)) => v,
                 Err(VaultError::IoError { message })
                     if message.contains("Failed to get directory handle") =>
                 {
-                    create_vault(
-                        JsValue::from_str(&vault_name),
-                        password.clone(),
-                        namespace.clone(),
-                        data.clone(),
-                        expires_in_seconds,
+                    create_vault_internal(
+                        vault_name
                     )
                     .await?;
                     return Ok(());
@@ -144,38 +223,38 @@ pub async fn upsert_vault(
                 Err(e) => return Err(e.into()),
             };
 
-            if vault.namespaces.contains_key(&namespace_str) && !replace_if_exists {
+            if vault.namespaces.contains_key(namespace) && !replace_if_exists {
                 return Err(VaultError::NamespaceAlreadyExists.into());
             }
 
             let namespace_data = insert_namespace_data(
-                &mut vault,
-                password.clone(),
+                &identity,
                 data.clone(),
                 expires_in_seconds,
             )
             .await?;
             vault
                 .namespaces
-                .insert(namespace_str.clone(), namespace_data.clone());
+                .insert(namespace.to_string(), namespace_data.clone());
 
-            let (dir_handle, _) = read_vault_with_name(&vault_name).await?;
+            let (dir_handle, _) = read_vault_with_name(vault_name).await?;
             save_vault(&dir_handle, vault.clone()).await?;
 
-            if let Ok(sync_manager) = get_sync_manager(&vault_name) {
+            if let Ok(sync_manager) = get_sync_manager(vault_name) {
                 let mut sync_manager = sync_manager.borrow_mut();
 
                 let operation = sync_manager.create_operation(
-                    namespace_str,
+                    namespace.to_string(),
                     OperationType::Update,
                     Some(namespace_data.data),
-                    Some(namespace_data.nonce),
+                    None,
                 );
 
                 let sync_msg = sync_manager.create_sync_message(
                     vault_name.to_string(),
                     operation,
                     Some(vault.metadata.clone()),
+                    Some(vault.identity_salts.clone()),
                 );
 
                 let peers = sync_manager.get_peers_mut();
@@ -223,15 +302,14 @@ pub async fn upsert_vault(
 #[wasm_bindgen]
 pub async fn remove_from_vault(
     vault_name: &str,
-    password: JsValue,
+    identity: &IdentityHandle,
     namespace: JsValue,
 ) -> Result<(), JsValue> {
     let namespace_str: String = from_value(namespace.clone())?;
     validate_namespace(&namespace_str)?;
-    let password: String = from_value(password)?;
     let namespace: String = from_value(namespace)?;
 
-    check_password(vault_name, &password).await?;
+    check_identity(vault_name, identity).await?;
 
     let (dir_handle, mut vault) = read_vault_with_name(vault_name).await?;
 
@@ -249,7 +327,7 @@ pub async fn remove_from_vault(
 #[wasm_bindgen]
 pub async fn read_from_vault(
     vault_name: &str,
-    password: JsValue,
+    identity: &IdentityHandle,
     namespace: JsValue,
 ) -> Result<JsValue, JsValue> {
     let namespace_str: String = from_value(namespace.clone())?;
@@ -260,9 +338,6 @@ pub async fn read_from_vault(
     }
 
     let result = time_it!("Total read_from_vault", {
-        let password: String = from_value(password).map_err(|_| VaultError::IoError {
-            message: "Invalid password format",
-        })?;
         let namespace: String = from_value(namespace).map_err(|_| VaultError::IoError {
             message: "Invalid namespace format",
         })?;
@@ -289,17 +364,8 @@ pub async fn read_from_vault(
             }
         }
 
-        let key_bytes = time_it!("Key derivation", {
-            derive_key(&password.as_bytes(), &vault.metadata.salt)?
-        });
-
-        let cipher_key = Key::from_slice(&key_bytes);
-        let cipher = ChaCha20Poly1305::new(cipher_key);
-        let nonce = Nonce::from_slice(&encrypted_namespace.nonce);
-
         let decrypted_data = time_it!("Decryption", {
-            cipher
-                .decrypt(nonce, encrypted_namespace.data.as_ref())
+            decrypt_with_identity(&encrypted_namespace.data, identity).await
                 .map_err(|_| VaultError::InvalidPassword)?
         });
 
@@ -333,9 +399,7 @@ pub async fn read_from_vault(
 }
 
 #[wasm_bindgen]
-pub async fn list_namespaces(vault_name: &str, password: JsValue) -> Result<JsValue, JsValue> {
-    let password: String = from_value(password)?;
-
+pub async fn list_namespaces(vault_name: &str) -> Result<JsValue, JsValue> {
     let (_, vault) = match read_vault_with_name(vault_name).await {
         Ok(result) => result,
         Err(VaultError::IoError { .. }) => {
@@ -352,8 +416,6 @@ pub async fn list_namespaces(vault_name: &str, password: JsValue) -> Result<JsVa
         console::log(&format!("Namespace found: {}", key));
     }
 
-    check_password(vault_name, &password).await?;
-
     let namespaces: Vec<String> = vault.namespaces.keys().cloned().collect();
 
     console::log(&format!("Returning {} namespaces", namespaces.len()));
@@ -361,10 +423,8 @@ pub async fn list_namespaces(vault_name: &str, password: JsValue) -> Result<JsVa
 }
 
 #[wasm_bindgen]
-pub async fn remove_vault(vault_name: &str, password: JsValue) -> Result<(), JsValue> {
+pub async fn remove_vault(vault_name: &str) -> Result<(), JsValue> {
     let _lock = acquire_vault_lock(vault_name).await?;
-    let password: String = from_value(password)?;
-    check_password(vault_name, &password).await?;
 
     let dirname = get_vault_dirname(vault_name);
     let root_handle = get_root_directory_handle().await?;
@@ -403,13 +463,15 @@ pub async fn list_vaults() -> Result<JsValue, JsValue> {
             break;
         }
 
-        if let Ok(value) = js_sys::Reflect::get(&next_result, &JsValue::from_str("value"))?
-            .dyn_into::<js_sys::Array>()
-        {
-            if let Some(name) = value.get(0).as_string() {
-                let vault_name = name;
-                console::log(&format!("Found vault: {}", vault_name));
-                vault_names.push(vault_name);
+        if next_result.is_null() {
+            break;
+        }
+
+        if let Ok(value) = js_sys::Reflect::get(&next_result, &JsValue::from_str("value")) {
+            if let Some(array) = value.dyn_ref::<js_sys::Array>() {
+                if let Some(name) = array.get(0).as_string() {
+                    vault_names.push(name);
+                }
             }
         }
     }
@@ -434,52 +496,42 @@ fn validate_vault_name(name: &str) -> Result<(), VaultError> {
 }
 
 #[wasm_bindgen]
-pub async fn create_vault(
-    vault_name: JsValue,
-    password: JsValue,
-    namespace: JsValue,
-    data: JsValue,
-    expires_in_seconds: Option<i64>,
-) -> Result<(), JsValue> {
-    let vault_name_str: String = from_value(vault_name)?;
-    let namespace_str: String = from_value(namespace.clone())?;
-    let dirname = get_vault_dirname(&vault_name_str);
+pub async fn create_vault(vault_name: JsValue) -> Result<(), JsValue> {
+    let name = vault_name
+        .as_string()
+        .ok_or_else(|| JsValue::from_str("vault_name must be a string"))?;
+    
+    create_vault_internal(&name).await
+}
 
-    validate_vault_name(&vault_name_str)?;
-    validate_namespace(&namespace_str)?;
+async fn create_vault_internal(vault_name: &str) -> Result<(), JsValue> {
+    let dirname = get_vault_dirname(vault_name);
 
-    let _lock = acquire_vault_lock(&vault_name_str).await?;
+    validate_vault_name(vault_name).map_err(|e| JsValue::from_str(&format!("{}", e)))?;
 
-    if (read_vault_with_name(&vault_name_str).await).is_ok() {
-        return Err(VaultError::VaultAlreadyExists.into());
+    if let Ok(_) = read_vault_with_name(vault_name).await {
+        return Err(JsValue::from_str(&format!("Vault '{}' already exists", vault_name)));
     }
 
-    let dir_handle = get_or_create_directory_handle(&dirname).await?;
+    let dir_handle = get_or_create_directory_handle(&dirname)
+        .await
+        .map_err(|e| JsValue::from_str(&format!("Failed to create directory: {}", e)))?;
 
-    let mut salt = [0u8; 32];
-    OsRng.fill_bytes(&mut salt);
-
-    let metadata = VaultMetadata {
-        salt,
-        peer_id: None,
-    };
-
-    let mut vault = Vault {
-        metadata,
+    let vault = Vault {
+        metadata: VaultMetadata { peer_id: None },
+        identity_salts: IdentitySalts::new(),
         namespaces: HashMap::new(),
         sync_enabled: false,
     };
 
-    let namespace_data =
-        insert_namespace_data(&mut vault, password, data, expires_in_seconds).await?;
-    vault.namespaces.insert(namespace_str, namespace_data);
-    save_vault(&dir_handle, vault).await?;
+    save_vault(&dir_handle, vault)
+        .await
+        .map_err(|e| JsValue::from_str(&format!("Failed to save vault: {:?}", e)))?;
 
-    console::log(&format!("Vault created successfully: {}", dirname));
     Ok(())
 }
 
-async fn check_password(vault_name: &str, password: &str) -> Result<Vault, VaultError> {
+async fn check_identity(vault_name: &str, identity: &IdentityHandle) -> Result<Vault, VaultError> {
     let (_, vault) = match read_vault_with_name(vault_name).await {
         Ok((handle, existing_vault)) => (handle, existing_vault),
 
@@ -491,25 +543,16 @@ async fn check_password(vault_name: &str, password: &str) -> Result<Vault, Vault
     };
 
     if let Some((_, first_encrypted)) = vault.namespaces.iter().next() {
-        let key_bytes = derive_key(password.as_bytes(), &vault.metadata.salt)?;
-        let cipher_key = Key::from_slice(&key_bytes);
-        let cipher = ChaCha20Poly1305::new(cipher_key);
-
-        cipher
-            .decrypt(
-                Nonce::from_slice(&first_encrypted.nonce),
-                first_encrypted.data.as_ref(),
-            )
+        decrypt_with_identity(&first_encrypted.data, identity)
+            .await
             .map_err(|_| VaultError::InvalidPassword)?;
     }
     Ok(vault)
 }
 
 #[wasm_bindgen]
-pub async fn export_vault(vault_name: &str, password: JsValue) -> Result<JsValue, JsValue> {
-    let password: String = from_value(password)?;
-
-    let vault = check_password(vault_name, &password).await?;
+pub async fn export_vault(vault_name: &str) -> Result<JsValue, JsValue> {
+    let vault = read_vault_with_name(vault_name).await?.1;
 
     // Create binary format with magic number "VAULT1"
     let magic = b"VAULT1";
@@ -678,58 +721,52 @@ async fn read_vault_with_name(
                                 break;
                             }
 
-                            let value =
-                                js_sys::Reflect::get(&next_result, &JsValue::from_str("value"))
-                                    .map_err(|_| VaultError::IoError {
-                                        message: "Failed to get entry value",
-                                    })?;
+                            if next_result.is_null() {
+                                break;
+                            }
 
-                            let array = value.dyn_into::<js_sys::Array>().map_err(|_| {
-                                VaultError::IoError {
-                                    message: "Failed to convert entry to array",
+                            if let Ok(value) = js_sys::Reflect::get(&next_result, &JsValue::from_str("value")) {
+                                if let Some(array) = value.dyn_ref::<js_sys::Array>() {
+                                    if let Some(name) = array.get(0).as_string() {
+                                        // Only process .ns files
+                                        if name.ends_with(".ns") {
+                                            let handle = array
+                                                .get(1)
+                                                .dyn_into::<web_sys::FileSystemFileHandle>()
+                                                .map_err(|_| VaultError::IoError {
+                                                    message: "Failed to get file handle",
+                                                })?;
+
+                                            let file =
+                                                JsFuture::from(handle.get_file()).await.map_err(|_| {
+                                                    VaultError::IoError {
+                                                        message: "Failed to get namespace file",
+                                                    }
+                                                })?;
+
+                                            let namespace_text =
+                                                JsFuture::from(file.unchecked_into::<web_sys::File>().text())
+                                                    .await
+                                                    .map_err(|_| VaultError::IoError {
+                                                        message: "Failed to read namespace file",
+                                                    })?
+                                                    .as_string()
+                                                    .ok_or(VaultError::IoError {
+                                                        message: "Failed to convert namespace data to string",
+                                                    })?;
+
+                                            let namespace_data: NamespaceData =
+                                                serde_json::from_str(&namespace_text).map_err(|_| {
+                                                    VaultError::SerializationError {
+                                                        message: "Failed to deserialize namespace data",
+                                                    }
+                                                })?;
+
+                                            let namespace = name[..name.len() - 3].to_string();
+                                            vault.namespaces.insert(namespace, namespace_data);
+                                        }
+                                    }
                                 }
-                            })?;
-
-                            let name = array.get(0).as_string().ok_or(VaultError::IoError {
-                                message: "Failed to get entry name",
-                            })?;
-
-                            // Only process .ns files
-                            if name.ends_with(".ns") {
-                                let handle = array
-                                    .get(1)
-                                    .dyn_into::<web_sys::FileSystemFileHandle>()
-                                    .map_err(|_| VaultError::IoError {
-                                        message: "Failed to get file handle",
-                                    })?;
-
-                                let file =
-                                    JsFuture::from(handle.get_file()).await.map_err(|_| {
-                                        VaultError::IoError {
-                                            message: "Failed to get namespace file",
-                                        }
-                                    })?;
-
-                                let namespace_text =
-                                    JsFuture::from(file.unchecked_into::<web_sys::File>().text())
-                                        .await
-                                        .map_err(|_| VaultError::IoError {
-                                            message: "Failed to read namespace file",
-                                        })?
-                                        .as_string()
-                                        .ok_or(VaultError::IoError {
-                                            message: "Failed to convert namespace data to string",
-                                        })?;
-
-                                let namespace_data: NamespaceData =
-                                    serde_json::from_str(&namespace_text).map_err(|_| {
-                                        VaultError::SerializationError {
-                                            message: "Failed to deserialize namespace data",
-                                        }
-                                    })?;
-
-                                let namespace = name[..name.len() - 3].to_string();
-                                vault.namespaces.insert(namespace, namespace_data);
                             }
                         }
                     }
@@ -887,33 +924,18 @@ pub async fn force_cleanup_vault(vault_name: &str) -> Result<(), JsValue> {
 }
 
 async fn insert_namespace_data(
-    vault: &mut Vault,
-    password: JsValue,
+    identity: &IdentityHandle,
     data: JsValue,
     expires_in_seconds: Option<i64>,
 ) -> Result<NamespaceData, JsValue> {
-    let password: String = from_value(password)?;
-
     let data_json = from_value::<serde_json::Value>(data)?;
     let data_bytes =
         serde_json::to_vec(&data_json).map_err(|_| VaultError::SerializationError {
             message: "Failed to serialize data",
         })?;
 
-    let key_bytes = derive_key(password.as_bytes(), &vault.metadata.salt)?;
-    let cipher_key = Key::from_slice(&key_bytes);
-    let cipher = ChaCha20Poly1305::new(cipher_key);
-
-    let mut nonce_bytes = [0u8; 12];
-    OsRng.fill_bytes(&mut nonce_bytes);
-    let nonce = Nonce::from_slice(&nonce_bytes);
-
-    let encrypted_data =
-        cipher
-            .encrypt(nonce, data_bytes.as_ref())
-            .map_err(|_| VaultError::IoError {
-                message: "Encryption failed",
-            })?;
+    let recipient = identity.to_public();
+    let encrypted_data = encrypt_with_recipients(&data_bytes, &[recipient]).await?;
 
     let expiration = if let Some(seconds) = expires_in_seconds {
         if seconds <= 0 {
@@ -930,7 +952,6 @@ async fn insert_namespace_data(
 
     let namespace_data = NamespaceData {
         data: encrypted_data,
-        nonce: nonce_bytes,
         expiration,
     };
 
@@ -940,18 +961,18 @@ async fn insert_namespace_data(
 static CLEANUP_INTERVAL: AtomicI64 = AtomicI64::new(0);
 static LAST_CLEANUP: AtomicI64 = AtomicI64::new(0);
 
+// TODO: enable sync by namespace
 #[wasm_bindgen]
 pub async fn enable_sync(
     vault_name: &str,
-    password: JsValue,
+    identity: &IdentityHandle,
     signaling_url: JsValue,
     stun_servers: JsValue,
 ) -> Result<JsValue, JsValue> {
-    let password_str: String = from_value(password)?;
     let signaling_url_str: String = from_value(signaling_url)?;
     let stun_servers_vec: Vec<String> = from_value(stun_servers)?;
 
-    let mut vault = check_password(vault_name, &password_str).await?;
+    let mut vault = check_identity(vault_name, identity).await?;
 
     if vault.metadata.peer_id.is_none() {
         let mut rng = OsRng;
@@ -985,7 +1006,7 @@ pub async fn enable_sync(
 #[wasm_bindgen]
 pub async fn connect_to_peer(
     vault_name: &str,
-    password: JsValue,
+    identity: &IdentityHandle,
     peer_id: JsValue,
     signaling_url: JsValue,
 ) -> Result<(), JsValue> {
@@ -993,16 +1014,15 @@ pub async fn connect_to_peer(
         "connect_to_peer called with: vault_name = {}",
         vault_name
     ));
-    console::log(&format!("password = {:?}", password));
+    console::log(&format!("identity = {:?}", identity));
     console::log(&format!("peer_id = {:?}", peer_id));
     console::log(&format!("signaling_url = {:?}", signaling_url));
 
-    let password_str: String = from_value(password)?;
     let peer_id_str: String = from_value(peer_id)?;
     let signaling_url_str: String = from_value(signaling_url)?;
 
-    console::log("Checking password...");
-    let vault = check_password(vault_name, &password_str).await?;
+    console::log("Checking identity...");
+    let vault = check_identity(vault_name, identity).await?;
 
     if !vault.sync_enabled {
         let msg = "Sync is not enabled for this vault";
@@ -1056,7 +1076,7 @@ pub async fn connect_to_peer(
             namespace,
             OperationType::Insert,
             Some(data.data),
-            Some(data.nonce),
+            None,
         );
         operations.push(operation);
     }
@@ -1074,6 +1094,7 @@ pub async fn connect_to_peer(
                 vault_name.to_string(),
                 op,
                 Some(vault.metadata.clone()),
+                Some(vault.identity_salts.clone()),
             )
         })
         .collect();
@@ -1123,17 +1144,16 @@ pub async fn connect_to_peer(
 #[wasm_bindgen]
 pub async fn add_peer(
     vault_name: &str,
-    password: JsValue,
+    identity: &IdentityHandle,
     peer_id: JsValue,
     namespace: JsValue,
     access_level: JsValue,
 ) -> Result<(), JsValue> {
-    let password_str: String = from_value(password)?;
     let peer_id_str: String = from_value(peer_id)?;
     let namespace_str: String = from_value(namespace)?;
     let access_level_str: String = from_value(access_level)?;
 
-    let vault = check_password(vault_name, &password_str).await?;
+    let vault = check_identity(vault_name, identity).await?;
 
     if !vault.sync_enabled {
         return Err(JsValue::from_str("Sync is not enabled for this vault"));
@@ -1172,13 +1192,14 @@ pub async fn add_peer(
             namespace_str.clone(),
             OperationType::Insert,
             Some(namespace_data.data.clone()),
-            Some(namespace_data.nonce),
+            None,
         );
 
         let sync_msg = sync_manager.create_sync_message(
             vault_name.to_string(),
             operation,
             Some(vault.metadata.clone()),
+            Some(vault.identity_salts.clone()),
         );
 
         let peer_ref = peer.borrow();
@@ -1219,13 +1240,11 @@ pub async fn add_peer(
 #[wasm_bindgen]
 pub async fn update_vault_from_sync(vault_name: &str, vault_data: &[u8]) -> Result<(), VaultError> {
     let sync_msg: SyncMessage = serde_json::from_slice(vault_data)
-        .map_err(|e| VaultError::JsError(format!("Failed to deserialize sync message: {}", e)))?;
+        .map_err(|e| VaultError::JsError(format!("Failed to deserialize sync message: {:?}", e)))?;
 
     let (file_handle, mut current_vault) = match read_vault_with_name(vault_name).await {
         Ok((handle, vault)) => (handle, vault),
-        Err(VaultError::IoError {
-            message: "Failed to get directory handle",
-        }) => {
+        Err(VaultError::IoError { message: "Failed to get directory handle" }) => {
             console::log(&format!("Creating new vault {} for sync", vault_name));
 
             let dirname = get_vault_dirname(vault_name);
@@ -1237,6 +1256,7 @@ pub async fn update_vault_from_sync(vault_name: &str, vault_data: &[u8]) -> Resu
                         "Missing vault metadata in sync message for new vault".to_string(),
                     )
                 })?,
+                identity_salts: sync_msg.identity_salts.clone().unwrap_or_else(IdentitySalts::new),
                 namespaces: HashMap::new(),
                 sync_enabled: true,
             };
@@ -1248,18 +1268,22 @@ pub async fn update_vault_from_sync(vault_name: &str, vault_data: &[u8]) -> Resu
         Err(e) => return Err(e),
     };
 
+    // Update identity salts if provided in sync message
+    if let Some(salts) = sync_msg.identity_salts {
+        current_vault.identity_salts = salts;
+    }
+
     match sync_msg.operation.operation_type {
         OperationType::Insert | OperationType::Update => {
-            if let (Some(data), Some(nonce)) = (sync_msg.operation.data, sync_msg.operation.nonce) {
+            if let (Some(data), _) = (sync_msg.operation.data, sync_msg.operation.nonce) {
                 let namespace = sync_msg.operation.namespace.clone();
                 let namespace_data = NamespaceData {
                     data,
-                    nonce,
                     expiration: None,
                 };
                 current_vault
                     .namespaces
-                    .insert(namespace.clone(), namespace_data);
+                    .insert(namespace.clone(), namespace_data.clone());
                 console::log(&format!("Updated namespace {} in vault", namespace));
             }
         }
