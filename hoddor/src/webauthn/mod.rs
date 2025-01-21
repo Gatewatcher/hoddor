@@ -14,10 +14,10 @@ pub async fn create_credential(
 ) -> Result<PublicKeyCredential, JsValue> {
     log(&format!("Init credential creation"));
 
-    let challenge = Uint8Array::from(gen_random::<32>()?.as_slice());
+    let challenge = Uint8Array::from(gen_random().as_slice());
 
     let cred_id = match cred_id {
-        None => Uint8Array::from(gen_random::<32>()?.as_slice()),
+        None => Uint8Array::from(gen_random().as_slice()),
         Some(cred_id) => cred_id.clone(),
     };
 
@@ -33,7 +33,7 @@ pub async fn get_credential(
 ) -> Result<PublicKeyCredential, JsValue> {
     log(&format!("Init credential get"));
 
-    let challenge = Uint8Array::from(gen_random::<32>()?.as_slice());
+    let challenge = Uint8Array::from(gen_random().as_slice());
 
     Ok(JsFuture::from(webauthn_get(&challenge, prf_salt, cred_id)?)
         .await?

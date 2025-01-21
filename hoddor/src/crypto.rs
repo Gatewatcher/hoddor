@@ -1,17 +1,14 @@
-use crate::{global::window, measure::time_it};
+use crate::measure::time_it;
 use argon2::Argon2;
 use hkdf::Hkdf;
 use js_sys::{Array, Uint8Array};
+use rand::{thread_rng, Rng};
 use sha2::{Digest, Sha256};
 use wasm_bindgen::prelude::JsValue;
 use web_sys::AuthenticationExtensionsPrfValues;
 
-pub fn gen_random<const N: usize>() -> Result<[u8; N], JsValue> {
-    let mut result: [u8; N] = [0; N];
-    window()
-        .crypto()?
-        .get_random_values_with_u8_array(&mut result)?;
-    Ok(result)
+pub fn gen_random() -> [u8; 32] {
+    thread_rng().gen::<[u8; 32]>()
 }
 
 pub fn derive_key(password: &[u8], salt: &[u8]) -> Result<[u8; 32], JsValue> {
