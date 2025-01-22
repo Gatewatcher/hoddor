@@ -1,5 +1,5 @@
-use wasm_bindgen::JsValue;
 use std::fmt;
+use wasm_bindgen::JsValue;
 
 #[derive(Debug)]
 pub enum VaultError {
@@ -44,7 +44,9 @@ impl fmt::Display for VaultError {
             VaultError::IoError { message } => write!(f, "IO Error: {}", message),
             VaultError::NamespaceNotFound => write!(f, "Namespace not found"),
             VaultError::InvalidPassword => write!(f, "Invalid password"),
-            VaultError::SerializationError { message } => write!(f, "Serialization Error: {}", message),
+            VaultError::SerializationError { message } => {
+                write!(f, "Serialization Error: {}", message)
+            }
             VaultError::JsError(msg) => write!(f, "JavaScript Error: {}", msg),
             VaultError::DataExpired => write!(f, "Data has expired"),
             VaultError::NamespaceAlreadyExists => write!(f, "Namespace already exists"),

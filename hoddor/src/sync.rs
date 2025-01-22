@@ -1,5 +1,5 @@
 use crate::measure::now;
-use crate::vault::{VaultMetadata, IdentitySalts};
+use crate::vault::{IdentitySalts, VaultMetadata};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use wasm_bindgen::JsValue;

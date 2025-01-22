@@ -1,5 +1,5 @@
 use age::{
-    secrecy::{ExposeSecret, SecretString},
+    secrecy::ExposeSecret,
     x25519::{Identity, Recipient},
     Decryptor, Encryptor,
 };
@@ -14,20 +14,19 @@ use web_sys::AuthenticationExtensionsPrfValues;
 pub fn gen_random() -> [u8; 32] {
     thread_rng().gen::<[u8; 32]>()
 }
-use bech32::{ToBase32, FromBase32, Variant};
+use crate::console;
+use bech32::{ToBase32, Variant};
 use chacha20::{
     cipher::{KeyIvInit, StreamCipher},
     ChaCha20,
 };
-use futures::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, AllowStdIo};
+use futures::io::{AllowStdIo, AsyncReadExt, AsyncWriteExt};
 use rand_core::{CryptoRng, Error as RngError, RngCore};
 use std::cell::RefCell;
-use std::io::{Cursor, Read};
-use std::str::FromStr;
-use wasm_bindgen::prelude::*;
-use x25519_dalek::{StaticSecret, PublicKey};
 use std::fmt;
-use crate::console;
+use std::io::Cursor;
+use wasm_bindgen::prelude::*;
+use x25519_dalek::StaticSecret;
 use zeroize::Zeroize;
 
 /// A deterministic CSPRNG using ChaCha20
@@ -42,7 +41,7 @@ impl DeterministicRng {
         // Use first 32 bytes as key, and a fixed nonce
         let nonce = [0u8; 12]; // ChaCha20 uses 12-byte nonces
         let cipher = ChaCha20::new(seed.into(), &nonce.into());
-        
+
         Self {
             cipher: RefCell::new(cipher),
             buffer: RefCell::new([0u8; 64]),
@@ -53,13 +52,13 @@ impl DeterministicRng {
     fn refill_buffer(&self) {
         // Get a new buffer of zeros
         let mut buffer = [0u8; 64];
-        
+
         // Encrypt zeros to get random bytes
         self.cipher.borrow_mut().apply_keystream(&mut buffer);
-        
+
         // Update the internal buffer
         *self.buffer.borrow_mut() = buffer;
-        
+
         // Reset position
         *self.buffer_pos.borrow_mut() = 0;
     }
@@ -80,19 +79,19 @@ impl RngCore for DeterministicRng {
 
     fn fill_bytes(&mut self, dest: &mut [u8]) {
         let mut remaining = dest;
-        
+
         while !remaining.is_empty() {
             let pos = *self.buffer_pos.borrow();
-            
+
             if pos >= 64 {
                 self.refill_buffer();
             }
-            
+
             let buffer = self.buffer.borrow();
             let pos = *self.buffer_pos.borrow(); // Get position again after potential refill
             let available = 64 - pos;
             let to_copy = remaining.len().min(available);
-            
+
             remaining[..to_copy].copy_from_slice(&buffer[pos..pos + to_copy]);
             *self.buffer_pos.borrow_mut() = pos + to_copy;
             remaining = &mut remaining[to_copy..];
@@ -110,7 +109,10 @@ impl CryptoRng for DeterministicRng {}
 
 // Generate an Age identity from a passphrase and salt
 #[wasm_bindgen]
-pub async fn identity_from_passphrase(passphrase: &str, salt: &[u8]) -> Result<IdentityHandle, JsValue> {
+pub async fn identity_from_passphrase(
+    passphrase: &str,
+    salt: &[u8],
+) -> Result<IdentityHandle, JsValue> {
     // Use Argon2 to derive a stable seed from the passphrase
     let argon2 = Argon2::default();
     let mut seed = [0u8; 32];
@@ -121,26 +123,23 @@ pub async fn identity_from_passphrase(passphrase: &str, salt: &[u8]) -> Result<I
 
     // Create a static secret from the derived key
     let secret = StaticSecret::from(seed);
-    
+
     // Create a secret string in the format Age expects
     let mut sk_bytes = secret.to_bytes();
     let sk_base32 = sk_bytes.to_base32();
     let encoded = bech32::encode("age-secret-key-", sk_base32, Variant::Bech32)
         .map_err(|e| JsValue::from_str(&format!("Failed to encode identity: {}", e)))?
         .to_uppercase();
-    
+
     // Clear sensitive data
     sk_bytes.zeroize();
     seed.zeroize();
-    
+
     // Parse into Age identity
-    encoded
-        .parse::<Identity>()
-        .map(Into::into)
-        .map_err(|e| {
-            console::log(&format!("Failed to parse identity string: {}", encoded));
-            JsValue::from_str(&format!("Failed to create identity: {}", e))
-        })
+    encoded.parse::<Identity>().map(Into::into).map_err(|e| {
+        console::log(&format!("Failed to parse identity string: {}", encoded));
+        JsValue::from_str(&format!("Failed to create identity: {}", e))
+    })
 }
 
 /// Generate a new Age identity (key pair)
@@ -159,11 +158,19 @@ pub fn parse_recipient(recipient: &str) -> Result<RecipientHandle, JsValue> {
 }
 
 /// Encrypt data with recipients (public keys)
-pub async fn encrypt_with_recipients(data: &[u8], recipients: &[RecipientHandle]) -> Result<Vec<u8>, JsValue> {
+pub async fn encrypt_with_recipients(
+    data: &[u8],
+    recipients: &[RecipientHandle],
+) -> Result<Vec<u8>, JsValue> {
     let recipients: Vec<_> = recipients.iter().map(|r| r.as_ref()).collect();
-    let encryptor = Encryptor::with_recipients(recipients.iter().map(|r| Box::new((*r).clone()) as Box<dyn age::Recipient + Send>).collect())
-        .ok_or_else(|| JsValue::from_str("No recipients provided"))?;
-    
+    let encryptor = Encryptor::with_recipients(
+        recipients
+            .iter()
+            .map(|r| Box::new((*r).clone()) as Box<dyn age::Recipient + Send>)
+            .collect(),
+    )
+    .ok_or_else(|| JsValue::from_str("No recipients provided"))?;
+
     let mut encrypted = vec![];
     let cursor = Cursor::new(&mut encrypted);
     let async_cursor = AllowStdIo::new(cursor);
@@ -183,20 +190,30 @@ pub async fn encrypt_with_recipients(data: &[u8], recipients: &[RecipientHandle]
 }
 
 /// Decrypt data with an identity (private key)
-pub async fn decrypt_with_identity(encrypted_data: &[u8], identity_handle: &IdentityHandle) -> Result<Vec<u8>, JsValue> {
+pub async fn decrypt_with_identity(
+    encrypted_data: &[u8],
+    identity_handle: &IdentityHandle,
+) -> Result<Vec<u8>, JsValue> {
     let cursor = Cursor::new(encrypted_data);
     let decryptor = match Decryptor::new(cursor) {
         Ok(d) => d,
-        Err(e) => return Err(JsValue::from_str(&format!("Failed to create decryptor: {}", e))),
+        Err(e) => {
+            return Err(JsValue::from_str(&format!(
+                "Failed to create decryptor: {}",
+                e
+            )))
+        }
     };
 
     match decryptor {
         Decryptor::Recipients(d) => {
             let mut decrypted = vec![];
             let reader = d
-                .decrypt(std::iter::once(identity_handle.as_identity() as &dyn age::Identity))
+                .decrypt(std::iter::once(
+                    identity_handle.as_identity() as &dyn age::Identity
+                ))
                 .map_err(|e| JsValue::from_str(&format!("Failed to decrypt: {}", e)))?;
-            
+
             let mut async_reader = AllowStdIo::new(reader);
             AsyncReadExt::read_to_end(&mut async_reader, &mut decrypted)
                 .await
@@ -283,7 +300,7 @@ impl IdentityHandle {
     pub fn to_json(&self) -> JsValue {
         // Convert the identity to a string representation
         let identity_str = self.identity.to_string().expose_secret().to_string();
-        
+
         // Create a JS object with the serialized identity
         let obj = js_sys::Object::new();
         js_sys::Reflect::set(&obj, &"identity".into(), &identity_str.into()).unwrap();
@@ -297,7 +314,7 @@ impl IdentityHandle {
             .map_err(|e| format!("Failed to get identity from JSON: {:?}", e))?
             .as_string()
             .ok_or("Identity is not a string")?;
-        
+
         // Parse the identity string back into an Age identity
         identity_str
             .parse::<Identity>()
