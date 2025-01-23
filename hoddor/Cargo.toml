@@ -113,7 +113,9 @@ features = [
     "AuthenticationExtensionsClientOutputs",
     "AuthenticationExtensionsPrfInputs",
     "AuthenticationExtensionsPrfValues",
-    "UserVerificationRequirement"
+    "UserVerificationRequirement",
+    "AuthenticatorAttachment",
+    "AuthenticatorSelectionCriteria"
 ]
 
 [dependencies.gloo-timers]

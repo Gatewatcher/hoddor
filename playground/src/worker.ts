@@ -34,14 +34,14 @@ self.onmessage = async (message) => {
         result = { success: true };
         break;
       case 'read_from_vault':
-        result = await read_from_vault(payload.vaultName, IdentityHandle.fromJSON(payload.identity), payload.namespace);
+        result = await read_from_vault(payload.vaultName, IdentityHandle.from_json(payload.identity), payload.namespace);
         break;
       case 'upsert_vault':
-        await upsert_vault(payload.vaultName, IdentityHandle.fromJSON(payload.identity), payload.namespace, payload.data, payload.expiresInSeconds, payload.replaceIfExists);
+        await upsert_vault(payload.vaultName, IdentityHandle.from_json(payload.identity), payload.namespace, payload.data, payload.expiresInSeconds, payload.replaceIfExists);
         result = { success: true };
         break;
       case 'remove_from_vault':
-        await remove_from_vault(payload.vaultName, IdentityHandle.fromJSON(payload.identity), payload.namespace);
+        await remove_from_vault(payload.vaultName, IdentityHandle.from_json(payload.identity), payload.namespace);
         result = { success: true };
         break;
       case 'list_namespaces':

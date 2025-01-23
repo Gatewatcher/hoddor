@@ -1,6 +1,6 @@
 # Hoddor Browser Vault
 
-A cutting-edge browser-based vault built with WebAssembly (Rust) that ensures your data remains private and secure by encrypting it directly on the client side. The backend has no access to the decryption keys, offering a truly zero-knowledge implementation for modern web applications.
+A cutting-edge Identity-based security browser-based vault built with WebAssembly (Rust) that ensures your data remains private and secure by encrypting it directly on the client side. The backend has no access to the decryption keys, offering a truly zero-knowledge implementation for modern web applications.
 
 This solution provides encrypted storage capabilities with robust support for multiple data types, including JSON and binary data, while ensuring that all sensitive operations occur exclusively on the user’s device.
 
@@ -20,7 +20,7 @@ This solution provides encrypted storage capabilities with robust support for mu
 
 ### Key Features
 
-- 🔒 **End-to-End Encryption**: Data is encrypted using **ChaCha20Poly1305** entirely on the client side. The backend never has access to raw data or decryption keys.
+- 🔒 **End-to-End Encryption**: Data is encrypted using [age encryption](https://age-encryption.org/), a modern file encryption tool designed to be simple, secure, and portable.
   
 - 🔑 **Password-Based Key Derivation**: Utilizes **Argon2id** to generate cryptographically secure keys from user-provided passwords.
 

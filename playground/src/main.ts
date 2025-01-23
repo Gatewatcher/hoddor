@@ -14,6 +14,7 @@ import init, {
   generate_identity,
   get_credential,
   create_credential,
+  list_webauthn_public_keys
 } from '../../hoddor/pkg/hoddor.js';
 import { VaultWorker } from './vault';
 import { runPerformanceTest } from './performance';
@@ -116,16 +117,16 @@ async function storeVideo(password: string, videoFile: File) {
       fileName: videoFile.name,
       lastModified: videoFile.lastModified
     });
-    await vault.upsertVault('default', identity.toJSON(), 'test_video_meta', Array.from(new TextEncoder().encode(metadata)), BigInt(5 * 60000), true);
+    await vault.upsertVault('default', identity.to_json(), 'test_video_meta', Array.from(new TextEncoder().encode(metadata)), BigInt(5 * 60000), true);
 
     const firstChunk = videoFile.slice(0, chunkSize);
     const firstChunkData = await readChunk(firstChunk);
-    await vault.upsertVault('default', identity.toJSON(), 'test_video_0', Array.from(firstChunkData), BigInt(5 * 60000), true);
+    await vault.upsertVault('default', identity.to_json(), 'test_video_0', Array.from(firstChunkData), BigInt(5 * 60000), true);
 
     while (offset < videoFile.size) {
       const chunk = videoFile.slice(offset, offset + chunkSize);
       const chunkData = await readChunk(chunk);
-      await vault.upsertVault('default', identity.toJSON(), `test_video_${offset}`, Array.from(chunkData), BigInt(5 * 60000), true);
+      await vault.upsertVault('default', identity.to_json(), `test_video_${offset}`, Array.from(chunkData), BigInt(5 * 60000), true);
       offset += chunkSize;
       const progress = Math.round((offset / videoFile.size) * 100);
       console.log(`Upload progress: ${progress}%`);
@@ -318,11 +319,7 @@ const Authenticate = document.createElement('button');
 Authenticate.textContent = 'Authenticate';
 
 Authenticate.onclick = async () => {
-  const username = prompt('Enter a username');
-  
-  if (username) {
-    await startAuthentication();
-  }
+  await startAuthentication();
 };
 
 document.body.appendChild(Authenticate);
@@ -380,18 +377,18 @@ expirationTestButton.onclick = async () => {
     const identity = await vault_identity_from_passphrase(PASSWORD, namespace);
     
     // Store data with expiration
-    await vault.upsertVault(namespace, identity.toJSON(), namespace, testData, BigInt(5), true);
+    await vault.upsertVault(namespace, identity.to_json(), namespace, testData, BigInt(5), true);
     console.log("Created data with 5 second expiration");
 
     // Initial read
-    const initialData = await vault.readFromVault(namespace, identity.toJSON(), namespace);
+    const initialData = await vault.readFromVault(namespace, identity.to_json(), namespace);
     statusDiv.textContent = "Initial read successful: " + JSON.stringify(initialData);
 
     // Try reading every second for 10 seconds
     for (let i = 0; i < 10; i++) {
       await new Promise(resolve => setTimeout(resolve, 1000));
       try {
-        const data = await vault.readFromVault(namespace, identity.toJSON(), namespace);
+        const data = await vault.readFromVault(namespace, identity.to_json(), namespace);
         statusDiv.textContent = `${i + 1}s: Data still accessible: ${JSON.stringify(Object.fromEntries(data))}`;
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
@@ -451,29 +448,51 @@ async function storeUserData(password: string, userData: UserData) {
   }
 }
 
-const nonce = crypto.getRandomValues(new Uint8Array(32));
-
 async function startRegistration(username: string) {
   try {
-    const create_credentials = await create_credential(username);
-    console.log('Registration: Create credential success:', create_credentials);
+    const result = await create_credential('default', username);
+    console.log('Registration: Create credential success:', result);
 
-    const get_credentials = await get_credential(nonce, new Uint8Array(create_credentials.rawId));
-    console.log('Registration: Get credential success:', get_credentials.getClientExtensionResults());
+    try {
+      await create_vault('default');
+    } catch (e) {
+      console.log('Vault already exists');
+    }
+
+    console.log('Encrypted data stored successfully in vault');
   } catch (e) {
     console.error('Failed to register user:', e);
-    // throw e;
   }
 }
 
 async function startAuthentication() {
   try {
-    const get_credentials = await get_credential(nonce);
+    const publicKeys = await list_webauthn_public_keys('default');
+    console.log('Available public keys:', publicKeys);
+
+    if (!Array.isArray(publicKeys) || publicKeys.length === 0) {
+      throw new Error('No WebAuthn credentials found. Please register first.');
+    }
+
+    const selectedPublicKey = publicKeys[0];
+    console.log('Selected public key:', selectedPublicKey);
+
+    const identity = await get_credential('default', selectedPublicKey);
+    console.log('startAuthentication: identity', identity);
     
-    console.log('Authentication: Get credential success:', get_credentials.getClientExtensionResults());
+    const namespace = `user_${Date.now().toString()}`;
+    const testData = {
+      username: 'username',
+      timestamp: Date.now(),
+      message: 'This is encrypted data for ' + 'username'
+    };
+
+    await upsert_vault('default', identity, namespace, testData, undefined, true);
+    const decryptedData = await read_from_vault('default', identity, namespace);
+    
+    console.log('Successfully decrypted data from vault:', decryptedData);
   } catch (e) {
-    console.error('Failed to authenticate user:', e);
-    // throw e;
+    console.error('Failed to authenticate:', e);
   }
 }
 
@@ -937,37 +956,30 @@ const testIdentityButton = document.createElement('button');
 testIdentityButton.textContent = 'Test Identity Creation';
 testIdentityButton.onclick = async () => {
   try {
-    // Create a new identity without passphrase
     const identity = generate_identity();
-    console.log('Generated identity:', identity.public_key);
-    alert(`Generated new identity:\n\nPublic Key: ${identity.public_key}\nPrivate Key: ${identity.private_key}`);
+    console.log('Generated identity:', identity.to_json().public_key);
+    alert(`Generated new identity:\n\nPublic Key: ${identity.to_json().public_key}\nPrivate Key: ${identity.to_json().private_key}`);
 
-    // Store some test data
     const testData = {
-      message: 'Hello from identity ' + identity.public_key,
+      message: 'Hello from identity ' + identity.to_json().public_key,
       timestamp: Date.now()
     };
 
-    // Create vault if it doesn't exist
     try {
       await create_vault('default');
     } catch (e) {
       console.log('Vault already exists');
     }
 
-    // Store data in vault
     const namespace = 'identity_test';
-    await vault.upsertVault('default', identity.toJSON(), namespace, testData, undefined, true);
+    await vault.upsertVault('default', identity.to_json(), namespace, testData, undefined, true);
     console.log('Data stored successfully');
 
-    // Read back the data
-    const readData = await vault.readFromVault('default', identity.toJSON(), namespace);
+    const readData = await vault.readFromVault('default', identity.to_json(), namespace);
     console.log('Read data:', readData);
     
-    // Convert Map to object if needed
     const dataObj = readData instanceof Map ? Object.fromEntries(readData) : readData;
     
-    // Display data in alert
     alert(`Retrieved Data:\n\n${JSON.stringify(dataObj, null, 2)}`);
 
   } catch (e) {

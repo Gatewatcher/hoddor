@@ -49,12 +49,20 @@ pub struct VaultMetadata {
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct IdentitySalts {
     salts: HashMap<String, [u8; 32]>,
+    credential_ids: HashMap<String, Vec<u8>>,
+}
+
+impl Default for IdentitySalts {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl IdentitySalts {
     pub fn new() -> Self {
         Self {
             salts: HashMap::new(),
+            credential_ids: HashMap::new(),
         }
     }
 
@@ -64,6 +72,26 @@ impl IdentitySalts {
 
     pub fn set_salt(&mut self, public_key: String, salt: [u8; 32]) {
         self.salts.insert(public_key, salt);
+    }
+
+    pub fn get_all_salts(&self) -> impl Iterator<Item = &[u8; 32]> {
+        self.salts.values()
+    }
+
+    pub fn get_all_credential_ids(&self) -> impl Iterator<Item = &Vec<u8>> {
+        self.credential_ids.values()
+    }
+
+    pub fn get_credential_id(&self, public_key: &str) -> Option<&Vec<u8>> {
+        self.credential_ids.get(public_key)
+    }
+
+    pub fn set_credential_id(&mut self, public_key: String, credential_id: Vec<u8>) {
+        self.credential_ids.insert(public_key, credential_id);
+    }
+
+    pub fn get_public_keys_with_credentials(&self) -> impl Iterator<Item = &String> {
+        self.credential_ids.keys()
     }
 }
 
@@ -75,7 +103,7 @@ pub struct Vault {
     pub sync_enabled: bool,
 }
 
-fn get_vault_dirname(vault_name: &str) -> String {
+pub fn get_vault_dirname(vault_name: &str) -> String {
     vault_name.to_string()
 }
 
@@ -121,7 +149,6 @@ pub async fn vault_identity_from_passphrase(
     validate_vault_name(vault_name)?;
 
     let dirname = get_vault_dirname(vault_name);
-    // Attempt to read the vault or create it if it doesn't exist
     let (dir_handle, mut vault) = match read_vault_with_name(&dirname).await {
         Ok(result) => result,
         Err(_) => {
@@ -194,7 +221,7 @@ pub async fn vault_identity_from_passphrase(
 #[wasm_bindgen]
 pub async fn upsert_vault(
     vault_name: &str,
-    identity: IdentityHandle,
+    identity: &IdentityHandle,
     namespace: &str,
     data: JsValue,
     expires_in_seconds: Option<i64>,
@@ -238,7 +265,7 @@ pub async fn upsert_vault(
             }
 
             let namespace_data =
-                insert_namespace_data(&identity, data.clone(), expires_in_seconds).await?;
+                insert_namespace_data(identity, data.clone(), expires_in_seconds).await?;
             vault
                 .namespaces
                 .insert(namespace.to_string(), namespace_data.clone());
@@ -657,7 +684,17 @@ pub async fn import_vault(vault_name: &str, data: JsValue) -> Result<(), JsValue
     Ok(())
 }
 
-async fn read_vault_with_name(
+pub async fn get_vault(vault_name: &str) -> Result<(FileSystemDirectoryHandle, Vault), JsValue> {
+    let dirname = get_vault_dirname(vault_name);
+    read_vault_with_name(&dirname).await.map_err(|_| {
+        JsValue::from_str(&format!(
+            "Vault '{}' does not exist",
+            vault_name
+        ))
+    })
+}
+
+pub async fn read_vault_with_name(
     vault_name: &str,
 ) -> Result<(FileSystemDirectoryHandle, Vault), VaultError> {
     let root = get_root_directory_handle().await?;
@@ -792,7 +829,7 @@ async fn read_vault_with_name(
     Ok((dir_handle, vault))
 }
 
-async fn save_vault(
+pub async fn save_vault(
     dir_handle: &FileSystemDirectoryHandle,
     vault: Vault,
 ) -> Result<(), VaultError> {
