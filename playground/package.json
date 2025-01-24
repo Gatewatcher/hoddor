@@ -9,11 +9,28 @@
     "preview": "vite preview"
   },
   "devDependencies": {
+    "@trivago/prettier-plugin-sort-imports": "4.2.0",
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.10.7",
+    "@types/react": "^19.0.7",
+    "@types/react-dom": "^19.0.3",
+    "@typescript-eslint/eslint-plugin": "6.7.2",
+    "@typescript-eslint/parser": "6.7.2",
     "concurrently": "9.1.0",
-    "typescript": "5.6.2",
+    "eslint": "8.50.0",
+    "eslint-plugin-import": "2.28.1",
+    "eslint-plugin-react": "7.33.2",
+    "eslint-plugin-react-hooks": "4.6.0",
+    "eslint-plugin-react-refresh": "0.4.3",
+    "prettier": "3.0.3",
+    "typescript": "^5.6.2",
     "vite": "5.4.10"
   },
   "dependencies": {
+    "@ant-design/icons": "^5.6.0",
+    "antd": "^5.23.2",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
     "vite-plugin-wasm": "3.3.0",
     "vite-plugin-wasm-pack": "0.1.12"
   }
