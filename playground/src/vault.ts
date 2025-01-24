@@ -1,3 +1,5 @@
+import { IdentityHandle } from "@hoddor/hoddor"
+
 export class VaultWorker {
   private worker: Worker
 
@@ -24,28 +26,28 @@ export class VaultWorker {
     })
   }
 
-  async createVault(vaultName: string, password: string, namespace: string, data: any, expiresInSeconds?: BigInt): Promise<void> {
-    await this.send('create_vault', { vaultName, password, namespace, data, expiresInSeconds })
+  async createVault(vaultName: string): Promise<void> {
+    await this.send('create_vault', { vaultName })
   }
 
-  async readFromVault(vaultName: string, password: string, namespace: string, expiresInSeconds?: BigInt): Promise<any> {
-    return this.send('read_from_vault', { vaultName, password, namespace, expiresInSeconds });
+  async readFromVault(vaultName: string, identity: IdentityHandle, namespace: string, expiresInSeconds?: BigInt): Promise<any> {
+    return this.send('read_from_vault', { vaultName, identity, namespace, expiresInSeconds });
   }
 
-  async upsertVault(vaultName: string, password: string, namespace: string, data: any, expiresInSeconds?: BigInt, replaceIfExists?: boolean): Promise<void> {
-    await this.send('upsert_vault', { vaultName, password, namespace, data, expiresInSeconds, replaceIfExists })
+  async upsertVault(vaultName: string, identity: IdentityHandle, namespace: string, data: any, expiresInSeconds?: BigInt, replaceIfExists?: boolean): Promise<void> {
+    await this.send('upsert_vault', { vaultName, identity, namespace, data, expiresInSeconds, replaceIfExists })
   }
 
-  async removeFromVault(vaultName: string, password: string, namespace: string): Promise<void> {
-    await this.send('remove_from_vault', { vaultName, password, namespace })
+  async removeFromVault(vaultName: string, identity: IdentityHandle, namespace: string): Promise<void> {
+    await this.send('remove_from_vault', { vaultName, identity, namespace })
   }
 
-  async removeVault(vaultName: string, password: string): Promise<void> {
-    await this.send('remove_vault', { vaultName, password })
+  async removeVault(vaultName: string): Promise<void> {
+    await this.send('remove_vault', { vaultName })
   }
 
-  async listNamespaces(vaultName: string, password: string): Promise<string[]> {
-    return this.send('list_namespaces', { vaultName, password })
+  async listNamespaces(vaultName: string): Promise<string[]> {
+    return this.send('list_namespaces', { vaultName })
   }
 
   async setDebugMode(enabled: boolean): Promise<void> {
@@ -56,8 +58,8 @@ export class VaultWorker {
     return this.send('list_vaults', {})
   }
 
-  async exportVault(vaultName: string, password: string): Promise<Uint8Array> {
-    const response = await this.send('export_vault', { vaultName, password });
+  async exportVault(vaultName: string): Promise<Uint8Array> {
+    const response = await this.send('export_vault', { vaultName });
     return response;
   }
 

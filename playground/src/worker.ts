@@ -7,7 +7,8 @@ import init, {
   list_vaults,
   export_vault,
   import_vault,
-  configure_cleanup
+  configure_cleanup,
+  IdentityHandle,
 } from '../../hoddor/pkg/hoddor.js';
 
 let initialized = false;
@@ -20,53 +21,50 @@ const initWasm = async () => {
 }
 
 self.onmessage = async (message) => {
-  const { type, payload } = message.data
+  const { type, payload } = message.data;
   
   try {
     await initWasm();
     
-    let result
+    let result;
+    
     switch (type) {
       case 'create_vault':
-        await create_vault(payload.vaultName, payload.password, payload.namespace, payload.data, payload.expiresInSeconds)
-        result = { success: true }
-        break
-      case 'read_from_vault':        
-        result = await read_from_vault(payload.vaultName, payload.password, payload.namespace)
-        break
+        await create_vault(payload.vaultName);
+        result = { success: true };
+        break;
+      case 'read_from_vault':
+        result = await read_from_vault(payload.vaultName, IdentityHandle.from_json(payload.identity), payload.namespace);
+        break;
       case 'upsert_vault':
-        await upsert_vault(payload.vaultName, payload.password, payload.namespace, payload.data, payload.expiresInSeconds, payload.replaceIfExists)
-        result = { success: true }
-        break
+        await upsert_vault(payload.vaultName, IdentityHandle.from_json(payload.identity), payload.namespace, payload.data, payload.expiresInSeconds, payload.replaceIfExists);
+        result = { success: true };
+        break;
       case 'remove_from_vault':
-        await remove_from_vault( payload.vaultName, payload.password, payload.namespace)
-        result = { success: true }
-        break
+        await remove_from_vault(payload.vaultName, IdentityHandle.from_json(payload.identity), payload.namespace);
+        result = { success: true };
+        break;
       case 'list_namespaces':
-        result = await list_namespaces( payload.vaultName, payload.password)
-        break
+        result = await list_namespaces(payload.vaultName);
+        break;
       case 'list_vaults':
-        result = await list_vaults()
-        break
+        result = await list_vaults();
+        break;
       case 'export_vault':
-        result = await export_vault(payload.vaultName, payload.password)
-        break
+        result = await export_vault(payload.vaultName);
+        break;
       case 'import_vault':
-        try {
-          await import_vault(payload.vaultName, payload.data)
-          result = { success: true }
-        } catch (e) {
-          console.error('Import error:', e);
-          throw e;
-        }
-        break
+        result = await import_vault(payload.vaultName, payload.data);
+        break;
       case 'configure_cleanup':
-        configure_cleanup(payload.intervalSeconds)
+        configure_cleanup(payload.intervalSeconds);
         result = { success: true }
         break
+      default:
+        throw new Error(`Unknown message type: ${type}`);
     }
-    
-    self.postMessage({ type: 'success', result })
+
+    self.postMessage({ type: 'success', result });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     self.postMessage({ 

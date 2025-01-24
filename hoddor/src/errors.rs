@@ -1,3 +1,4 @@
+use std::fmt;
 use wasm_bindgen::JsValue;
 
 #[derive(Debug)]
@@ -35,6 +36,24 @@ impl From<LockError> for VaultError {
 #[derive(Debug)]
 pub enum LockError {
     AcquisitionFailed,
+}
+
+impl fmt::Display for VaultError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            VaultError::IoError { message } => write!(f, "IO Error: {}", message),
+            VaultError::NamespaceNotFound => write!(f, "Namespace not found"),
+            VaultError::InvalidPassword => write!(f, "Invalid password"),
+            VaultError::SerializationError { message } => {
+                write!(f, "Serialization Error: {}", message)
+            }
+            VaultError::JsError(msg) => write!(f, "JavaScript Error: {}", msg),
+            VaultError::DataExpired => write!(f, "Data has expired"),
+            VaultError::NamespaceAlreadyExists => write!(f, "Namespace already exists"),
+            VaultError::VaultAlreadyExists => write!(f, "Vault already exists"),
+            VaultError::VaultNotFound => write!(f, "Vault not found"),
+        }
+    }
 }
 
 impl From<VaultError> for JsValue {
