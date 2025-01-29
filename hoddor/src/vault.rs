@@ -99,6 +99,7 @@ impl IdentitySalts {
 pub struct Vault {
     pub metadata: VaultMetadata,
     pub identity_salts: IdentitySalts,
+    pub username_pk: HashMap<String, String>,
     pub namespaces: HashMap<String, NamespaceData>,
     pub sync_enabled: bool,
 }
@@ -288,6 +289,7 @@ pub async fn upsert_vault(
                     operation,
                     Some(vault.metadata.clone()),
                     Some(vault.identity_salts.clone()),
+                    Some(vault.username_pk.clone())
                 );
 
                 let peers = sync_manager.get_peers_mut();
@@ -557,6 +559,7 @@ async fn create_vault_internal(vault_name: &str) -> Result<(), JsValue> {
     let vault = Vault {
         metadata: VaultMetadata { peer_id: None },
         identity_salts: IdentitySalts::new(),
+        username_pk: HashMap::new(),
         namespaces: HashMap::new(),
         sync_enabled: false,
     };
@@ -1142,6 +1145,7 @@ pub async fn connect_to_peer(
                 op,
                 Some(vault.metadata.clone()),
                 Some(vault.identity_salts.clone()),
+                Some(vault.username_pk.clone()),
             )
         })
         .collect();
@@ -1247,6 +1251,7 @@ pub async fn add_peer(
             operation,
             Some(vault.metadata.clone()),
             Some(vault.identity_salts.clone()),
+            Some(vault.username_pk.clone()),
         );
 
         let peer_ref = peer.borrow();
@@ -1309,6 +1314,10 @@ pub async fn update_vault_from_sync(vault_name: &str, vault_data: &[u8]) -> Resu
                     .identity_salts
                     .clone()
                     .unwrap_or_else(IdentitySalts::new),
+                username_pk: match sync_msg.username_pk {
+                    Some(username_pk) => username_pk,
+                    None => HashMap::new()
+                },
                 namespaces: HashMap::new(),
                 sync_enabled: true,
             };

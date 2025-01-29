@@ -1,5 +1,7 @@
 {
   "compilerOptions": {
+    "outDir": "./dist",
+    "jsx": "react-jsx",
     "target": "ESNext",
     "useDefineForClassFields": true,
     "module": "ESNext",
@@ -22,7 +24,7 @@
     "resolveJsonModule": true,
     "esModuleInterop": true,
     "noImplicitReturns": true,
-    "baseUrl": ".",
+    "baseUrl": "./src",
     "paths": {
       "@hoddor/*": ["../hoddor/pkg/*"]
     },
