@@ -1,23 +1,23 @@
-import './style.css';
 import init, {
-  set_debug_mode,
-  upsert_vault,
+  add_peer,
+  connect_to_peer,
+  create_credential,
+  create_vault,
+  enable_sync,
+  generate_identity,
+  get_credential,
+  list_vaults,
+  list_webauthn_public_keys,
   read_from_vault,
   remove_from_vault,
   remove_vault,
-  list_vaults,
-  enable_sync,
-  connect_to_peer,
-  add_peer,
-  create_vault,
+  set_debug_mode,
+  upsert_vault,
   vault_identity_from_passphrase,
-  generate_identity,
-  get_credential,
-  create_credential,
-  list_webauthn_public_keys
 } from '../../hoddor/pkg/hoddor.js';
-import { VaultWorker } from './vault';
-import { runPerformanceTest } from './performance';
+import { runPerformanceTest } from './performance.js';
+import './style.old.css';
+import { VaultWorker } from './vault.js';
 
 const BASE_URL = 'http://localhost:8080';
 const PASSWORD = 'password123';
@@ -51,13 +51,20 @@ async function storeImage(password: string, imageBytes: Uint8Array) {
     const identity = await vault_identity_from_passphrase(password, 'default');
 
     try {
-      await remove_from_vault('default', identity, namespace).catch(() => { });
+      await remove_from_vault('default', identity, namespace).catch(() => {});
     } catch (e) {
       console.warn('Failed to remove old image data:', e);
     }
 
     try {
-      await upsert_vault('default', identity, namespace, numberArray, undefined, true);
+      await upsert_vault(
+        'default',
+        identity,
+        namespace,
+        numberArray,
+        undefined,
+        true,
+      );
     } catch (e) {
       console.error('Error in storeImage:', e);
       throw e;
@@ -75,7 +82,9 @@ async function displayStoredImage(password: string) {
     const identity = await vault_identity_from_passphrase(password, 'default');
     const retrievedData = await read_from_vault('default', identity, namespace);
 
-    const dataArray = Array.isArray(retrievedData) ? retrievedData : Array.from(retrievedData as any);
+    const dataArray = Array.isArray(retrievedData)
+      ? retrievedData
+      : Array.from(retrievedData as any);
     const uint8Array = new Uint8Array(dataArray);
     console.log('Converted array length:', uint8Array.length);
 
@@ -103,7 +112,8 @@ async function storeVideo(password: string, videoFile: File) {
 
   const readChunk = (blob: Blob): Promise<Uint8Array> => {
     return new Promise((resolve, reject) => {
-      reader.onload = () => resolve(new Uint8Array(reader.result as ArrayBuffer));
+      reader.onload = () =>
+        resolve(new Uint8Array(reader.result as ArrayBuffer));
       reader.onerror = reject;
       reader.readAsArrayBuffer(blob);
     });
@@ -115,18 +125,39 @@ async function storeVideo(password: string, videoFile: File) {
       type: videoFile.type,
       chunks: Math.ceil(videoFile.size / chunkSize),
       fileName: videoFile.name,
-      lastModified: videoFile.lastModified
+      lastModified: videoFile.lastModified,
     });
-    await vault.upsertVault('default', identity.to_json(), 'test_video_meta', Array.from(new TextEncoder().encode(metadata)), BigInt(5 * 60000), true);
+    await vault.upsertVault(
+      'default',
+      identity.toJSON(),
+      'test_video_meta',
+      Array.from(new TextEncoder().encode(metadata)),
+      BigInt(5 * 60000),
+      true,
+    );
 
     const firstChunk = videoFile.slice(0, chunkSize);
     const firstChunkData = await readChunk(firstChunk);
-    await vault.upsertVault('default', identity.to_json(), 'test_video_0', Array.from(firstChunkData), BigInt(5 * 60000), true);
+    await vault.upsertVault(
+      'default',
+      identity.toJSON(),
+      'test_video_0',
+      Array.from(firstChunkData),
+      BigInt(5 * 60000),
+      true,
+    );
 
     while (offset < videoFile.size) {
       const chunk = videoFile.slice(offset, offset + chunkSize);
       const chunkData = await readChunk(chunk);
-      await vault.upsertVault('default', identity.to_json(), `test_video_${offset}`, Array.from(chunkData), BigInt(5 * 60000), true);
+      await vault.upsertVault(
+        'default',
+        identity.toJSON(),
+        `test_video_${offset}`,
+        Array.from(chunkData),
+        BigInt(5 * 60000),
+        true,
+      );
       offset += chunkSize;
       const progress = Math.round((offset / videoFile.size) * 100);
       console.log(`Upload progress: ${progress}%`);
@@ -143,8 +174,14 @@ async function displayStoredVideo(password: string) {
   try {
     // 1) Read metadata
     const identity = await vault_identity_from_passphrase(password, 'default');
-    const metadataRaw = await read_from_vault('default', identity, 'test_video_meta');
-    const metadataText = new TextDecoder().decode(new Uint8Array(metadataRaw as number[]));
+    const metadataRaw = await read_from_vault(
+      'default',
+      identity,
+      'test_video_meta',
+    );
+    const metadataText = new TextDecoder().decode(
+      new Uint8Array(metadataRaw as number[]),
+    );
     const metadata = JSON.parse(metadataText);
 
     const chunkSize = 1024 * 1024;
@@ -153,7 +190,11 @@ async function displayStoredVideo(password: string) {
     // 2) Read chunks
     for (let offset = 0; offset < metadata.size; offset += chunkSize) {
       const chunkNamespace = `test_video_${offset}`;
-      const chunkData = await read_from_vault('default', identity, chunkNamespace);
+      const chunkData = await read_from_vault(
+        'default',
+        identity,
+        chunkNamespace,
+      );
       chunks.push(new Uint8Array(chunkData as number[]));
 
       const progress = Math.round((offset / metadata.size) * 100);
@@ -206,7 +247,7 @@ const importButton = document.createElement('button');
 importButton.textContent = 'Import Vault';
 importButton.onclick = () => importInput.click();
 
-fileInput.onchange = async (e) => {
+fileInput.onchange = async e => {
   const file = (e.target as HTMLInputElement).files?.[0];
   if (file) {
     await storeVideo(PASSWORD, file);
@@ -214,7 +255,7 @@ fileInput.onchange = async (e) => {
   }
 };
 
-importInput.onchange = async (e) => {
+importInput.onchange = async e => {
   const file = (e.target as HTMLInputElement).files?.[0];
   if (!file) return;
 
@@ -225,7 +266,10 @@ importInput.onchange = async (e) => {
 
     if (uint8Array.length > 6) {
       const header = new TextDecoder().decode(uint8Array.slice(0, 6));
-      console.log('Detected format:', header === 'VAULT1' ? 'Binary vault format' : 'Legacy format');
+      console.log(
+        'Detected format:',
+        header === 'VAULT1' ? 'Binary vault format' : 'Legacy format',
+      );
     }
 
     await vault.importVault('default', uint8Array);
@@ -253,7 +297,7 @@ const startTime = Date.now();
 const logOperation = (operation: string) => {
   operationLog.push({
     time: Date.now() - startTime,
-    operation
+    operation,
   });
 };
 
@@ -270,7 +314,7 @@ perfButton.onclick = async () => {
   try {
     for (const size of dataSizes) {
       progressDiv.textContent = `Testing with ${size}MB data...`;
-      const result = await runPerformanceTest(10, size, (i) => {
+      const result = await runPerformanceTest(10, size, i => {
         logOperation(`Progress (${size}MB): ${i}%`);
         progressDiv.textContent = `Testing ${size}MB data: ${i}%`;
       });
@@ -280,18 +324,28 @@ perfButton.onclick = async () => {
     const resultsDiv = document.createElement('div');
     resultsDiv.innerHTML = `
             <h3>Large Data Performance Test Results</h3>
-            ${results.map(result => `
-                <h4>Test with ${result.dataSizeMb}MB data (${result.iterations} iterations)</h4>
-                <pre>${JSON.stringify({
-      worker: result.worker,
-      direct: result.direct
-    }, null, 2)}</pre>
-            `).join('')}
+            ${results
+              .map(
+                result => `
+                <h4>Test with ${result.dataSizeMb}MB data (${
+                  result.iterations
+                } iterations)</h4>
+                <pre>${JSON.stringify(
+                  {
+                    worker: result.worker,
+                    direct: result.direct,
+                  },
+                  null,
+                  2,
+                )}</pre>
+            `,
+              )
+              .join('')}
             
             <h4>Operation Timeline</h4>
-            <pre>${operationLog.map(log =>
-      `[${log.time}ms] ${log.operation}`
-    ).join('\n')}</pre>
+            <pre>${operationLog
+              .map(log => `[${log.time}ms] ${log.operation}`)
+              .join('\n')}</pre>
         `;
     document.body.appendChild(resultsDiv);
   } finally {
@@ -307,7 +361,7 @@ Register.textContent = 'Register';
 
 Register.onclick = async () => {
   const username = prompt('Enter a username');
-  
+
   if (username) {
     await startRegistration(username);
   }
@@ -327,7 +381,7 @@ document.body.appendChild(Authenticate);
 const exportButton = document.createElement('button');
 exportButton.textContent = 'Export Vault';
 exportButton.onclick = async () => {
-  try {    
+  try {
     const vaultData = await vault.exportVault('default');
     const blob = new Blob([vaultData], { type: 'application/octet-stream' });
     const url = URL.createObjectURL(blob);
@@ -364,34 +418,53 @@ expirationTestButton.onclick = async () => {
   document.body.appendChild(statusDiv);
 
   try {
-    const testData = { message: "This data will expire soon!" };
-    const namespace = "expiration_test";
-    
+    const testData = { message: 'This data will expire soon!' };
+    const namespace = 'expiration_test';
+
     // Create vault if it doesn't exist
     try {
       await vault.createVault(namespace);
     } catch (e) {
       console.log('Vault already exists');
     }
-    
+
     const identity = await vault_identity_from_passphrase(PASSWORD, namespace);
-    
+
     // Store data with expiration
-    await vault.upsertVault(namespace, identity.to_json(), namespace, testData, BigInt(5), true);
-    console.log("Created data with 5 second expiration");
+    await vault.upsertVault(
+      namespace,
+      identity.to_json(),
+      namespace,
+      testData,
+      BigInt(5),
+      true,
+    );
+    console.log('Created data with 5 second expiration');
 
     // Initial read
-    const initialData = await vault.readFromVault(namespace, identity.to_json(), namespace);
-    statusDiv.textContent = "Initial read successful: " + JSON.stringify(initialData);
+    const initialData = await vault.readFromVault(
+      namespace,
+      identity.to_json(),
+      namespace,
+    );
+    statusDiv.textContent =
+      'Initial read successful: ' + JSON.stringify(initialData);
 
     // Try reading every second for 10 seconds
     for (let i = 0; i < 10; i++) {
       await new Promise(resolve => setTimeout(resolve, 1000));
       try {
-        const data = await vault.readFromVault(namespace, identity.to_json(), namespace);
-        statusDiv.textContent = `${i + 1}s: Data still accessible: ${JSON.stringify(Object.fromEntries(data))}`;
+        const data = await vault.readFromVault(
+          namespace,
+          identity.to_json(),
+          namespace,
+        );
+        statusDiv.textContent = `${
+          i + 1
+        }s: Data still accessible: ${JSON.stringify(Object.fromEntries(data))}`;
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
         statusDiv.textContent = `${i + 1}s: Data expired: ${errorMessage}`;
         console.log('Data expired:', errorMessage);
         break;
@@ -437,9 +510,23 @@ async function storeUserData(password: string, userData: UserData) {
     const identity = await vault_identity_from_passphrase(password, 'default');
 
     try {
-      await upsert_vault('default', identity, namespace, userData, undefined, true);
+      await upsert_vault(
+        'default',
+        identity,
+        namespace,
+        userData,
+        undefined,
+        true,
+      );
     } catch (e) {
-      await upsert_vault('default', identity, namespace, userData, undefined, true);
+      await upsert_vault(
+        'default',
+        identity,
+        namespace,
+        userData,
+        undefined,
+        true,
+      );
     }
     console.log('User data stored successfully');
   } catch (e) {
@@ -479,17 +566,24 @@ async function startAuthentication() {
 
     const identity = await get_credential('default', selectedPublicKey);
     console.log('startAuthentication: identity', identity);
-    
+
     const namespace = `user_${Date.now().toString()}`;
     const testData = {
       username: 'username',
       timestamp: Date.now(),
-      message: 'This is encrypted data for ' + 'username'
+      message: 'This is encrypted data for ' + 'username',
     };
 
-    await upsert_vault('default', identity, namespace, testData, undefined, true);
+    await upsert_vault(
+      'default',
+      identity,
+      namespace,
+      testData,
+      undefined,
+      true,
+    );
     const decryptedData = await read_from_vault('default', identity, namespace);
-    
+
     console.log('Successfully decrypted data from vault:', decryptedData);
   } catch (e) {
     console.error('Failed to authenticate:', e);
@@ -520,9 +614,9 @@ async function testUserData() {
     email: 'john@example.com',
     preferences: {
       theme: 'dark',
-      notifications: true
+      notifications: true,
     },
-    lastUpdated: Date.now()
+    lastUpdated: Date.now(),
   };
 
   await storeUserData(password, testUser);
@@ -582,16 +676,25 @@ async function readTodoList(): Promise<TodoList> {
     const identity = await vault_identity_from_passphrase(PASSWORD, 'todos');
     const data = await read_from_vault('todos', identity, 'todo_list');
     if (data) {
-      const todoData = new TextDecoder().decode(new Uint8Array(data as number[]));
+      const todoData = new TextDecoder().decode(
+        new Uint8Array(data as number[]),
+      );
       const newTodos = JSON.parse(todoData);
 
-      if (!cachedTodos || JSON.stringify(newTodos) !== JSON.stringify(cachedTodos)) {
+      if (
+        !cachedTodos ||
+        JSON.stringify(newTodos) !== JSON.stringify(cachedTodos)
+      ) {
         console.log('New todos received:', newTodos);
         const todoContainer = document.querySelector('[data-todo-container]');
         if (todoContainer) {
-          const inputContainer = todoContainer.querySelector('[data-input-container]');
+          const inputContainer = todoContainer.querySelector(
+            '[data-input-container]',
+          );
           const list = todoContainer.querySelector('[data-list]');
-          const waitingMessage = todoContainer.querySelector('[data-waiting-message]');
+          const waitingMessage = todoContainer.querySelector(
+            '[data-waiting-message]',
+          );
           if (inputContainer && list && waitingMessage) {
             inputContainer.style.display = 'flex';
             list.style.display = 'block';
@@ -614,13 +717,20 @@ async function readTodoList(): Promise<TodoList> {
     console.error('Error reading todo list:', e);
     return cachedTodos || { items: [], lastSync: Date.now() };
   }
-};
+}
 
 async function writeTodoList(todos: TodoList) {
   try {
     const todoData = new TextEncoder().encode(JSON.stringify(todos));
     const identity = await vault_identity_from_passphrase(PASSWORD, 'todos');
-    await upsert_vault('todos', identity, 'todo_list', Array.from(todoData), undefined, true);
+    await upsert_vault(
+      'todos',
+      identity,
+      'todo_list',
+      Array.from(todoData),
+      undefined,
+      true,
+    );
     cachedTodos = todos;
     const syncStatus = document.querySelector('[data-sync-status]');
     if (syncStatus) {
@@ -662,7 +772,8 @@ async function createTodoDemo() {
   waitingMessage.style.textAlign = 'center';
   waitingMessage.style.padding = '20px';
   waitingMessage.style.color = '#666';
-  waitingMessage.textContent = 'Connect to a peer to start collaborating on todos';
+  waitingMessage.textContent =
+    'Connect to a peer to start collaborating on todos';
   container.appendChild(waitingMessage);
 
   const inputContainer = document.createElement('div');
@@ -754,7 +865,7 @@ async function createTodoDemo() {
       item.appendChild(deleteBtn);
       list.appendChild(item);
     });
-  };
+  }
 
   const todoAddButton = container.querySelector('button');
   const todoInput = container.querySelector('input');
@@ -768,7 +879,7 @@ async function createTodoDemo() {
         id: crypto.randomUUID(),
         text,
         completed: false,
-        lastModified: Date.now()
+        lastModified: Date.now(),
       });
       todos.lastSync = Date.now();
 
@@ -778,7 +889,7 @@ async function createTodoDemo() {
       todoInput.value = '';
     });
 
-    todoInput.addEventListener('keypress', (e) => {
+    todoInput.addEventListener('keypress', e => {
       if (e.key === 'Enter') {
         todoAddButton.click();
       }
@@ -815,14 +926,13 @@ async function main() {
 
     const vaults = await list_vaults();
     console.log('Available vaults:', vaults);
-
   } catch (error) {
     console.error('Error:', error);
   }
   await createTodoDemo();
 }
 
-main()
+main();
 
 async function addSyncButtons() {
   const container = document.createElement('div');
@@ -860,7 +970,7 @@ async function addSyncButtons() {
       const wsUrl = `ws://localhost:8080/ws?token=${token}`;
 
       const randomVaultName = `peer_${Math.random().toString(36).substring(7)}`;
-      try {        
+      try {
         await create_vault(randomVaultName);
       } catch (e) {
         if (!e.toString().includes('Vault already exists')) {
@@ -869,8 +979,16 @@ async function addSyncButtons() {
       }
 
       statusText.textContent = 'Enabling sync...';
-      const identity = await vault_identity_from_passphrase(PASSWORD, 'default');
-      localPeerId = await enable_sync(randomVaultName, identity, wsUrl, STUN_SERVERS);
+      const identity = await vault_identity_from_passphrase(
+        PASSWORD,
+        'default',
+      );
+      localPeerId = await enable_sync(
+        randomVaultName,
+        identity,
+        wsUrl,
+        STUN_SERVERS,
+      );
       statusText.textContent = 'Sync enabled, ready to connect';
 
       myPeerId.textContent = `My Peer ID: ${localPeerId}`;
@@ -886,7 +1004,7 @@ async function addSyncButtons() {
       statusText.textContent = 'Please enter a peer ID';
       return;
     }
-    
+
     try {
       statusText.textContent = 'Getting auth token...';
 
@@ -897,8 +1015,18 @@ async function addSyncButtons() {
         const initialTodos = { items: [], lastSync: Date.now() };
         const todoData = new TextEncoder().encode(JSON.stringify(initialTodos));
         await create_vault('todos');
-        const identity = await vault_identity_from_passphrase(PASSWORD, 'todos');
-        await upsert_vault('todos', identity, 'todo_list', Array.from(todoData), undefined, true);
+        const identity = await vault_identity_from_passphrase(
+          PASSWORD,
+          'todos',
+        );
+        await upsert_vault(
+          'todos',
+          identity,
+          'todo_list',
+          Array.from(todoData),
+          undefined,
+          true,
+        );
       } catch (e) {
         if (!e.toString().includes('Vault already exists')) {
           throw e;
@@ -912,7 +1040,13 @@ async function addSyncButtons() {
       statusText.textContent = 'Connecting...';
       await connect_to_peer('todos', identity, targetPeerId, wsUrl);
 
-      await add_peer('todos', identity, targetPeerId, 'todo_list', 'contributor');
+      await add_peer(
+        'todos',
+        identity,
+        targetPeerId,
+        'todo_list',
+        'contributor',
+      );
 
       statusText.textContent = `Connected to peer ${targetPeerId}`;
 
@@ -939,7 +1073,7 @@ async function addSyncButtons() {
 async function getAuthToken(): Promise<string> {
   const response = await fetch(`${BASE_URL}/token`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' }
+    headers: { 'Content-Type': 'application/json' },
   });
 
   if (!response.ok) {
@@ -956,32 +1090,52 @@ const testIdentityButton = document.createElement('button');
 testIdentityButton.textContent = 'Test Identity Creation';
 testIdentityButton.onclick = async () => {
   try {
+    // Create a new identity without passphrase
     const identity = generate_identity();
-    console.log('Generated identity:', identity.to_json().public_key);
-    alert(`Generated new identity:\n\nPublic Key: ${identity.to_json().public_key}\nPrivate Key: ${identity.to_json().private_key}`);
+    console.log('Generated identity:', identity.public_key);
+    alert(
+      `Generated new identity:\n\nPublic Key: ${identity.public_key}\nPrivate Key: ${identity.private_key}`,
+    );
 
+    // Store some test data
     const testData = {
-      message: 'Hello from identity ' + identity.to_json().public_key,
-      timestamp: Date.now()
+      message: 'Hello from identity ' + identity.public_key,
+      timestamp: Date.now(),
     };
 
+    // Create vault if it doesn't exist
     try {
       await create_vault('default');
     } catch (e) {
       console.log('Vault already exists');
     }
 
+    // Store data in vault
     const namespace = 'identity_test';
-    await vault.upsertVault('default', identity.to_json(), namespace, testData, undefined, true);
+    await vault.upsertVault(
+      'default',
+      identity.toJSON(),
+      namespace,
+      testData,
+      undefined,
+      true,
+    );
     console.log('Data stored successfully');
 
-    const readData = await vault.readFromVault('default', identity.to_json(), namespace);
+    // Read back the data
+    const readData = await vault.readFromVault(
+      'default',
+      identity.toJSON(),
+      namespace,
+    );
     console.log('Read data:', readData);
-    
-    const dataObj = readData instanceof Map ? Object.fromEntries(readData) : readData;
-    
-    alert(`Retrieved Data:\n\n${JSON.stringify(dataObj, null, 2)}`);
 
+    // Convert Map to object if needed
+    const dataObj =
+      readData instanceof Map ? Object.fromEntries(readData) : readData;
+
+    // Display data in alert
+    alert(`Retrieved Data:\n\n${JSON.stringify(dataObj, null, 2)}`);
   } catch (e) {
     console.error('Error in identity test:', e);
   }

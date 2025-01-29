@@ -34,6 +34,7 @@ pub struct SyncMessage {
     pub vault_name: String,
     pub vault_metadata: Option<VaultMetadata>,
     pub identity_salts: Option<IdentitySalts>,
+    pub username_pk: Option<HashMap<String, String>>,
 }
 
 pub struct SyncManager {
@@ -120,6 +121,7 @@ impl SyncManager {
         operation: VaultOperation,
         vault_metadata: Option<VaultMetadata>,
         identity_salts: Option<IdentitySalts>,
+        username_pk: Option<HashMap<String, String>>
     ) -> SyncMessage {
         SyncMessage {
             operation,
@@ -127,6 +129,7 @@ impl SyncManager {
             vault_name,
             vault_metadata,
             identity_salts,
+            username_pk
         }
     }
 

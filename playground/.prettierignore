@@ -1,0 +1,8 @@
+node_modules
+dist
+coverage
+public
+cache
+src/index.tsx
+.gitlab-ci.yml
+*.md
