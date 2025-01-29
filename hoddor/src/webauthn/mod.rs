@@ -74,7 +74,11 @@ pub async fn create_credential(
     raw_id.copy_to(&mut cred_id);
     vault
         .identity_salts
-        .set_credential_id(public_key.clone(), cred_id);
+        .set_credential_id(public_key.clone(), cred_id.clone());
+    
+    vault
+        .username_pk
+        .insert(String::from(username), public_key.clone());
 
     save_vault(&dir_handle, vault)
         .await
@@ -84,15 +88,27 @@ pub async fn create_credential(
 }
 
 #[wasm_bindgen]
-pub async fn get_credential(vault_name: &str, public_key: &str) -> Result<IdentityHandle, JsValue> {
+pub async fn get_credential(vault_name: &str, username: &str) -> Result<IdentityHandle, JsValue> {
     log(&format!(
-        "Init credential get for public key: {}",
-        public_key
+        "Init credential get for username: {}",
+        username
     ));
 
     let challenge = Uint8Array::from(gen_random().as_slice());
 
     let (_, vault) = get_vault(vault_name).await?;
+
+    let public_key = vault.username_pk.get(username).ok_or_else(|| {
+        JsValue::from_str(&format!(
+            "No public key found for username: {}",
+            username
+        ))
+    })?;
+
+    log(&format!(
+        "Found public key for username: {}, {:?}",
+        username, public_key
+    ));
 
     let credential_id = vault
         .identity_salts
@@ -178,7 +194,7 @@ pub async fn get_credential(vault_name: &str, public_key: &str) -> Result<Identi
 
     let identity = identity_from_prf(&prf_values)?;
 
-    if identity.public_key() != public_key {
+    if identity.public_key() != public_key.clone() {
         return Err(JsValue::from_str(&format!(
             "PRF-derived identity mismatch. Expected: {}, Got: {}",
             public_key,
