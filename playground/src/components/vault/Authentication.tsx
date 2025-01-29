@@ -34,8 +34,7 @@ export const Authentication = () => {
       dispatch(actions.addIdentity(identity.to_json()));
 
       messageApi.success('You have now an identity.');
-    } catch (e) {
-      console.log(e);
+    } catch (error) {
       messageApi.error('Failed to register you.');
     }
   };
@@ -47,8 +46,7 @@ export const Authentication = () => {
       dispatch(actions.addIdentity(identity.to_json()));
 
       messageApi.success('You have now an identity.');
-    } catch (e) {
-      console.log(e);
+    } catch (error) {
       messageApi.error('Failed to authenticate you.');
     }
   };

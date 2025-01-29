@@ -14,14 +14,6 @@ module.exports = {
     react: {
       version: 'detect',
     },
-    linkComponents: [
-      // Components used as alternatives to <a> for linking, eg. <Link to={ url } />
-      'Hyperlink',
-      {
-        name: 'Link',
-        linkAttribute: 'to',
-      },
-    ],
   },
   rules: {
     '@typescript-eslint/ban-types': 'off',
