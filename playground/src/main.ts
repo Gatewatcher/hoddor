@@ -1,12 +1,16 @@
 import init, {
   add_peer,
   connect_to_peer,
+  create_credential,
   create_vault,
   enable_sync,
   generate_identity,
+  get_credential,
   list_vaults,
+  list_webauthn_public_keys,
   read_from_vault,
   remove_from_vault,
+  remove_vault,
   set_debug_mode,
   upsert_vault,
   vault_identity_from_passphrase,
@@ -230,9 +234,18 @@ fileInput.type = 'file';
 fileInput.accept = 'video/*';
 fileInput.style.display = 'none';
 
+const importInput = document.createElement('input');
+importInput.type = 'file';
+importInput.accept = '*';
+importInput.style.display = 'none';
+
 const fileButton = document.createElement('button');
 fileButton.textContent = 'Select Video File';
 fileButton.onclick = () => fileInput.click();
+
+const importButton = document.createElement('button');
+importButton.textContent = 'Import Vault';
+importButton.onclick = () => importInput.click();
 
 fileInput.onchange = async e => {
   const file = (e.target as HTMLInputElement).files?.[0];
@@ -242,10 +255,38 @@ fileInput.onchange = async e => {
   }
 };
 
+importInput.onchange = async e => {
+  const file = (e.target as HTMLInputElement).files?.[0];
+  if (!file) return;
+
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    const uint8Array = new Uint8Array(arrayBuffer);
+    console.log('Importing vault data of size:', uint8Array.length, 'bytes');
+
+    if (uint8Array.length > 6) {
+      const header = new TextDecoder().decode(uint8Array.slice(0, 6));
+      console.log(
+        'Detected format:',
+        header === 'VAULT1' ? 'Binary vault format' : 'Legacy format',
+      );
+    }
+
+    await vault.importVault('default', uint8Array);
+    alert('Vault imported successfully');
+    location.reload();
+  } catch (error) {
+    console.error('Failed to import vault:', error);
+    alert('Failed to import vault: ' + error);
+  } finally {
+    importInput.value = '';
+  }
+};
+
 document.body.appendChild(fileButton);
 document.body.appendChild(fileInput);
-// document.body.appendChild(importButton);
-// document.body.appendChild(importInput);
+document.body.appendChild(importButton);
+document.body.appendChild(importInput);
 
 const perfButton = document.createElement('button');
 perfButton.textContent = 'Run Performance Test';
@@ -315,6 +356,60 @@ perfButton.onclick = async () => {
 
 document.body.appendChild(perfButton);
 
+const Register = document.createElement('button');
+Register.textContent = 'Register';
+
+Register.onclick = async () => {
+  const username = prompt('Enter a username');
+
+  if (username) {
+    await startRegistration(username);
+  }
+};
+
+document.body.appendChild(Register);
+
+const Authenticate = document.createElement('button');
+Authenticate.textContent = 'Authenticate';
+
+Authenticate.onclick = async () => {
+  await startAuthentication();
+};
+
+document.body.appendChild(Authenticate);
+
+const exportButton = document.createElement('button');
+exportButton.textContent = 'Export Vault';
+exportButton.onclick = async () => {
+  try {
+    const vaultData = await vault.exportVault('default');
+    const blob = new Blob([vaultData], { type: 'application/octet-stream' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'vault_backup.dat';
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error('Failed to export vault:', error);
+    alert('Failed to export vault: ' + error);
+  }
+};
+document.body.appendChild(exportButton);
+
+const removeVaultButton = document.createElement('button');
+removeVaultButton.textContent = 'Remove Vault';
+removeVaultButton.onclick = async () => {
+  try {
+    await remove_vault('default');
+    alert('Vault removed successfully');
+  } catch (error) {
+    console.error('Failed to remove vault:', error);
+    alert('Failed to remove vault: ' + error);
+  }
+};
+document.body.appendChild(removeVaultButton);
+
 const expirationTestButton = document.createElement('button');
 expirationTestButton.textContent = 'Test Data Expiration';
 expirationTestButton.onclick = async () => {
@@ -338,7 +433,7 @@ expirationTestButton.onclick = async () => {
     // Store data with expiration
     await vault.upsertVault(
       namespace,
-      identity.toJSON(),
+      identity.to_json(),
       namespace,
       testData,
       BigInt(5),
@@ -349,7 +444,7 @@ expirationTestButton.onclick = async () => {
     // Initial read
     const initialData = await vault.readFromVault(
       namespace,
-      identity.toJSON(),
+      identity.to_json(),
       namespace,
     );
     statusDiv.textContent =
@@ -361,7 +456,7 @@ expirationTestButton.onclick = async () => {
       try {
         const data = await vault.readFromVault(
           namespace,
-          identity.toJSON(),
+          identity.to_json(),
           namespace,
         );
         statusDiv.textContent = `${
@@ -437,6 +532,61 @@ async function storeUserData(password: string, userData: UserData) {
   } catch (e) {
     console.error('Failed to store user data:', e);
     throw e;
+  }
+}
+
+async function startRegistration(username: string) {
+  try {
+    const result = await create_credential('default', username);
+    console.log('Registration: Create credential success:', result);
+
+    try {
+      await create_vault('default');
+    } catch (e) {
+      console.log('Vault already exists');
+    }
+
+    console.log('Encrypted data stored successfully in vault');
+  } catch (e) {
+    console.error('Failed to register user:', e);
+  }
+}
+
+async function startAuthentication() {
+  try {
+    const publicKeys = await list_webauthn_public_keys('default');
+    console.log('Available public keys:', publicKeys);
+
+    if (!Array.isArray(publicKeys) || publicKeys.length === 0) {
+      throw new Error('No WebAuthn credentials found. Please register first.');
+    }
+
+    const selectedPublicKey = publicKeys[0];
+    console.log('Selected public key:', selectedPublicKey);
+
+    const identity = await get_credential('default', selectedPublicKey);
+    console.log('startAuthentication: identity', identity);
+
+    const namespace = `user_${Date.now().toString()}`;
+    const testData = {
+      username: 'username',
+      timestamp: Date.now(),
+      message: 'This is encrypted data for ' + 'username',
+    };
+
+    await upsert_vault(
+      'default',
+      identity,
+      namespace,
+      testData,
+      undefined,
+      true,
+    );
+    const decryptedData = await read_from_vault('default', identity, namespace);
+
+    console.log('Successfully decrypted data from vault:', decryptedData);
+  } catch (e) {
+    console.error('Failed to authenticate:', e);
   }
 }
 
