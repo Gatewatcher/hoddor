@@ -42,6 +42,7 @@ export const VaultBody = () => {
   const selectedVault = useSelector(appSelectors.getSelectedVault);
   const json = useSelector(appSelectors.getJson);
   const image = useSelector(appSelectors.getImage);
+  const video = useSelector(appSelectors.getVideo);
   const [messageApi, contextHolder] = message.useMessage();
 
   if (!selectedVault) {
@@ -63,10 +64,20 @@ export const VaultBody = () => {
       );
 
       try {
-        if (Array.isArray(data)) {
-          dispatch(actions.setImage(arrayBufferToBase64(new Uint8Array(data))));
-        } else {
-          dispatch(actions.setJson(Object.fromEntries(data)));
+        if (data) {
+          if (value.namespace.includes('.png')) {
+            dispatch(
+              actions.setImage(arrayBufferToBase64(new Uint8Array(data))),
+            );
+          } else if (value.namespace.includes('.json')) {
+            dispatch(actions.setJson(Object.fromEntries(data)));
+          } else {
+            dispatch(
+              actions.setVideo(
+                URL.createObjectURL(new Blob([new Uint8Array(data)])),
+              ),
+            );
+          }
         }
       } catch (e) {
         console.log(e);
@@ -133,7 +144,9 @@ export const VaultBody = () => {
           {json ? (
             <JsonView value={json} />
           ) : image ? (
-            <Image width={200} src={`data:image/jpeg;base64,${image}`} />
+            <Image width="100%" src={`data:image/jpeg;base64,${image}`} />
+          ) : video ? (
+            <video id="video" width="100%" controls src={video}></video>
           ) : (
             <Typography.Paragraph style={{ margin: 0 }}>
               Nothing to read, select a file.

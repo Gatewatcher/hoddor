@@ -9,6 +9,7 @@ enum Types {
   ADD_IDENTITY = 'app/ADD_IDENTITY',
   SET_JSON = 'app/SET_JSON',
   SET_IMAGE = 'app/SET_IMAGE',
+  SET_VIDEO = 'app/SET_VIDEO',
   DELETE_VAULT = 'app/DELETE_VAULT',
   FLUSH_IDENTITY = 'app/FLUSH_IDENTITY',
 }
@@ -20,6 +21,7 @@ export const actions = {
   addIdentity: createAction<Identity>(Types.ADD_IDENTITY),
   setJson: createAction<{}>(Types.SET_JSON),
   setImage: createAction<string>(Types.SET_IMAGE),
+  setVideo: createAction<string>(Types.SET_VIDEO),
   deleteVault: createAction(Types.DELETE_VAULT),
   flushIdentity: createAction(Types.FLUSH_IDENTITY),
 };

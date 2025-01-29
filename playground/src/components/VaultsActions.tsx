@@ -25,20 +25,12 @@ export const VaultsActions = () => {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  const showModal = () => {
-    setIsModalOpen(true);
-  };
-
-  const handleOk = async (value: FieldType) => {
+  const handleCreation = async (value: FieldType) => {
     await create_vault(value.vaultName);
     dispatch(actions.setVaults(await list_vaults()));
 
     messageApi.success(`Vault ${value.vaultName} created.`);
 
-    setIsModalOpen(false);
-  };
-
-  const handleCancel = () => {
     setIsModalOpen(false);
   };
 
@@ -96,14 +88,14 @@ export const VaultsActions = () => {
         }}
         type="primary"
         block
-        onClick={showModal}
+        onClick={() => setIsModalOpen(true)}
       >
         Create vault
       </Button>
       <Modal
         title="Create vault"
         open={isModalOpen}
-        onCancel={handleCancel}
+        onCancel={() => setIsModalOpen(false)}
         footer={(_, { CancelBtn }) => (
           <>
             <CancelBtn />
@@ -114,7 +106,7 @@ export const VaultsActions = () => {
         )}
         okButtonProps={{ htmlType: 'submit' }}
       >
-        <Form id="createVault" onFinish={handleOk} layout="vertical">
+        <Form id="createVault" onFinish={handleCreation} layout="vertical">
           <Form.Item<FieldType>
             label="Vault name:"
             name="vaultName"

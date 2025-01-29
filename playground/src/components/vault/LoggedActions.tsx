@@ -11,6 +11,14 @@ import {
 import { actions } from './../../store/app.actions';
 import { appSelectors } from './../../store/app.selectors';
 
+const readChunk = (blob: Blob, reader: FileReader): Promise<Uint8Array> => {
+  return new Promise((resolve, reject) => {
+    reader.onload = () => resolve(new Uint8Array(reader.result as ArrayBuffer));
+    reader.onerror = reject;
+    reader.readAsArrayBuffer(blob);
+  });
+};
+
 export const LoggedActions = () => {
   const dispatch = useDispatch();
   const identity = useSelector(appSelectors.getIdentity);
@@ -35,12 +43,15 @@ export const LoggedActions = () => {
 
   const uploadAction = async (file: RcFile) => {
     if (identity) {
-      let data;
+      let data: unknown = file;
 
-      if (file.type === 'json') {
+      if (file.type === 'application/json') {
         data = JSON.parse(await file.text());
-      } else if (file.type === 'image/png') {
+      } else if (file.type.includes('image/')) {
         data = Array.from(new Uint8Array(await file.arrayBuffer()));
+      } else if (file.type.includes('video/')) {
+        const reader = new FileReader();
+        data = Array.from(await readChunk(file, reader));
       }
 
       await upsert_vault(

@@ -24,6 +24,10 @@ const getImage = (state: States) => {
   return state.appState.image;
 };
 
+const getVideo = (state: States) => {
+  return state.appState.video;
+};
+
 export const appSelectors = {
   getVaults,
   getSelectedVault,
@@ -31,4 +35,5 @@ export const appSelectors = {
   getIdentity,
   getJson,
   getImage,
+  getVideo,
 };

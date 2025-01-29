@@ -10,6 +10,7 @@ export type AppState = {
   identity?: Identity;
   json?: {};
   image?: string;
+  video?: string;
 };
 
 const initialState: AppState = {
@@ -55,6 +56,8 @@ export const appReducer: Reducer<AppState, UnknownAction> = (
     return {
       ...state,
       json: action.payload,
+      image: initialState.image,
+      video: initialState.video,
     };
   }
 
@@ -62,6 +65,17 @@ export const appReducer: Reducer<AppState, UnknownAction> = (
     return {
       ...state,
       image: action.payload,
+      video: initialState.video,
+      json: initialState.json,
+    };
+  }
+
+  if (actions.setVideo.match(action)) {
+    return {
+      ...state,
+      video: action.payload,
+      image: initialState.image,
+      json: initialState.json,
     };
   }
 
@@ -74,6 +88,7 @@ export const appReducer: Reducer<AppState, UnknownAction> = (
       identity: initialState.identity,
       json: initialState.json,
       image: initialState.image,
+      video: initialState.video,
     };
   }
 
@@ -83,6 +98,7 @@ export const appReducer: Reducer<AppState, UnknownAction> = (
       identity: initialState.identity,
       json: initialState.json,
       image: initialState.image,
+      video: initialState.video,
     };
   }
 
