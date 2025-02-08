@@ -1,4 +1,4 @@
-import { IdentityHandle } from "@hoddor/hoddor"
+import { IdentityHandle } from '../../hoddor/pkg/hoddor';
 
 export class VaultWorker {
   private worker: Worker

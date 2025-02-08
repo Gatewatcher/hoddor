@@ -1,3 +1,4 @@
+import { arrayBufferToBase64 } from 'utils/file.utils';
 import init, {
   add_peer,
   connect_to_peer,
@@ -33,14 +34,6 @@ async function fetchImageAsBytes(url: string): Promise<Uint8Array> {
   const blob = await response.blob();
   const arrayBuffer = await blob.arrayBuffer();
   return new Uint8Array(arrayBuffer);
-}
-
-function arrayBufferToBase64(buffer: Uint8Array): string {
-  let binary = '';
-  for (let i = 0; i < buffer.length; i++) {
-    binary += String.fromCharCode(buffer[i]);
-  }
-  return btoa(binary);
 }
 
 async function storeImage(password: string, imageBytes: Uint8Array) {
@@ -1114,7 +1107,7 @@ testIdentityButton.onclick = async () => {
     const namespace = 'identity_test';
     await vault.upsertVault(
       'default',
-      identity.toJSON(),
+      identity.to_json(),
       namespace,
       testData,
       undefined,
@@ -1125,7 +1118,7 @@ testIdentityButton.onclick = async () => {
     // Read back the data
     const readData = await vault.readFromVault(
       'default',
-      identity.toJSON(),
+      identity.to_json(),
       namespace,
     );
     console.log('Read data:', readData);

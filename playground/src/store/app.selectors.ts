@@ -28,6 +28,18 @@ const getVideo = (state: States) => {
   return state.appState.video;
 };
 
+const getMarkdown = (state: States) => {
+  return state.appState.markdown;
+};
+
+const getText = (state: States) => {
+  return state.appState.text;
+};
+
+const getAudio = (state: States) => {
+  return state.appState.audio;
+};
+
 export const appSelectors = {
   getVaults,
   getSelectedVault,
@@ -36,4 +48,7 @@ export const appSelectors = {
   getJson,
   getImage,
   getVideo,
+  getMarkdown,
+  getText,
+  getAudio,
 };

@@ -11,11 +11,17 @@ export type AppState = {
   json?: {};
   image?: string;
   video?: string;
+  markdown: string | null;
+  text: string | null;
+  audio: string | null;
 };
 
 const initialState: AppState = {
   vaults: [],
   namespaces: [],
+  markdown: null,
+  text: null,
+  audio: null,
 };
 
 export const appReducer: Reducer<AppState, UnknownAction> = (
@@ -99,6 +105,42 @@ export const appReducer: Reducer<AppState, UnknownAction> = (
       json: initialState.json,
       image: initialState.image,
       video: initialState.video,
+    };
+  }
+
+  if (actions.setMarkdown.match(action)) {
+    return {
+      ...state,
+      markdown: action.payload,
+      image: initialState.image,
+      video: initialState.video,
+      json: initialState.json,
+      audio: initialState.audio,
+      text: initialState.text,
+    };
+  }
+
+  if (actions.setText.match(action)) {
+    return {
+      ...state,
+      text: action.payload,
+      image: initialState.image,
+      video: initialState.video,
+      json: initialState.json,
+      audio: initialState.audio,
+      markdown: initialState.markdown,
+    };
+  }
+
+  if (actions.setAudio.match(action)) {
+    return {
+      ...state,
+      audio: action.payload,
+      image: initialState.image,
+      video: initialState.video,
+      json: initialState.json,
+      text: initialState.text,
+      markdown: initialState.markdown,
     };
   }
 

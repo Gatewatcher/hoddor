@@ -4,9 +4,9 @@ import { useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 
 import {
-  create_vault,
-  export_vault,
-  list_vaults,
+    create_vault,
+    export_vault,
+    list_vaults,
 } from '../../../hoddor/pkg/hoddor';
 import { actions } from './../store/app.actions';
 import { appSelectors } from './../store/app.selectors';
@@ -59,12 +59,18 @@ export const VaultsActions = () => {
   const importVault = async (file: RcFile) => {
     const vaultName = prompt('Vault name:');
     if (vaultName) {
-      vaultWorker.importVault(
-        vaultName,
-        new Uint8Array(await file.arrayBuffer()),
-      );
+      try {
+        await vaultWorker.importVault(
+          vaultName,
+          new Uint8Array(await file.arrayBuffer()),
+        );
 
-      messageApi.success(`Vault ${vaultName} imported.`);
+        dispatch(actions.setVaults(await list_vaults()));
+        
+        messageApi.success(`Vault ${vaultName} imported.`);
+      } catch (error) {
+        messageApi.error(`Failed to import vault ${vaultName}: ${error}`);
+      }
     }
     return 'done';
   };
