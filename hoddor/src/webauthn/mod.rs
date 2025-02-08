@@ -19,12 +19,11 @@ fn get_identity_from_vault() -> Result<[u8; 32], JsValue> {
     OsRng.fill_bytes(&mut new_salt);
     Ok(new_salt)
 }
-
 #[wasm_bindgen]
 pub async fn create_credential(
     vault_name: &str,
     username: &str,
-) -> Result<PublicKeyCredential, JsValue> {
+) -> Result<IdentityHandle, JsValue> {
     log(&"Init credential creation".to_string());
 
     let challenge = Uint8Array::from(gen_random().as_slice());
@@ -84,7 +83,7 @@ pub async fn create_credential(
         .await
         .map_err(|e| JsValue::from_str(&format!("Failed to save vault: {:?}", e)))?;
 
-    Ok(credential)
+    Ok(identity)
 }
 
 #[wasm_bindgen]
