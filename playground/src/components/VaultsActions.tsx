@@ -3,11 +3,6 @@ import Upload, { RcFile } from 'antd/es/upload';
 import { useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 
-import {
-    create_vault,
-    export_vault,
-    list_vaults,
-} from '../../../hoddor/pkg/hoddor';
 import { actions } from './../store/app.actions';
 import { appSelectors } from './../store/app.selectors';
 import { VaultWorker } from './../vault';
@@ -26,8 +21,8 @@ export const VaultsActions = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const handleCreation = async (value: FieldType) => {
-    await create_vault(value.vaultName);
-    dispatch(actions.setVaults(await list_vaults()));
+    await vaultWorker.createVault(value.vaultName || 'default');
+    dispatch(actions.setVaults(await vaultWorker.listVaults()));
 
     messageApi.success(`Vault ${value.vaultName} created.`);
 
@@ -40,7 +35,7 @@ export const VaultsActions = () => {
     }
 
     try {
-      const vaultData = await export_vault(selectedVault);
+      const vaultData = await vaultWorker.exportVault(selectedVault);
       const blob = new Blob([vaultData], { type: 'application/octet-stream' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -65,7 +60,7 @@ export const VaultsActions = () => {
           new Uint8Array(await file.arrayBuffer()),
         );
 
-        dispatch(actions.setVaults(await list_vaults()));
+        dispatch(actions.setVaults(await vaultWorker.listVaults()));
         
         messageApi.success(`Vault ${vaultName} imported.`);
       } catch (error) {

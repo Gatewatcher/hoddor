@@ -1,13 +1,13 @@
 import { Reducer, UnknownAction } from '@reduxjs/toolkit';
 
 import { actions } from './app.actions';
-import { Identity } from './models/Identity';
+import { IdentityHandle } from '../../../hoddor/pkg/hoddor';
 
 export type AppState = {
   vaults: string[];
   selectedVault?: string;
   namespaces: string[];
-  identity?: Identity;
+  identity?: IdentityHandle;
   json?: {};
   image?: string;
   video?: string;

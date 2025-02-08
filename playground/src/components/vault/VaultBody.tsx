@@ -13,20 +13,17 @@ import {
 import { useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 
-import {
-  IdentityHandle,
-  list_namespaces,
-  read_from_vault,
-  remove_from_vault,
-} from '../../../../hoddor/pkg/hoddor';
 import { actions } from './../../store/app.actions';
 import { appSelectors } from './../../store/app.selectors';
 import { arrayBufferToBase64, getMimeTypeFromExtension } from '../../utils/file.utils';
+import { VaultWorker } from '../../vault';
 
 interface DataType {
   key: React.Key;
   namespace: string;
 }
+
+const vaultWorker = new VaultWorker();
 
 export const VaultBody = () => {
   const dispatch = useDispatch();
@@ -47,7 +44,7 @@ export const VaultBody = () => {
   }
 
   const getNamespacesList = async () => {
-    const namespaces: string[] = await list_namespaces(selectedVault);
+    const namespaces: string[] = await vaultWorker.listNamespaces(selectedVault);
 
     dispatch(actions.setNamespaces(namespaces));
   };
@@ -58,9 +55,9 @@ export const VaultBody = () => {
       return;
     }
     try {
-      const data = await read_from_vault(
+      const data = await vaultWorker.readFromVault(
         selectedVault,
-        IdentityHandle.from_json(identity),
+        identity,
         value.namespace,
       );
 
@@ -119,9 +116,9 @@ export const VaultBody = () => {
 
   const handleDelete = async (value: { namespace: string }) => {
     if (identity) {
-      await remove_from_vault(
+      await vaultWorker.removeFromVault(
         selectedVault,
-        IdentityHandle.from_json(identity),
+        identity,
         value.namespace,
       );
 

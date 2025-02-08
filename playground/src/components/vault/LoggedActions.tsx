@@ -3,14 +3,12 @@ import { Button, Flex, Upload, message } from 'antd';
 import { RcFile } from 'antd/es/upload';
 import { useDispatch, useSelector } from 'react-redux';
 
-import {
-  IdentityHandle,
-  list_namespaces,
-  upsert_vault,
-} from '../../../../hoddor/pkg/hoddor';
 import { actions } from './../../store/app.actions';
 import { appSelectors } from './../../store/app.selectors';
 import { getMimeTypeFromExtension } from '../../utils/file.utils';
+import { VaultWorker } from '../../vault';
+
+const vaultWorker = new VaultWorker();
 
 export const LoggedActions = () => {
   const dispatch = useDispatch();
@@ -23,7 +21,7 @@ export const LoggedActions = () => {
   }
 
   const getNamespacesList = async () => {
-    const namespaces: string[] = await list_namespaces(selectedVault);
+    const namespaces: string[] = await vaultWorker.listNamespaces(selectedVault);
 
     dispatch(actions.setNamespaces(namespaces));
   };
@@ -51,9 +49,9 @@ export const LoggedActions = () => {
           data = Array.from(uint8Array);
         }
 
-        await upsert_vault(
+        await vaultWorker.upsertVault(
           selectedVault,
-          IdentityHandle.from_json(identity),
+          identity,
           file.name,
           data,
           undefined,
