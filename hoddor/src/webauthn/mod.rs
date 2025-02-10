@@ -5,7 +5,7 @@ use wasm_bindgen_futures::JsFuture;
 use web_sys::{AuthenticationExtensionsPrfValues, PublicKeyCredential};
 use webauthn::{webauthn_create, webauthn_get};
 
-use crate::vault::{get_vault, read_vault_with_name, save_vault};
+use crate::vault::{get_vault, save_vault};
 use crate::{
     console::*,
     crypto::{gen_random, identity_from_prf},

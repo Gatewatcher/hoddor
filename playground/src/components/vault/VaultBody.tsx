@@ -1,5 +1,6 @@
 import { DeleteOutlined, FileOutlined } from '@ant-design/icons';
 import JsonView from '@uiw/react-json-view';
+import ReactMarkdown from 'react-markdown';
 import { Image } from 'antd';
 import {
   Button,
@@ -12,27 +13,17 @@ import {
 import { useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 
-import {
-  IdentityHandle,
-  list_namespaces,
-  read_from_vault,
-  remove_from_vault,
-} from '../../../../hoddor/pkg/hoddor';
 import { actions } from './../../store/app.actions';
 import { appSelectors } from './../../store/app.selectors';
+import { arrayBufferToBase64, getMimeTypeFromExtension } from '../../utils/file.utils';
+import { VaultWorker } from '../../vault';
 
 interface DataType {
   key: React.Key;
   namespace: string;
 }
 
-const arrayBufferToBase64 = (buffer: Uint8Array): string => {
-  let binary = '';
-  for (let i = 0; i < buffer.length; i++) {
-    binary += String.fromCharCode(buffer[i]);
-  }
-  return btoa(binary);
-};
+const vaultWorker = new VaultWorker();
 
 export const VaultBody = () => {
   const dispatch = useDispatch();
@@ -43,6 +34,9 @@ export const VaultBody = () => {
   const json = useSelector(appSelectors.getJson);
   const image = useSelector(appSelectors.getImage);
   const video = useSelector(appSelectors.getVideo);
+  const markdown = useSelector(appSelectors.getMarkdown);
+  const text = useSelector(appSelectors.getText);
+  const audio = useSelector(appSelectors.getAudio);
   const [messageApi, contextHolder] = message.useMessage();
 
   if (!selectedVault) {
@@ -50,47 +44,81 @@ export const VaultBody = () => {
   }
 
   const getNamespacesList = async () => {
-    const namespaces: string[] = await list_namespaces(selectedVault);
+    const namespaces: string[] = await vaultWorker.listNamespaces(selectedVault);
 
     dispatch(actions.setNamespaces(namespaces));
   };
 
   const handleReadFile = async (value: { namespace: string }) => {
-    if (identity) {
-      const data = await read_from_vault(
+    if (!identity) {
+      messageApi.error('No identity.');
+      return;
+    }
+    try {
+      const data = await vaultWorker.readFromVault(
         selectedVault,
-        IdentityHandle.from_json(identity),
+        identity,
         value.namespace,
       );
 
-      try {
-        if (data) {
-          if (value.namespace.includes('.png')) {
-            dispatch(
-              actions.setImage(arrayBufferToBase64(new Uint8Array(data))),
-            );
-          } else if (value.namespace.includes('.json')) {
-            dispatch(actions.setJson(Object.fromEntries(data)));
-          } else {
-            dispatch(
-              actions.setVideo(
-                URL.createObjectURL(new Blob([new Uint8Array(data)])),
-              ),
-            );
-          }
-        }
-      } catch (e) {
-        console.log(e);
-        messageApi.error(`Can't read ${value.namespace}.`);
+      if (!data) {
+        messageApi.error('No data received from vault');
+        return;
       }
+
+      let processedData;
+      if (data instanceof Map) {
+        processedData = Array.from(data.values());
+      } else {
+        processedData = data;
+      }
+
+      const uint8Array = new Uint8Array(processedData);
+      const mimeType = getMimeTypeFromExtension(value.namespace);
+      console.log('Detected MIME type:', mimeType);
+
+      if (mimeType === 'application/json') {
+        try {
+          dispatch(actions.setJson(Object.fromEntries(data)));
+        } catch (e) {
+          console.error('Failed to parse JSON:', e);
+          messageApi.error('Failed to parse JSON data');
+        }
+      } else if (mimeType.startsWith('image/')) {
+        dispatch(actions.setImage(arrayBufferToBase64(uint8Array)));
+      } else if (mimeType.startsWith('video/')) {
+        const blob = new Blob([uint8Array], { type: mimeType });
+        dispatch(actions.setVideo(URL.createObjectURL(blob)));
+      } else if (mimeType === 'text/markdown') {
+        const content = new TextDecoder().decode(uint8Array);
+        dispatch(actions.setMarkdown(content));
+      } else if (mimeType.startsWith('text/')) {
+        const textContent = new TextDecoder().decode(uint8Array);
+        dispatch(actions.setText(textContent));
+      } else if (mimeType.startsWith('audio/')) {
+        try {
+          const blob = new Blob([uint8Array], { type: mimeType });
+          console.log('Audio blob size:', blob.size);
+          const audioUrl = URL.createObjectURL(blob);
+          dispatch(actions.setAudio(audioUrl));
+        } catch (audioError) {
+          console.error('Audio processing error:', audioError);
+          messageApi.error(`Failed to process audio file: ${audioError}`);
+        }
+      } else {
+        messageApi.error(`Unsupported file type: ${mimeType}`);
+      }
+    } catch (e) {
+      console.error('Error processing file:', e);
+      messageApi.error(`Can't read ${value.namespace}.`);
     }
   };
 
   const handleDelete = async (value: { namespace: string }) => {
     if (identity) {
-      await remove_from_vault(
+      await vaultWorker.removeFromVault(
         selectedVault,
-        IdentityHandle.from_json(identity),
+        identity,
         value.namespace,
       );
 
@@ -100,6 +128,15 @@ export const VaultBody = () => {
 
   useEffect(() => {
     getNamespacesList();
+
+    return () => {
+      if (audio) {
+        URL.revokeObjectURL(audio);
+      }
+      if (video) {
+        URL.revokeObjectURL(video);
+      }
+    };
   }, [selectedVault]);
 
   const columns: TableColumnsType<DataType> = [
@@ -140,13 +177,30 @@ export const VaultBody = () => {
             }))}
           />
         </Splitter.Panel>
-        <Splitter.Panel>
+        <Splitter.Panel style={{ padding: '20px' }}>
           {json ? (
             <JsonView value={json} />
           ) : image ? (
             <Image width="100%" src={`data:image/jpeg;base64,${image}`} />
           ) : video ? (
             <video id="video" width="100%" controls src={video}></video>
+          ) : markdown ? (
+            <ReactMarkdown>{markdown}</ReactMarkdown>
+          ) : text ? (
+            <Typography.Paragraph style={{ whiteSpace: 'pre-wrap' }}>
+              {text}
+            </Typography.Paragraph>
+          ) : audio ? (
+            <audio
+              controls
+              src={audio}
+              style={{ width: '100%' }}
+              onError={(e) => {
+                const audioElement = e.currentTarget;
+                messageApi.error(`Error playing audio file: ${audioElement.error?.message || 'Unknown error'}`);
+              }}
+              preload="metadata"
+            />
           ) : (
             <Typography.Paragraph style={{ margin: 0 }}>
               Nothing to read, select a file.

@@ -29,7 +29,7 @@ export const Authentication = () => {
     try {
       const identity = await create_credential(selectedVault, username);
 
-      dispatch(actions.addIdentity(identity.to_json()));
+      dispatch(actions.addIdentity(identity));
 
       messageApi.success('You have now an identity.');
     } catch (error) {
