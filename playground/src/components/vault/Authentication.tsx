@@ -27,9 +27,7 @@ export const Authentication = () => {
 
   const handleRegister = async (username: string) => {
     try {
-      await create_credential(selectedVault, username);
-
-      const identity = await get_credential(selectedVault, username);
+      const identity = await create_credential(selectedVault, username);
 
       dispatch(actions.addIdentity(identity.to_json()));
 
