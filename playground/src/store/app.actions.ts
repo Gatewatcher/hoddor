@@ -1,6 +1,5 @@
 import { createAction } from '@reduxjs/toolkit';
-
-import { Identity } from './models/Identity';
+import { IdentityHandle } from '../../../hoddor/pkg/hoddor';
 
 enum Types {
   SET_VAULTS = 'app/SET_VAULTS',
@@ -21,7 +20,7 @@ export const actions = {
   setVaults: createAction<string[]>(Types.SET_VAULTS),
   selectVault: createAction<string>(Types.SELECT_VAULT),
   setNamespaces: createAction<string[]>(Types.SET_NAMESPACES),
-  addIdentity: createAction<Identity>(Types.ADD_IDENTITY),
+  addIdentity: createAction<IdentityHandle>(Types.ADD_IDENTITY),
   setJson: createAction<{}>(Types.SET_JSON),
   setImage: createAction<string>(Types.SET_IMAGE),
   setVideo: createAction<string>(Types.SET_VIDEO),
