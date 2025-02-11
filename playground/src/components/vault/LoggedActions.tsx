@@ -3,21 +3,12 @@ import { Button, Flex, Upload, message } from 'antd';
 import { RcFile } from 'antd/es/upload';
 import { useDispatch, useSelector } from 'react-redux';
 
-import {
-  IdentityHandle,
-  list_namespaces,
-  upsert_vault,
-} from '../../../../hoddor/pkg/hoddor';
 import { actions } from './../../store/app.actions';
 import { appSelectors } from './../../store/app.selectors';
+import { getMimeTypeFromExtension } from '../../utils/file.utils';
+import { VaultWorker } from '../../vault';
 
-const readChunk = (blob: Blob, reader: FileReader): Promise<Uint8Array> => {
-  return new Promise((resolve, reject) => {
-    reader.onload = () => resolve(new Uint8Array(reader.result as ArrayBuffer));
-    reader.onerror = reject;
-    reader.readAsArrayBuffer(blob);
-  });
-};
+const vaultWorker = new VaultWorker();
 
 export const LoggedActions = () => {
   const dispatch = useDispatch();
@@ -30,7 +21,7 @@ export const LoggedActions = () => {
   }
 
   const getNamespacesList = async () => {
-    const namespaces: string[] = await list_namespaces(selectedVault);
+    const namespaces: string[] = await vaultWorker.listNamespaces(selectedVault);
 
     dispatch(actions.setNamespaces(namespaces));
   };
@@ -43,27 +34,36 @@ export const LoggedActions = () => {
 
   const uploadAction = async (file: RcFile) => {
     if (identity) {
-      let data: unknown = file;
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const uint8Array = new Uint8Array(arrayBuffer);
+        const mimeType = getMimeTypeFromExtension(file.name);
+        let data: unknown;
 
-      if (file.type === 'application/json') {
-        data = JSON.parse(await file.text());
-      } else if (file.type.includes('image/')) {
-        data = Array.from(new Uint8Array(await file.arrayBuffer()));
-      } else if (file.type.includes('video/')) {
-        const reader = new FileReader();
-        data = Array.from(await readChunk(file, reader));
+        if (mimeType === 'application/json') {
+          const text = await file.text();
+          data = JSON.parse(text);
+        } else if (mimeType.startsWith('text/') || mimeType === 'text/markdown') {
+          data = Array.from(new TextEncoder().encode(await file.text()));
+        } else {
+          data = Array.from(uint8Array);
+        }
+
+        await vaultWorker.upsertVault(
+          selectedVault,
+          identity,
+          file.name,
+          data,
+          undefined,
+          false,
+        );
+
+        messageApi.success(`${file.name} file uploaded successfully.`);
+        getNamespacesList();
+      } catch (error) {
+        console.error('Upload failed:', error);
+        messageApi.error(`Failed to upload ${file.name}: ${error}`);
       }
-
-      await upsert_vault(
-        selectedVault,
-        IdentityHandle.from_json(identity),
-        file.name,
-        data,
-        undefined,
-        false,
-      ).finally(messageApi.success(`${file.name} file uploaded successfully.`));
-
-      getNamespacesList();
     }
     return 'done';
   };
@@ -80,7 +80,12 @@ export const LoggedActions = () => {
         >
           Logout
         </Button>
-        <Upload action={uploadAction} name="file" fileList={[]}>
+        <Upload 
+          action={uploadAction} 
+          name="file" 
+          fileList={[]}
+          accept=".json,.txt,.md,.markdown,.mp3,.wav,.ogg,.m4a,.aac,.mp4,.mov,.jpg,.jpeg,.png,.gif,.webp"
+        >
           <Button icon={<UploadOutlined />}>Click to Upload</Button>
         </Upload>
       </Flex>

@@ -118,7 +118,7 @@ This project is licensed under the MIT License.
 ## Getting Help
 
 If you need help, you can refer to the following resources:
-- [Discord](https://discord.gg/wu3Fr6nE)
+- [Discord](https://discord.gg/sg7CpqzEhe)
 - [Support](https://github.com/Gatewatcher/hoddor/issues)
 
 ## Maintainers
