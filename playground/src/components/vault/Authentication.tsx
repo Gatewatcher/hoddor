@@ -29,8 +29,7 @@ export const Authentication = () => {
     try {
       const identity = await create_credential(selectedVault, username);
 
-      dispatch(actions.addIdentity(identity));
-
+      dispatch(actions.addIdentity(identity.to_json()));
       messageApi.success('You have now an identity.');
     } catch (error) {
       messageApi.error('Failed to register you.');
