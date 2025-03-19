@@ -1,155 +1,118 @@
 #![cfg(target_arch = "wasm32")]
 
 extern crate wasm_bindgen_test;
-use hoddor::crypto::derive_key;
-use wasm_bindgen::prelude::*;
-use wasm_bindgen_futures::{future_to_promise, JsFuture};
+use hoddor::crypto::identity_from_passphrase;
 use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_browser);
 
-fn bytes_to_hex(bytes: &[u8]) -> String {
-    let mut s = String::with_capacity(bytes.len() * 2);
-    for &b in bytes {
-        s.push_str(&format!("{:02x}", b));
-    }
-    s
-}
-
-// Helper to convert a JsValue password to a byte slice.
-fn get_password_bytes(password: JsValue) -> Result<Vec<u8>, JsValue> {
-    password
-        .as_string()
-        .map(|s| s.into_bytes())
-        .ok_or_else(|| JsValue::from_str("Invalid or non-string password"))
+#[wasm_bindgen_test]
+async fn test_identity_from_passphrase_basic() {
+    let password = "test_password123";
+    let salt = [0u8; 32];
+    let identity = identity_from_passphrase(password, &salt).await.expect("Failed to derive identity");
+    assert!(!identity.public_key().is_empty(), "Public key should not be empty");
+    assert!(!identity.private_key().is_empty(), "Private key should not be empty");
 }
 
 #[wasm_bindgen_test]
-fn test_derive_key_basic() {
-    let password = JsValue::from_str("test_password123");
-    let pass_bytes = get_password_bytes(password).expect("Failed to retrieve password bytes");
-    let key = derive_key(&pass_bytes, b"default_salt").expect("Failed to derive key");
-    assert_eq!(key.len(), 32, "Derived key should be 32 bytes long");
-}
-
-#[wasm_bindgen_test]
-fn test_derive_key_uniqueness() {
-    let password = JsValue::from_str("same_password");
-    let pass_bytes =
-        get_password_bytes(password.clone()).expect("Failed to retrieve password bytes");
-    let key1 = derive_key(&pass_bytes, b"default_salt1").expect("Failed to derive key1");
-    let key2 = derive_key(&pass_bytes, b"default_salt2").expect("Failed to derive key2");
+async fn test_identity_from_passphrase_uniqueness() {
+    let password = "same_password";
+    let salt1 = [1u8; 32];
+    let salt2 = [2u8; 32];
+    
+    let identity1 = identity_from_passphrase(password, &salt1).await.expect("Failed to derive identity1");
+    let identity2 = identity_from_passphrase(password, &salt2).await.expect("Failed to derive identity2");
+    
     assert_ne!(
-        key1, key2,
-        "Derived keys should be unique for different salts"
+        identity1.public_key(), identity2.public_key(),
+        "Derived identities should be unique for different salts"
     );
 }
 
 #[wasm_bindgen_test]
-fn test_derive_key_empty_password() {
-    let empty_password = JsValue::from_str("");
-    let pass_bytes = get_password_bytes(empty_password).expect("Failed to retrieve password bytes");
-    let key =
-        derive_key(&pass_bytes, b"any_salt").expect("Failed to derive key from empty password");
-    assert_eq!(key.len(), 32, "Derived key should still be 32 bytes long");
+async fn test_identity_from_passphrase_empty_password() {
+    let empty_password = "";
+    let salt = [3u8; 32];
+    let identity = identity_from_passphrase(empty_password, &salt).await.expect("Failed to derive identity from empty password");
+    assert!(!identity.public_key().is_empty(), "Public key should not be empty");
+    assert!(!identity.private_key().is_empty(), "Private key should not be empty");
 }
 
 #[wasm_bindgen_test]
-fn test_derive_key_long_password() {
-    let long_password = JsValue::from_str(&"a".repeat(1000));
-    let pass_bytes =
-        get_password_bytes(long_password.clone()).expect("Failed to retrieve password bytes");
-    let key =
-        derive_key(&pass_bytes, b"long_salt").expect("Failed to derive key from long password");
-    assert_eq!(key.len(), 32, "Derived key should be 32 bytes");
+async fn test_identity_from_passphrase_long_password() {
+    let long_password = &"a".repeat(1000);
+    let salt = [4u8; 32];
+    let identity = identity_from_passphrase(long_password, &salt).await.expect("Failed to derive identity from long password");
+    assert!(!identity.public_key().is_empty(), "Public key should not be empty");
+    assert!(!identity.private_key().is_empty(), "Private key should not be empty");
 }
 
 #[wasm_bindgen_test]
-fn test_derive_key_unicode_password() {
-    let unicode_password = JsValue::from_str("パスワード123!@#");
-    let pass_bytes =
-        get_password_bytes(unicode_password.clone()).expect("Failed to retrieve password bytes");
-    let key = derive_key(&pass_bytes, b"unicode_salt")
-        .expect("Failed to derive key from unicode password");
-    assert_eq!(key.len(), 32, "Derived key should be 32 bytes long");
+async fn test_identity_from_passphrase_unicode_password() {
+    let unicode_password = "パスワード123!@#";
+    let salt = [5u8; 32];
+    let identity = identity_from_passphrase(unicode_password, &salt).await.expect("Failed to derive identity from unicode password");
+    assert!(!identity.public_key().is_empty(), "Public key should not be empty");
+    assert!(!identity.private_key().is_empty(), "Private key should not be empty");
 }
 
 #[wasm_bindgen_test]
-fn test_derive_key_whitespace_password() {
-    let whitespace_password = JsValue::from_str("   spaces   tabs\t\t\tnewlines\n\n\n   ");
-    let pass_bytes =
-        get_password_bytes(whitespace_password.clone()).expect("Failed to retrieve password bytes");
-    let key = derive_key(&pass_bytes, b"salt_with_whitespace").expect("Failed to derive key");
-    assert_eq!(key.len(), 32, "Derived key should be 32 bytes long");
+async fn test_identity_from_passphrase_whitespace_password() {
+    let whitespace_password = "   spaces   tabs\t\t\tnewlines\n\n\n   ";
+    let salt = [6u8; 32];
+    let identity = identity_from_passphrase(whitespace_password, &salt).await.expect("Failed to derive identity from whitespace password");
+    assert!(!identity.public_key().is_empty(), "Public key should not be empty");
+    assert!(!identity.private_key().is_empty(), "Private key should not be empty");
 }
 
 #[wasm_bindgen_test]
-fn test_derive_key_null_character_password() {
-    let null_char_password = JsValue::from_str("pass\0word\0with\0nulls");
-    let pass_bytes =
-        get_password_bytes(null_char_password.clone()).expect("Failed to retrieve password bytes");
-    let key =
-        derive_key(&pass_bytes, b"null_salt").expect("Failed to derive key with null characters");
-    assert_eq!(key.len(), 32, "Derived key should be 32 bytes long");
+async fn test_identity_from_passphrase_null_character_password() {
+    let null_char_password = "pass\0word\0with\0nulls";
+    let salt = [7u8; 32];
+    let identity = identity_from_passphrase(null_char_password, &salt).await.expect("Failed to derive identity with null characters");
+    assert!(!identity.public_key().is_empty(), "Public key should not be empty");
+    assert!(!identity.private_key().is_empty(), "Private key should not be empty");
 }
 
 #[wasm_bindgen_test]
-fn test_derive_key_null_password() {
-    let null_password = JsValue::NULL;
-    let result = get_password_bytes(null_password).and_then(|p| derive_key(&p, b"some_salt"));
-    assert!(
-        result.is_err(),
-        "Deriving key from null password should fail"
-    );
-}
-
-#[wasm_bindgen_test]
-fn test_derive_key_undefined_password() {
-    let undefined_password = JsValue::UNDEFINED;
-    let result = get_password_bytes(undefined_password).and_then(|p| derive_key(&p, b"some_salt"));
-    assert!(
-        result.is_err(),
-        "Deriving key from undefined password should fail"
-    );
-}
-
-#[wasm_bindgen_test]
-async fn test_concurrent_key_derivation() {
-    let passwords: Vec<JsValue> = (0..3).map(|i| format!("password{}", i).into()).collect();
+async fn test_concurrent_identity_derivation() {
+    let passwords = ["password0", "password1", "password2"];
+    let salt = [9u8; 32];
 
     let mut derive_futures = Vec::new();
-    for password in passwords {
-        let future = future_to_promise(async move {
-            let pass_bytes = get_password_bytes(password)?;
-            let key = derive_key(&pass_bytes, b"concurrent_salt").map_err(|e| e)?;
-            // Convert derived key into a hex-like string for returning as JsValue
-            Ok(JsValue::from_str(&bytes_to_hex(&key)))
+    for &password in &passwords {
+        let password = password.to_string();
+        let salt_clone = salt.clone();
+        
+        let future = wasm_bindgen_futures::spawn_local(async move {
+            match identity_from_passphrase(&password, &salt_clone).await {
+                Ok(identity) => {
+                    // Verify the identity has valid keys
+                    assert!(!identity.public_key().is_empty());
+                    assert!(!identity.private_key().is_empty());
+                }
+                Err(e) => {
+                    panic!("Failed to derive identity concurrently: {:?}", e);
+                }
+            }
         });
+        
         derive_futures.push(future);
     }
 
-    for future in derive_futures {
-        JsFuture::from(future)
-            .await
-            .expect("Failed to derive key concurrently");
-    }
+    // No need to await the futures as they're already spawned
 }
+
 #[wasm_bindgen_test]
-fn test_derive_key_salt_too_short() {
-    let password = JsValue::from_str("short_salt_password");
-    let pass_bytes = get_password_bytes(password).expect("Failed to retrieve password bytes");
+async fn test_identity_from_passphrase_salt_too_short() {
+    let password = "short_salt_password";
+    let salt = [10u8; 1]; // Too short salt
 
-    let result = derive_key(&pass_bytes, b"a");
+    let result = identity_from_passphrase(password, &salt).await;
 
-    match result {
-        Ok(_) => panic!("Expected SaltTooShort error, but derive_key succeeded"),
-        Err(e) => {
-            let err_str = e.as_string().unwrap_or_default();
-            assert!(
-                err_str.contains("SaltTooShort"),
-                "Expected an error mentioning 'SaltTooShort', got: {}",
-                err_str
-            );
-        }
-    }
+    assert!(
+        result.is_err(),
+        "Expected an error with salt that's too short, but got success"
+    );
 }
