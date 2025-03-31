@@ -21,7 +21,6 @@ async fn performance_test_bulk_upserts() {
 
     test_utils::cleanup_all_vaults().await;
 
-    // Step 1: Create the vault
     let t0 = get_performance().unwrap().now();
     create_vault(JsValue::from_str(vault_name))
         .await
@@ -29,12 +28,10 @@ async fn performance_test_bulk_upserts() {
     let t1 = get_performance().unwrap().now();
     let vault_creation_time = t1 - t0;
 
-    // Step 2: Get identity handle
     let identity = vault_identity_from_passphrase(password_str, vault_name)
         .await
         .expect("Failed to create identity");
     
-    // Step 3: Create initial namespace
     upsert_vault(
         vault_name,
         &identity,
@@ -103,18 +100,15 @@ async fn performance_test_large_data() {
     let large_string = "X".repeat(data_size);
     let data = JsValue::from_str(&large_string);
 
-    // Step 1: Create the vault
     let t0 = get_performance().unwrap().now();
     create_vault(JsValue::from_str(vault_name))
         .await
         .expect("Failed to create vault for performance test");
     
-    // Step 2: Get identity handle
     let identity = vault_identity_from_passphrase(password_str, vault_name)
         .await
         .expect("Failed to create identity");
     
-    // Step 3: Insert large data
     upsert_vault(
         vault_name,
         &identity,

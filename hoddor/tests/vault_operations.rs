@@ -168,19 +168,15 @@ async fn test_list_vaults() {
         ("vault3", "password3", "ns1", "data3"),
     ];
 
-    // Create vaults and add data to them
     for (vault_name, password, namespace, data) in &vault_configs {
-        // Create the vault
         create_vault(JsValue::from_str(vault_name))
             .await
             .expect("Failed to create vault");
         
-        // Get identity handle
         let identity = vault_identity_from_passphrase(password, vault_name)
             .await
             .expect("Failed to create identity");
         
-        // Insert data
         upsert_vault(
             vault_name,
             &identity,
@@ -193,7 +189,6 @@ async fn test_list_vaults() {
         .expect("Failed to insert data");
     }
 
-    // List all vaults
     let listed = list_vaults().await.expect("Failed to list vaults");
     let listed_vaults: Vec<String> = from_value(listed).expect("Failed to convert vault list");
 
@@ -251,17 +246,14 @@ async fn test_duplicate_vault_creation() {
     let data1: JsValue = "test_data1".into();
     let _data2: JsValue = "test_data2".into();
 
-    // Create the first vault
     create_vault(JsValue::from_str(vault_name))
         .await
         .expect("Failed to create first vault");
     
-    // Get identity handle from password
     let identity = vault_identity_from_passphrase(password_str, vault_name)
         .await
         .expect("Failed to create identity from passphrase");
     
-    // Add data to first vault
     upsert_vault(
         vault_name,
         &identity,
@@ -280,7 +272,6 @@ async fn test_duplicate_vault_creation() {
         "Should not be able to create duplicate vault"
     );
 
-    // Read the data to ensure original data is preserved
     let read_data = read_from_vault(vault_name, &identity, JsValue::from_str(namespace_str))
         .await
         .expect("Failed to read vault");
@@ -291,7 +282,6 @@ async fn test_duplicate_vault_creation() {
         "Original data should be preserved"
     );
 
-    // Clean up
     remove_vault(vault_name)
         .await
         .expect("Failed to remove test vault");
@@ -306,12 +296,10 @@ async fn test_special_characters_in_namespace() {
     let namespace_str = "test-namespace_#$+[]()";
     let data: JsValue = "test_data".into();
 
-    // Create the vault
     create_vault(JsValue::from_str(vault_name))
         .await
         .expect("Failed to create vault");
     
-    // Get identity handle from password
     let identity = vault_identity_from_passphrase(password_str, vault_name)
         .await
         .expect("Failed to create identity from passphrase");
@@ -328,7 +316,6 @@ async fn test_special_characters_in_namespace() {
     .await
     .expect("Failed to insert data with special characters in namespace");
 
-    // Try to read back the data
     let read_data = read_from_vault(vault_name, &identity, JsValue::from_str(namespace_str))
         .await
         .expect("Failed to read data with special characters in namespace");
@@ -339,7 +326,6 @@ async fn test_special_characters_in_namespace() {
         "Data should be preserved with special character namespace"
     );
 
-    // Verify it's in the list of namespaces
     let listed = list_namespaces(vault_name)
         .await
         .expect("Failed to list namespaces");
@@ -363,7 +349,6 @@ async fn test_concurrent_vault_operations() {
     let data: Vec<JsValue> = (0..3).map(|i| format!("data{}", i).into()).collect();
     let vault_names: Vec<String> = (0..3).map(|i| format!("vault{}", i)).collect();
 
-    // First create all vaults concurrently
     let mut create_futures = Vec::new();
     for i in 0..3 {
         let vault_name = vault_names[i].clone();
@@ -376,7 +361,6 @@ async fn test_concurrent_vault_operations() {
         result.expect("Failed to create vault in concurrent operation");
     }
 
-    // Now create identities and insert data concurrently
     let mut insert_futures = Vec::new();
     for i in 0..3 {
         let vault_name = vault_names[i].clone();
@@ -421,12 +405,10 @@ async fn test_empty_namespace() {
     let whitespace_namespace = " ";
     let data: JsValue = "test_data".into();
 
-    // Create the vault
     create_vault(JsValue::from_str(vault_name))
         .await
         .expect("Failed to create vault");
     
-    // Get identity handle from password
     let identity = vault_identity_from_passphrase(password_str, vault_name)
         .await
         .expect("Failed to create identity from passphrase");
@@ -443,16 +425,13 @@ async fn test_empty_namespace() {
     )
     .await;
     
-    // Verify that we can use whitespace namespaces
     assert!(
         result.is_ok(),
         "Should succeed with whitespace-only namespace in the current API"
     );
 
-    // Now try to read the data back
     let read_result = read_from_vault(vault_name, &identity, JsValue::from_str(whitespace_namespace)).await;
     
-    // If reading works, verify the data
     match read_result {
         Ok(read_data) => {
             assert_eq!(read_data.as_string().unwrap(), "test_data");
@@ -465,7 +444,6 @@ async fn test_empty_namespace() {
         }
     }
 
-    // List namespaces to verify the whitespace namespace exists
     let namespaces = list_namespaces(vault_name)
         .await
         .expect("Failed to list namespaces");
@@ -489,17 +467,14 @@ async fn test_empty_data() {
     let namespace_str = "test_namespace";
     let data: JsValue = "".into();
 
-    // Create the vault
     create_vault(JsValue::from_str(vault_name))
         .await
         .expect("Failed to create vault");
     
-    // Get identity handle from password
     let identity = vault_identity_from_passphrase(password_str, vault_name)
         .await
         .expect("Failed to create identity from passphrase");
     
-    // Insert empty data
     upsert_vault(
         vault_name,
         &identity,
@@ -511,7 +486,6 @@ async fn test_empty_data() {
     .await
     .expect("Failed to insert empty data into vault");
 
-    // Read the empty data back
     let read_data = read_from_vault(vault_name, &identity, JsValue::from_str(namespace_str))
         .await
         .expect("Failed to read from vault with empty data");
@@ -559,7 +533,6 @@ async fn test_special_characters_in_vault_name() {
             name
         );
         
-        // Clean up the created vault
         remove_vault(name).await.expect("Failed to remove test vault");
     }
 
@@ -608,7 +581,6 @@ async fn test_concurrent_vault_creation() {
         identities.push(identity);
     }
 
-    // Now test concurrent operations with new namespaces
     let mut create_futures = Vec::new();
     for i in 0..3 {
         let vault_name = vault_names[i].clone();
@@ -664,12 +636,10 @@ async fn test_read_non_existent_namespace() {
     let password_str = "test_password123";
     let non_existent_namespace = "non_existent_namespace";
 
-    // Create the vault
     create_vault(JsValue::from_str(vault_name))
         .await
         .expect("Failed to create vault");
     
-    // Get identity handle
     let identity = vault_identity_from_passphrase(password_str, vault_name)
         .await
         .expect("Failed to create identity");
@@ -693,17 +663,14 @@ async fn test_list_namespaces_in_empty_vault() {
     let namespace_str = "initial_namespace";
     let data: JsValue = "initial_data".into();
 
-    // Create the vault
     create_vault(JsValue::from_str(vault_name))
         .await
         .expect("Failed to create vault");
     
-    // Get identity handle from password
     let identity = vault_identity_from_passphrase(password_str, vault_name)
         .await
         .expect("Failed to create identity from passphrase");
     
-    // Insert initial data
     upsert_vault(
         vault_name,
         &identity,
@@ -715,12 +682,10 @@ async fn test_list_namespaces_in_empty_vault() {
     .await
     .expect("Failed to insert initial data into vault");
 
-    // Remove the namespace
     remove_from_vault(vault_name, &identity, JsValue::from_str(namespace_str))
         .await
         .expect("Failed to remove initial namespace");
 
-    // List namespaces, which should be empty
     let listed = list_namespaces(vault_name)
         .await
         .expect("Failed to list namespaces");
@@ -744,17 +709,14 @@ async fn test_concurrent_read_operations() {
     let namespace_str = "test_namespace";
     let data: JsValue = "test_data".into();
 
-    // Create the vault
     create_vault(JsValue::from_str(vault_name))
         .await
         .expect("Failed to create vault");
     
-    // Get identity handle from password
     let identity = vault_identity_from_passphrase(password_str, vault_name)
         .await
         .expect("Failed to create identity from passphrase");
     
-    // Insert data
     upsert_vault(
         vault_name,
         &identity,
@@ -766,7 +728,6 @@ async fn test_concurrent_read_operations() {
     .await
     .expect("Failed to insert data into vault");
 
-    // Create multiple concurrent read operations
     let mut read_futures = Vec::new();
     for _ in 0..3 {
         let vault_name_clone = vault_name.to_string();
@@ -785,7 +746,6 @@ async fn test_concurrent_read_operations() {
         read_futures.push(future);
     }
 
-    // Execute all reads concurrently
     let results = future::join_all(read_futures).await;
     for result in results {
         let read_data = result.expect("Failed to read from vault concurrently");
@@ -845,12 +805,10 @@ async fn test_data_expiration() {
     // Wait longer for data to expire
     TimeoutFuture::new(3000_u32).await;
     
-    // Force cleanup to remove expired data
     force_cleanup_vault(vault_name)
         .await
         .expect("Failed to force cleanup vault");
     
-    // Try to read after expiration and cleanup
     let read_result = read_from_vault(vault_name, &identity, JsValue::from_str(namespace)).await;
     
     assert!(
@@ -870,17 +828,14 @@ async fn test_force_cleanup() {
     let vault_name = "force_cleanup_vault";
     let password_str = "force_cleanup_password";
 
-    // Create the vault
     create_vault(JsValue::from_str(vault_name))
         .await
         .expect("Failed to create vault");
     
-    // Get identity handle
     let identity = vault_identity_from_passphrase(password_str, vault_name)
         .await
         .expect("Failed to create identity");
     
-    // Insert data with expiration in namespace1
     upsert_vault(
         vault_name,
         &identity,
@@ -892,7 +847,6 @@ async fn test_force_cleanup() {
     .await
     .expect("Failed to insert data into namespace1");
     
-    // Insert data with expiration in namespace2
     upsert_vault(
         vault_name,
         &identity,
@@ -908,12 +862,10 @@ async fn test_force_cleanup() {
     let wait_time: u32 = 1100;
     TimeoutFuture::new(wait_time).await;
     
-    // Force cleanup to remove expired data
     force_cleanup_vault(vault_name)
         .await
         .expect("Failed to force cleanup vault");
 
-    // List namespaces, which should be empty after cleanup
     let listed = list_namespaces(vault_name)
         .await
         .expect("Failed to list namespaces after forced cleanup");
@@ -936,20 +888,16 @@ async fn test_concurrent_upserts_same_namespace() {
     let password_str = "same_ns_password";
     let namespace = "same_namespace";
 
-    // Create vault
     create_vault(JsValue::from_str(vault_name))
         .await
         .expect("Failed to create vault");
     
-    // Get identity handle
     let identity = vault_identity_from_passphrase(password_str, vault_name)
         .await
         .expect("Failed to create identity");
     
-    // Initial data
     let initial_data: JsValue = "initial_data".into();
     
-    // Insert initial data
     upsert_vault(
         vault_name,
         &identity,
@@ -1015,7 +963,6 @@ async fn test_concurrent_upserts_same_namespace() {
         }
     }
 
-    // Read final data
     let final_data = read_from_vault(vault_name, &identity, JsValue::from_str(namespace))
         .await
         .expect("Failed to read final data");
@@ -1108,7 +1055,6 @@ async fn test_concurrent_performance() {
         handles.push(promise);
     }
     
-    // Wait for all operations to complete
     for (i, promise) in handles.into_iter().enumerate() {
         match JsFuture::from(promise).await {
             Ok(_) => {
@@ -1143,17 +1089,14 @@ async fn test_disable_cleanup() {
     let vault_name = "cleanup_disabled_vault";
     let password_str = "cleanup_password";
 
-    // Create the vault
     create_vault(JsValue::from_str(vault_name))
         .await
         .expect("Failed to create vault");
     
-    // Get identity handle
     let identity = vault_identity_from_passphrase(password_str, vault_name)
         .await
         .expect("Failed to create identity");
     
-    // Insert data with expiration
     upsert_vault(
         vault_name,
         &identity,
@@ -1172,7 +1115,6 @@ async fn test_disable_cleanup() {
     let wait_time: u32 = 3000;
     TimeoutFuture::new(wait_time).await;
 
-    // Try to read data after expiration time but with cleanup disabled
     let read_data = read_from_vault(vault_name, &identity, JsValue::from_str("short_lived_ns")).await;
 
     match read_data {
