@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "RUSTFLAGS='--cfg=web_sys_unstable_apis' concurrently \"cd ../hoddor && watchexec -w src -- wasm-pack build --target web\" \"cd ../server && watchexec -w src -- cargo run\" \"vite\"",
+    "dev": "cross-env RUSTFLAGS='--cfg=web_sys_unstable_apis' concurrently \"cd ../hoddor && watchexec -w src -- wasm-pack build --target web\" \"cd ../server && watchexec -w src -- cargo run\" \"vite\"",
     "build": "RUSTFLAGS='--cfg=web_sys_unstable_apis' tsc && vite build",
     "preview": "vite preview"
   },
@@ -15,6 +15,7 @@
     "@typescript-eslint/eslint-plugin": "6.7.2",
     "@typescript-eslint/parser": "6.7.2",
     "concurrently": "9.1.0",
+    "cross-env": "7.0.3",
     "eslint": "8.50.0",
     "eslint-plugin-import": "2.28.1",
     "eslint-plugin-react": "7.33.2",
