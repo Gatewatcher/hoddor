@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - 66-create-github-actions-to-release-on-gatewatcher-scope
 
 permissions:
   contents: write
@@ -41,8 +42,8 @@ jobs:
       - name: Build project
         run: npm run build
 
-      - name: Run semantic-release
-        uses: cycjimmy/semantic-release-action@v4
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      # - name: Run semantic-release
+      #   uses: cycjimmy/semantic-release-action@v4
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      #     NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
