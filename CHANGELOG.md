@@ -1,3 +1,11 @@
+## [1.0.1](https://github.com/Gatewatcher/hoddor/compare/v1.0.0...v1.0.1) (2025-06-20)
+
+
+### Bug Fixes
+
+* add nextrelease version ([0408152](https://github.com/Gatewatcher/hoddor/commit/04081523c44b90f6d1ca4d2efe7a72c6089301ea))
+* version bumping ([254ccc5](https://github.com/Gatewatcher/hoddor/commit/254ccc59f0d29c89a3fb24e45b516d28b361c80d))
+
 # 1.0.0 (2025-06-20)
 
 
