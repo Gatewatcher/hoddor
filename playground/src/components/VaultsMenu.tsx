@@ -2,9 +2,9 @@ import { Menu } from 'antd';
 import { useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 
+import { VaultWorker } from '../vault';
 import { actions } from './../store/app.actions';
 import { appSelectors } from './../store/app.selectors';
-import { VaultWorker } from '../vault';
 
 const vaultWorker = new VaultWorker();
 
@@ -20,7 +20,7 @@ export const VaultsMenu = () => {
     if (!vaults.length) {
       getVaultsList();
     }
-  }, [vaults]);
+  }, [vaults.length]);
 
   return (
     !!vaults.length && (

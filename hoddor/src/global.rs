@@ -1,7 +1,7 @@
 use crate::errors::VaultError;
 use wasm_bindgen::prelude::JsValue;
 use wasm_bindgen::prelude::*;
-use web_sys::{self, Window, WorkerGlobalScope};
+use web_sys::{self, StorageManager, Window, WorkerGlobalScope};
 
 pub fn get_global_scope() -> Result<JsValue, VaultError> {
     // Try worker scope first
@@ -21,4 +21,20 @@ pub fn window() -> Window {
         .expect("Unable to retrieve global scope")
         .dyn_into::<Window>()
         .expect("Unable to retrieve window")
+}
+
+pub fn get_storage_manager() -> Result<StorageManager, VaultError> {
+    let global = get_global_scope()?;
+
+    let storage = if let Ok(worker) = global.clone().dyn_into::<WorkerGlobalScope>() {
+        worker.navigator().storage()
+    } else if let Ok(window) = global.dyn_into::<web_sys::Window>() {
+        window.navigator().storage()
+    } else {
+        return Err(VaultError::IoError {
+            message: "Could not access navigator",
+        });
+    };
+
+    Ok(storage)
 }
