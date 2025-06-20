@@ -20,5 +20,10 @@
     ],
     "@semantic-release/git",
     "@semantic-release/github"
+  ],
+  "assets": [
+    "hoddor/Cargo.toml",
+    "package.json",
+    "CHANGELOG.md"
   ]
 }
