@@ -1,6 +1,6 @@
 {
   "name": "@gatewatcher/hoddor",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "Gatewatcher Hoddor",
   "author": "Gatewatcher frontend team",
   "license": "MIT",
@@ -8,15 +8,14 @@
     "type": "git",
     "url": "https://github.com/Gatewatcher/hoddor"
   },
-  "publishConfig": {
-    "access": "public"
-  },
   "scripts": {
-    "build": "wasm-pack build hoddor --target web --release --out-dir ../dist"
+    "build": "wasm-pack build hoddor --target web --release --out-dir ../dist --scope gatewatcher",
+    "set-version": "node scripts/set-version.js"
   },
   "devDependencies": {
     "@semantic-release/changelog": "6.0.3",
     "@semantic-release/commit-analyzer": "13.0.1",
+    "@semantic-release/exec": "7.1.0",
     "@semantic-release/git": "10.0.1",
     "@semantic-release/github": "11.0.3",
     "@semantic-release/npm": "12.0.1",
