@@ -1,7 +1,7 @@
 import { Button, Flex, Typography, message } from 'antd';
 import { useDispatch, useSelector } from 'react-redux';
 
-import { remove_vault } from '../../../../hoddor/pkg/hoddor';
+import { remove_vault } from '../../../../dist/hoddor';
 import { actions } from './../../store/app.actions';
 import { appSelectors } from './../../store/app.selectors';
 

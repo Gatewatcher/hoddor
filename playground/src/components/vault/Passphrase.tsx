@@ -1,7 +1,7 @@
 import { Button, Flex, Form, Input, message } from 'antd';
 import { useDispatch, useSelector } from 'react-redux';
 
-import { vault_identity_from_passphrase } from '../../../../hoddor/pkg/hoddor';
+import { vault_identity_from_passphrase } from '../../../../dist/hoddor';
 import { actions } from './../../store/app.actions';
 import { appSelectors } from './../../store/app.selectors';
 

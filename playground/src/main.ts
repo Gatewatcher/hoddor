@@ -1,4 +1,5 @@
 import { arrayBufferToBase64 } from 'utils/file.utils';
+
 import init, {
   add_peer,
   connect_to_peer,
@@ -15,7 +16,7 @@ import init, {
   set_debug_mode,
   upsert_vault,
   vault_identity_from_passphrase,
-} from '../../hoddor/pkg/hoddor.js';
+} from '../../dist/hoddor.js';
 import { runPerformanceTest } from './performance.js';
 import './style.old.css';
 import { VaultWorker } from './vault.js';

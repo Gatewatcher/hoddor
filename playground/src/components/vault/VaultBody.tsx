@@ -1,6 +1,5 @@
 import { DeleteOutlined, FileOutlined } from '@ant-design/icons';
 import JsonView from '@uiw/react-json-view';
-import ReactMarkdown from 'react-markdown';
 import { Image } from 'antd';
 import {
   Button,
@@ -11,12 +10,16 @@ import {
   message,
 } from 'antd';
 import { useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { useDispatch, useSelector } from 'react-redux';
 
+import {
+  arrayBufferToBase64,
+  getMimeTypeFromExtension,
+} from '../../utils/file.utils';
+import { VaultWorker } from '../../vault';
 import { actions } from './../../store/app.actions';
 import { appSelectors } from './../../store/app.selectors';
-import { arrayBufferToBase64, getMimeTypeFromExtension } from '../../utils/file.utils';
-import { VaultWorker } from '../../vault';
 
 interface DataType {
   key: React.Key;
@@ -44,7 +47,8 @@ export const VaultBody = () => {
   }
 
   const getNamespacesList = async () => {
-    const namespaces: string[] = await vaultWorker.listNamespaces(selectedVault);
+    const namespaces: string[] =
+      await vaultWorker.listNamespaces(selectedVault);
 
     dispatch(actions.setNamespaces(namespaces));
   };
@@ -195,9 +199,13 @@ export const VaultBody = () => {
               controls
               src={audio}
               style={{ width: '100%' }}
-              onError={(e) => {
+              onError={e => {
                 const audioElement = e.currentTarget;
-                messageApi.error(`Error playing audio file: ${audioElement.error?.message || 'Unknown error'}`);
+                messageApi.error(
+                  `Error playing audio file: ${
+                    audioElement.error?.message || 'Unknown error'
+                  }`,
+                );
               }}
               preload="metadata"
             />

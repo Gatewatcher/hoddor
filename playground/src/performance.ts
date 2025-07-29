@@ -1,15 +1,29 @@
+import init, {
+  create_vault,
+  read_from_vault,
+  upsert_vault,
+} from '../../dist/hoddor.js';
 import { VaultWorker } from './vault';
-import init, { create_vault, read_from_vault, upsert_vault } from '../../hoddor/pkg/hoddor.js';
 
 function multiplyLargeMatrices(size: number): number[][] {
-  const matrix1 = Array(size).fill(0).map(() =>
-    Array(size).fill(0).map(() => Math.random())
-  );
-  const matrix2 = Array(size).fill(0).map(() =>
-    Array(size).fill(0).map(() => Math.random())
-  );
+  const matrix1 = Array(size)
+    .fill(0)
+    .map(() =>
+      Array(size)
+        .fill(0)
+        .map(() => Math.random()),
+    );
+  const matrix2 = Array(size)
+    .fill(0)
+    .map(() =>
+      Array(size)
+        .fill(0)
+        .map(() => Math.random()),
+    );
 
-  const result = Array(size).fill(0).map(() => Array(size).fill(0));
+  const result = Array(size)
+    .fill(0)
+    .map(() => Array(size).fill(0));
 
   for (let i = 0; i < size; i++) {
     for (let j = 0; j < size; j++) {
@@ -40,11 +54,15 @@ function generateLargeData(sizeInMb: number): object {
   return data;
 }
 
-export async function runPerformanceTest(iterations: number = 10, dataSizeMb: number = 1, onProgress?: (count: number) => void) {
+export async function runPerformanceTest(
+  iterations: number = 10,
+  dataSizeMb: number = 1,
+  onProgress?: (count: number) => void,
+) {
   await init();
   const results = {
     worker: { create: 0, read: 0, update: 0 },
-    direct: { create: 0, read: 0, update: 0 }
+    direct: { create: 0, read: 0, update: 0 },
   };
 
   const worker = new VaultWorker();
@@ -62,11 +80,16 @@ export async function runPerformanceTest(iterations: number = 10, dataSizeMb: nu
     results.worker.create += performance.now() - createStart;
 
     const readStart = performance.now();
-    await worker.readFromVault(vaultName, 'test123', namespace)
+    await worker.readFromVault(vaultName, 'test123', namespace);
     results.worker.read += performance.now() - readStart;
 
     const updateStart = performance.now();
-    await worker.upsertVault(vaultName, 'test123', namespace + Date.now().toString(), { ...largeData, updated: true });
+    await worker.upsertVault(
+      vaultName,
+      'test123',
+      namespace + Date.now().toString(),
+      { ...largeData, updated: true },
+    );
     results.worker.update += performance.now() - updateStart;
   }
 
@@ -86,8 +109,15 @@ export async function runPerformanceTest(iterations: number = 10, dataSizeMb: nu
     await read_from_vault(vaultName, 'test123', namespace);
     results.direct.read += performance.now() - readStart;
 
-    const updateStart = performance.now();    
-    await upsert_vault(vaultName, 'test123', namespace + Date.now().toString(), { ...largeData, updated: true }, undefined, false);
+    const updateStart = performance.now();
+    await upsert_vault(
+      vaultName,
+      'test123',
+      namespace + Date.now().toString(),
+      { ...largeData, updated: true },
+      undefined,
+      false,
+    );
     results.direct.update += performance.now() - updateStart;
   }
 
@@ -100,6 +130,6 @@ export async function runPerformanceTest(iterations: number = 10, dataSizeMb: nu
   return {
     ...results,
     dataSizeMb,
-    iterations
+    iterations,
   };
 }

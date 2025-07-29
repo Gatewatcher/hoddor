@@ -6,6 +6,7 @@ use crate::file_system::{
     get_or_create_directory_handle, get_or_create_file_handle_in_directory,
     get_root_directory_handle, remove_directory_with_contents, remove_file_from_directory,
 };
+use crate::global::get_global_scope;
 use crate::lock::acquire_vault_lock;
 use crate::measure::get_performance;
 use crate::measure::time_it;
@@ -32,6 +33,8 @@ use rand::RngCore;
 use argon2::password_hash::rand_core::OsRng;
 
 use futures_channel::mpsc::UnboundedReceiver;
+
+use crate::notifications;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 struct Expiration {
@@ -942,6 +945,34 @@ pub async fn save_vault(
         .map_err(|_| VaultError::IoError {
             message: "Failed to close writer",
         })?;
+    }
+
+    let global_scope = get_global_scope()?;
+    let msg = notifications::Message {
+        event: notifications::EventType::VaultUpdate,
+        data: vault.clone(),
+    };
+    let js_value = serde_wasm_bindgen::to_value(&msg).map_err(|_| VaultError::IoError {
+        message: "Failed to serialize",
+    })?;
+
+    if let Ok(worker_scope) = global_scope
+        .clone()
+        .dyn_into::<web_sys::DedicatedWorkerGlobalScope>()
+    {
+        worker_scope.post_message(&js_value)?;
+        console::log("message posted using worker");
+    } else if let Ok(window) = global_scope.dyn_into::<web_sys::Window>() {
+        window
+            .post_message(&js_value, "*")
+            .map_err(|_| VaultError::IoError {
+                message: "Failed to post message to window",
+            })?;
+        console::log("message posted using window");
+    } else {
+        return Err(VaultError::IoError {
+            message: "Unknown global scope",
+        });
     }
 
     Ok(())

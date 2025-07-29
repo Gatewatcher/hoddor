@@ -1,7 +1,7 @@
 import { Reducer, UnknownAction } from '@reduxjs/toolkit';
 
+import { IdentityHandle } from '../../../dist/hoddor';
 import { actions } from './app.actions';
-import { IdentityHandle } from '../../../hoddor/pkg/hoddor';
 
 export type AppState = {
   vaults: string[];
@@ -45,6 +45,7 @@ export const appReducer: Reducer<AppState, UnknownAction> = (
   }
 
   if (actions.setNamespaces.match(action)) {
+    console.log('action', action);
     return {
       ...state,
       namespaces: action.payload,
