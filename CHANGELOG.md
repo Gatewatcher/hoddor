@@ -1,3 +1,10 @@
+# [1.1.0](https://github.com/Gatewatcher/hoddor/compare/v1.0.1...v1.1.0) (2025-08-24)
+
+
+### Features
+
+* add persistance for the storage ([#65](https://github.com/Gatewatcher/hoddor/issues/65)) ([88d11e8](https://github.com/Gatewatcher/hoddor/commit/88d11e84c6c2b094b784a83cc833e306783892da))
+
 ## [1.0.1](https://github.com/Gatewatcher/hoddor/compare/v1.0.0...v1.0.1) (2025-06-20)
 
 

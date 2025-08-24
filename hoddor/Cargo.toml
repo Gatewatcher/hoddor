@@ -1,6 +1,6 @@
 [package]
 name = "hoddor"
-version = "1.0.1"
+version = "1.1.0"
 authors = ["Gatewatcher Frontend Team <frontend@gatewatcher.com>"]
 description = "Hoddor Browser Vault"
 edition = "2021"
