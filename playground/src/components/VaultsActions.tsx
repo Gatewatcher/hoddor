@@ -3,6 +3,7 @@ import Upload, { RcFile } from 'antd/es/upload';
 import { useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 
+import { create_vault } from '../../../hoddor/pkg/hoddor';
 import { actions } from './../store/app.actions';
 import { appSelectors } from './../store/app.selectors';
 import { VaultWorker } from './../vault';
@@ -21,7 +22,7 @@ export const VaultsActions = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const handleCreation = async (value: FieldType) => {
-    await vaultWorker.createVault(value.vaultName || 'default');
+    await create_vault(value.vaultName || 'default');
     dispatch(actions.setVaults(await vaultWorker.listVaults()));
 
     messageApi.success(`Vault ${value.vaultName} created.`);
@@ -61,7 +62,7 @@ export const VaultsActions = () => {
         );
 
         dispatch(actions.setVaults(await vaultWorker.listVaults()));
-        
+
         messageApi.success(`Vault ${vaultName} imported.`);
       } catch (error) {
         messageApi.error(`Failed to import vault ${vaultName}: ${error}`);

@@ -9,6 +9,9 @@ use crate::file_system::{
 use crate::lock::acquire_vault_lock;
 use crate::measure::get_performance;
 use crate::measure::time_it;
+use crate::persistence::{
+    check_storage_persistence, has_requested_persistence, request_persistence_storage,
+};
 use crate::sync::{get_sync_manager, OperationType, SyncMessage};
 use crate::webrtc::{AccessLevel, WebRtcPeer};
 use std::cell::RefCell;
@@ -289,7 +292,7 @@ pub async fn upsert_vault(
                     operation,
                     Some(vault.metadata.clone()),
                     Some(vault.identity_salts.clone()),
-                    Some(vault.username_pk.clone())
+                    Some(vault.username_pk.clone()),
                 );
 
                 let peers = sync_manager.get_peers_mut();
@@ -689,12 +692,9 @@ pub async fn import_vault(vault_name: &str, data: JsValue) -> Result<(), JsValue
 
 pub async fn get_vault(vault_name: &str) -> Result<(FileSystemDirectoryHandle, Vault), JsValue> {
     let dirname = get_vault_dirname(vault_name);
-    read_vault_with_name(&dirname).await.map_err(|_| {
-        JsValue::from_str(&format!(
-            "Vault '{}' does not exist",
-            vault_name
-        ))
-    })
+    read_vault_with_name(&dirname)
+        .await
+        .map_err(|_| JsValue::from_str(&format!("Vault '{}' does not exist", vault_name)))
 }
 
 pub async fn read_vault_with_name(
@@ -836,6 +836,24 @@ pub async fn save_vault(
     dir_handle: &FileSystemDirectoryHandle,
     vault: Vault,
 ) -> Result<(), VaultError> {
+    if !has_requested_persistence() {
+        let is_persisted = check_storage_persistence().await.unwrap_or(false);
+
+        if !is_persisted {
+            let result = request_persistence_storage().await;
+
+            match result {
+                Ok(is_granted) => {
+                    console::log(&format!("persistence request granted: {}", is_granted));
+                }
+                Err(VaultError::JsError(message)) => {
+                    console::error(&message);
+                }
+                _ => {}
+            }
+        }
+    }
+
     let mut namespace_data = Vec::new();
     for (namespace, data) in &vault.namespaces {
         let namespace_json = serde_json::to_string(&data).map_err(|_| VaultError::IoError {
@@ -1316,7 +1334,7 @@ pub async fn update_vault_from_sync(vault_name: &str, vault_data: &[u8]) -> Resu
                     .unwrap_or_else(IdentitySalts::new),
                 username_pk: match sync_msg.username_pk {
                     Some(username_pk) => username_pk,
-                    None => HashMap::new()
+                    None => HashMap::new(),
                 },
                 namespaces: HashMap::new(),
                 sync_enabled: true,

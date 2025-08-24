@@ -1,26 +1,12 @@
-use crate::console::log;
 use crate::errors::VaultError;
-use crate::global::get_global_scope;
+use crate::{console::log, global::get_storage_manager};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 
-use web_sys::{
-    self, FileSystemDirectoryHandle, FileSystemFileHandle, FileSystemGetFileOptions,
-    WorkerGlobalScope,
-};
+use web_sys::{self, FileSystemDirectoryHandle, FileSystemFileHandle, FileSystemGetFileOptions};
 
 pub async fn get_root_directory_handle() -> Result<FileSystemDirectoryHandle, VaultError> {
-    let global = get_global_scope()?;
-
-    let storage = if let Ok(worker) = global.clone().dyn_into::<WorkerGlobalScope>() {
-        worker.navigator().storage()
-    } else if let Ok(window) = global.dyn_into::<web_sys::Window>() {
-        window.navigator().storage()
-    } else {
-        return Err(VaultError::IoError {
-            message: "Could not access navigator",
-        });
-    };
+    let storage = get_storage_manager()?;
 
     let dir_promise = storage.get_directory();
     let dir_handle = JsFuture::from(dir_promise)
