@@ -1,10 +1,10 @@
-import init from '../../hoddor/pkg/hoddor.js';
+import init from '../../dist/hoddor.js';
 
 export const initWasm = async () => {
   try {
-    await init()
+    await init();
   } catch (error) {
-    console.error('Failed to initialize WASM:', error)
-    throw error
+    console.error('Failed to initialize WASM:', error);
+    throw error;
   }
-}
+};

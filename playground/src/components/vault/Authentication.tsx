@@ -2,10 +2,7 @@ import { Button, Flex, Form, Input, Modal, message } from 'antd';
 import { useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 
-import {
-  create_credential,
-  get_credential,
-} from '../../../../hoddor/pkg/hoddor';
+import { create_credential, get_credential } from '../../../../dist/hoddor';
 import { actions } from './../../store/app.actions';
 import { appSelectors } from './../../store/app.selectors';
 import { Passphrase } from './Passphrase';
