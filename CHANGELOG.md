@@ -1,3 +1,10 @@
+# [1.2.0](https://github.com/Gatewatcher/hoddor/compare/v1.1.0...v1.2.0) (2025-08-27)
+
+
+### Features
+
+* **notifications:** trigger notifications on vault updates ([#69](https://github.com/Gatewatcher/hoddor/issues/69)) ([#70](https://github.com/Gatewatcher/hoddor/issues/70)) ([d01233c](https://github.com/Gatewatcher/hoddor/commit/d01233c4dbe9795e7349572bcc32db64488163cf))
+
 # [1.1.0](https://github.com/Gatewatcher/hoddor/compare/v1.0.1...v1.1.0) (2025-08-24)
 
 
