@@ -4,7 +4,8 @@ extern crate wasm_bindgen_test;
 use futures_util::future;
 use gloo_timers::future::TimeoutFuture;
 use hoddor::{
-    console,
+    adapters::logger,
+
     vault::{
         configure_cleanup, create_vault, export_vault, force_cleanup_vault, import_vault,
         list_namespaces, list_vaults, read_from_vault, remove_from_vault, remove_vault,
@@ -720,7 +721,7 @@ async fn test_disable_cleanup() {
 
     match read_data {
         Ok(d) => {
-            console::log("Data remains because we disabled cleanup.");
+            logger().log("Data remains because we disabled cleanup.");
             assert_eq!(
                 d.as_string().unwrap(),
                 "short_lived_data",
@@ -728,8 +729,8 @@ async fn test_disable_cleanup() {
             );
         }
         Err(e) => {
-            console::log("Data is expired at read time, so the read returned error");
-            console::log(&format!("Error: {:?}", e));
+            logger().log("Data is expired at read time, so the read returned error");
+            logger().log(&format!("Error: {:?}", e));
         }
     }
 
@@ -759,7 +760,7 @@ async fn test_concurrent_upserts_different_namespaces() {
     for i in 1..6 {
         let ns = format!("namespace{}", i);
         let dt = format!("data{}", i);
-        console::log(&format!("Preparing upsert for namespace '{}'", ns));
+        logger().log(&format!("Preparing upsert for namespace '{}'", ns));
         tasks.push(upsert_vault(
             vault_name,
             password.clone(),
@@ -773,7 +774,7 @@ async fn test_concurrent_upserts_different_namespaces() {
     let results = future::join_all(tasks).await;
     for (i, result) in results.into_iter().enumerate() {
         if let Err(e) = result {
-            console::log(&format!("Upsert #{} failed with error: {:?}", i, e));
+            logger().log(&format!("Upsert #{} failed with error: {:?}", i, e));
         }
     }
 
@@ -781,10 +782,10 @@ async fn test_concurrent_upserts_different_namespaces() {
         .await
         .expect("Failed to list namespaces");
     let ns_array = js_sys::Array::from(&namespaces);
-    console::log(&format!("Found {} namespaces:", ns_array.length()));
+    logger().log(&format!("Found {} namespaces:", ns_array.length()));
     for i in 0..ns_array.length() {
         if let Some(ns) = ns_array.get(i).as_string() {
-            console::log(&format!("  - {}", ns));
+            logger().log(&format!("  - {}", ns));
         }
     }
 
@@ -810,7 +811,7 @@ async fn test_concurrent_upserts_different_namespaces() {
                 );
             }
             Err(e) => {
-                console::log(&format!("Read failed for namespace '{}': {:?}", ns, e));
+                logger().log(&format!("Read failed for namespace '{}': {:?}", ns, e));
             }
         }
     }

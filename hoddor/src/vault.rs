@@ -19,7 +19,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 
-use crate::console;
+use crate::adapters::logger;
 use core::str;
 use serde_wasm_bindgen::{from_value, to_value};
 use std::collections::HashMap;
@@ -168,11 +168,11 @@ pub async fn vault_identity_from_passphrase(
 
     // Try to find an existing identity by iterating over stored salts
     for (stored_pubkey, salt) in &vault.identity_salts.salts {
-        console::log(&format!("Checking stored public key: {}", stored_pubkey));
+        logger().log(&format!("Checking stored public key: {}", stored_pubkey));
 
         // Validate salt length
         if salt.len() != 32 {
-            console::error(&format!(
+            logger().error(&format!(
                 "Invalid salt length ({}) for public key: {}",
                 salt.len(),
                 stored_pubkey
@@ -180,20 +180,20 @@ pub async fn vault_identity_from_passphrase(
             continue;
         }
 
-        console::log(&format!("Using salt: {:?}", salt));
+        logger().log(&format!("Using salt: {:?}", salt));
 
         match identity_from_passphrase(passphrase, salt).await {
             Ok(identity) => {
-                console::log(&format!("Generated public key: {}", identity.public_key()));
+                logger().log(&format!("Generated public key: {}", identity.public_key()));
                 if identity.public_key() == *stored_pubkey {
-                    console::log("Found matching identity");
+                    logger().log("Found matching identity");
                     return Ok(identity);
                 } else {
-                    console::warn("Public key does not match stored salt");
+                    logger().warn("Public key does not match stored salt");
                 }
             }
             Err(err) => {
-                console::warn(&format!(
+                logger().warn(&format!(
                     "Failed to generate identity with stored salt for public key {}: {:?}",
                     stored_pubkey, err
                 ));
@@ -201,14 +201,14 @@ pub async fn vault_identity_from_passphrase(
         };
     }
 
-    console::log("No matching identity found; generating new salt");
+    logger().log("No matching identity found; generating new salt");
     let mut new_salt = [0u8; 32];
     OsRng.fill_bytes(&mut new_salt);
 
     let identity = identity_from_passphrase(passphrase, &new_salt)
         .await
         .map_err(|e| {
-            console::error(&format!("Failed to create new identity: {:?}", e));
+            logger().error(&format!("Failed to create new identity: {:?}", e));
             JsValue::from_str(&format!("Failed to create new identity: {:?}", e))
         })?;
 
@@ -218,7 +218,7 @@ pub async fn vault_identity_from_passphrase(
         .set_salt(identity.public_key(), new_salt);
 
     save_vault(&dir_handle, vault).await.map_err(|e| {
-        console::error(&format!("Failed to save vault: {:?}", e));
+        logger().error(&format!("Failed to save vault: {:?}", e));
         JsValue::from_str(&format!("Failed to save vault: {:?}", e))
     })?;
 
@@ -375,7 +375,7 @@ pub async fn read_from_vault(
     validate_namespace(&namespace_str)?;
     let namespace_str = namespace.as_string().unwrap_or_default();
     if get_performance().is_some() {
-        console::time(&format!("read_from_vault {} {}", vault_name, namespace_str));
+        logger().time(&format!("read_from_vault {} {}", vault_name, namespace_str));
     }
 
     let result = time_it!("Total read_from_vault", {
@@ -434,7 +434,7 @@ pub async fn read_from_vault(
     });
 
     if get_performance().is_some() {
-        console::timeEnd(&format!("read_from_vault {} {}", vault_name, namespace_str));
+        logger().time_end(&format!("read_from_vault {} {}", vault_name, namespace_str));
     }
 
     result
@@ -450,17 +450,17 @@ pub async fn list_namespaces(vault_name: &str) -> Result<JsValue, JsValue> {
         Err(e) => return Err(e.into()),
     };
 
-    console::log(&format!(
+    logger().log(&format!(
         "Found {} namespaces in vault",
         vault.namespaces.len()
     ));
     for key in vault.namespaces.keys() {
-        console::log(&format!("Namespace found: {}", key));
+        logger().log(&format!("Namespace found: {}", key));
     }
 
     let namespaces: Vec<String> = vault.namespaces.keys().cloned().collect();
 
-    console::log(&format!("Returning {} namespaces", namespaces.len()));
+    logger().log(&format!("Returning {} namespaces", namespaces.len()));
     Ok(to_value(&namespaces)?)
 }
 
@@ -478,7 +478,7 @@ pub async fn remove_vault(vault_name: &str) -> Result<(), JsValue> {
 #[wasm_bindgen]
 pub async fn list_vaults() -> Result<JsValue, JsValue> {
     let root = get_root_directory_handle().await?;
-    console::log("Listing vaults from root directory");
+    logger().log("Listing vaults from root directory");
 
     let entries_val = js_sys::Reflect::get(&root, &JsValue::from_str("entries"))?;
     let entries_fn = entries_val
@@ -518,7 +518,7 @@ pub async fn list_vaults() -> Result<JsValue, JsValue> {
         }
     }
 
-    console::log(&format!("Found {} vaults in total", vault_names.len()));
+    logger().log(&format!("Found {} vaults in total", vault_names.len()));
     Ok(to_value(&vault_names)?)
 }
 
@@ -603,7 +603,7 @@ pub async fn export_vault(vault_name: &str) -> Result<JsValue, JsValue> {
     // Create binary format with magic number "VAULT1"
     let magic = b"VAULT1";
     let serialized = serde_json::to_vec(&vault).map_err(|e| {
-        console::log(&format!("Serialization error: {:?}", e));
+        logger().log(&format!("Serialization error: {:?}", e));
         VaultError::SerializationError {
             message: "Failed to serialize vault for export",
         }
@@ -616,7 +616,7 @@ pub async fn export_vault(vault_name: &str) -> Result<JsValue, JsValue> {
     vault_bytes.extend_from_slice(&(serialized.len() as u32).to_be_bytes());
     vault_bytes.extend_from_slice(&serialized);
 
-    console::log(&format!(
+    logger().log(&format!(
         "Exporting vault data: {} bytes (magic: {}, length: 4, content: {})",
         vault_bytes.len(),
         magic.len(),
@@ -639,7 +639,7 @@ pub async fn import_vault(vault_name: &str, data: JsValue) -> Result<(), JsValue
             .map_err(|e| JsValue::from_str(&format!("Failed to convert input data: {:?}", e)))?
     };
 
-    console::log(&format!(
+    logger().log(&format!(
         "Attempting to import vault data of size: {} bytes",
         vault_bytes.len()
     ));
@@ -666,7 +666,7 @@ pub async fn import_vault(vault_name: &str, data: JsValue) -> Result<(), JsValue
     }
 
     let imported_vault: Vault = serde_json::from_slice(&vault_bytes[10..]).map_err(|e| {
-        console::log(&format!("Deserialization error: {:?}", e));
+        logger().log(&format!("Deserialization error: {:?}", e));
         VaultError::SerializationError {
             message: "Failed to deserialize vault data",
         }
@@ -677,7 +677,7 @@ pub async fn import_vault(vault_name: &str, data: JsValue) -> Result<(), JsValue
             return Err(VaultError::VaultAlreadyExists.into());
         }
         Err(VaultError::IoError { .. }) => {
-            console::log(&format!(
+            logger().log(&format!(
                 "No existing vault named '{}'; proceeding with import.",
                 vault_name
             ));
@@ -847,10 +847,10 @@ pub async fn save_vault(
 
             match result {
                 Ok(is_granted) => {
-                    console::log(&format!("persistence request granted: {}", is_granted));
+                    logger().log(&format!("persistence request granted: {}", is_granted));
                 }
                 Err(VaultError::JsError(message)) => {
-                    console::error(&message);
+                    logger().error(&message);
                 }
                 _ => {}
             }
@@ -961,14 +961,14 @@ pub async fn save_vault(
         .dyn_into::<web_sys::DedicatedWorkerGlobalScope>()
     {
         worker_scope.post_message(&js_value)?;
-        console::log("message posted using worker");
+        logger().log("message posted using worker");
     } else if let Ok(window) = global_scope.dyn_into::<web_sys::Window>() {
         window
             .post_message(&js_value, "*")
             .map_err(|_| VaultError::IoError {
                 message: "Failed to post message to window",
             })?;
-        console::log("message posted using window");
+        logger().log("message posted using window");
     } else {
         return Err(VaultError::IoError {
             message: "Unknown global scope",
@@ -1006,7 +1006,7 @@ async fn cleanup_expired_data(
         let _ = remove_file_from_directory(dir_handle, &filename).await;
         vault.namespaces.remove(&namespace);
         data_removed = true;
-        console::log(&format!("Removed expired namespace: {}", namespace));
+        logger().log(&format!("Removed expired namespace: {}", namespace));
     }
 
     if data_removed {
@@ -1095,12 +1095,12 @@ pub async fn enable_sync(
     let (mut peer, _receiver): (WebRtcPeer, UnboundedReceiver<Vec<u8>>) =
         WebRtcPeer::create_peer(vault.metadata.peer_id.clone().unwrap(), stun_servers_vec).await?;
 
-    console::log(&format!(
+    logger().log(&format!(
         "Connecting to signaling server at {}",
         signaling_url_str
     ));
 
-    console::log("Connecting to signaling server...");
+    logger().log("Connecting to signaling server...");
     peer.connect(&signaling_url_str, None).await?;
 
     Ok(JsValue::from_str(&vault.metadata.peer_id.clone().unwrap()))
@@ -1113,23 +1113,23 @@ pub async fn connect_to_peer(
     peer_id: JsValue,
     signaling_url: JsValue,
 ) -> Result<(), JsValue> {
-    console::log(&format!(
+    logger().log(&format!(
         "connect_to_peer called with: vault_name = {}",
         vault_name
     ));
-    console::log(&format!("identity = {:?}", identity));
-    console::log(&format!("peer_id = {:?}", peer_id));
-    console::log(&format!("signaling_url = {:?}", signaling_url));
+    logger().log(&format!("identity = {:?}", identity));
+    logger().log(&format!("peer_id = {:?}", peer_id));
+    logger().log(&format!("signaling_url = {:?}", signaling_url));
 
     let peer_id_str: String = from_value(peer_id)?;
     let signaling_url_str: String = from_value(signaling_url)?;
 
-    console::log("Checking identity...");
+    logger().log("Checking identity...");
     let vault = check_identity(vault_name, identity).await?;
 
     if !vault.sync_enabled {
         let msg = "Sync is not enabled for this vault";
-        console::error(msg);
+        logger().error(msg);
         return Err(JsValue::from_str(msg));
     }
 
@@ -1139,7 +1139,7 @@ pub async fn connect_to_peer(
         .clone()
         .ok_or_else(|| JsValue::from_str("No peer ID found in vault metadata"))?;
 
-    console::log("Creating WebRTC peer...");
+    logger().log("Creating WebRTC peer...");
     let stun_servers = js_sys::Array::new();
     stun_servers.push(&"stun:stun.l.google.com:19302".into());
     let stun_servers: Vec<String> = stun_servers
@@ -1151,30 +1151,30 @@ pub async fn connect_to_peer(
         WebRtcPeer::create_peer(my_peer_id, stun_servers).await?;
     let peer_rc = Rc::new(RefCell::new(peer));
 
-    console::log("Connecting to signaling server...");
+    logger().log("Connecting to signaling server...");
     peer_rc
         .borrow_mut()
         .connect(&signaling_url_str, Some(&peer_id_str))
         .await?;
 
-    console::log("Adding peer to sync manager...");
-    console::log(&format!("Adding peer {} to sync manager", peer_id_str));
+    logger().log("Adding peer to sync manager...");
+    logger().log(&format!("Adding peer {} to sync manager", peer_id_str));
     let sync_manager = get_sync_manager(vault_name)?;
     sync_manager.borrow_mut().add_peer(peer_rc);
 
-    console::log("Sending initial vault data to the peer...");
+    logger().log("Sending initial vault data to the peer...");
     let vault = read_vault_with_name(vault_name).await?.1;
     let sync_manager = get_sync_manager(vault_name)?;
     let mut sync_manager = sync_manager.borrow_mut();
 
     let mut operations = Vec::new();
-    console::log(&format!(
+    logger().log(&format!(
         "Found {} namespaces to sync",
         vault.namespaces.len()
     ));
 
     for (namespace, data) in vault.namespaces {
-        console::log(&format!("Creating operation for namespace: {}", namespace));
+        logger().log(&format!("Creating operation for namespace: {}", namespace));
         let operation =
             sync_manager.create_operation(namespace, OperationType::Insert, Some(data.data), None);
         operations.push(operation);
@@ -1203,11 +1203,11 @@ pub async fn connect_to_peer(
 
     let mut retries = 0;
     while !peer_ref.is_ready() && retries < 20 {
-        console::log(&format!(
+        logger().log(&format!(
             "Waiting for WebRTC connection to be ready (attempt {})",
             retries + 1
         ));
-        console::log(&format!(
+        logger().log(&format!(
             "Connection status: connected={}, channel_open={}, ice_connected={}",
             peer_ref.is_connected(),
             peer_ref.is_channel_open(),
@@ -1227,7 +1227,7 @@ pub async fn connect_to_peer(
     }
 
     for sync_msg in sync_messages {
-        console::log(&format!(
+        logger().log(&format!(
             "Sending sync message for vault: {}, namespace: {}",
             vault_name, sync_msg.operation.namespace
         ));
@@ -1236,7 +1236,7 @@ pub async fn connect_to_peer(
             .map_err(|e| JsValue::from_str(&format!("Failed to serialize sync message: {}", e)))?;
 
         peer_ref.send_message(msg_bytes)?;
-        console::log("Sync message sent successfully");
+        logger().log("Sync message sent successfully");
     }
     Ok(())
 }
@@ -1277,7 +1277,7 @@ pub async fn add_peer(
     }
 
     if let Some(namespace_data) = vault.namespaces.get(&namespace_str) {
-        console::log(&format!(
+        logger().log(&format!(
             "Found data for namespace {}, preparing to send",
             namespace_str
         ));
@@ -1307,7 +1307,7 @@ pub async fn add_peer(
 
         let mut retries = 0;
         while !peer_ref.is_ready() && retries < 10 {
-            console::log(&format!(
+            logger().log(&format!(
                 "Waiting for WebRTC connection to be ready (attempt {})",
                 retries + 1
             ));
@@ -1321,7 +1321,7 @@ pub async fn add_peer(
             ));
         }
 
-        console::log(&format!(
+        logger().log(&format!(
             "Sending data for namespace {} to peer",
             namespace_str
         ));
@@ -1330,9 +1330,9 @@ pub async fn add_peer(
             .map_err(|e| JsValue::from_str(&format!("Failed to serialize sync message: {}", e)))?;
 
         peer_ref.send_message(msg_bytes)?;
-        console::log("Data sent successfully");
+        logger().log("Data sent successfully");
     } else {
-        console::log(&format!("No data found for namespace {}", namespace_str));
+        logger().log(&format!("No data found for namespace {}", namespace_str));
     }
 
     Ok(())
@@ -1348,7 +1348,7 @@ pub async fn update_vault_from_sync(vault_name: &str, vault_data: &[u8]) -> Resu
         Err(VaultError::IoError {
             message: "Failed to get directory handle",
         }) => {
-            console::log(&format!("Creating new vault {} for sync", vault_name));
+            logger().log(&format!("Creating new vault {} for sync", vault_name));
 
             let dirname = get_vault_dirname(vault_name);
             let dir_handle = get_or_create_directory_handle(&dirname).await?;
@@ -1394,13 +1394,13 @@ pub async fn update_vault_from_sync(vault_name: &str, vault_data: &[u8]) -> Resu
                 current_vault
                     .namespaces
                     .insert(namespace.clone(), namespace_data.clone());
-                console::log(&format!("Updated namespace {} in vault", namespace));
+                logger().log(&format!("Updated namespace {} in vault", namespace));
             }
         }
         OperationType::Delete => {
             let namespace = sync_msg.operation.namespace.clone();
             current_vault.namespaces.remove(&namespace);
-            console::log(&format!("Removed namespace {} from vault", namespace));
+            logger().log(&format!("Removed namespace {} from vault", namespace));
         }
     }
 
@@ -1412,14 +1412,14 @@ pub async fn update_vault_from_sync(vault_name: &str, vault_data: &[u8]) -> Resu
 #[wasm_bindgen]
 pub fn configure_cleanup(interval_seconds: i64) {
     if interval_seconds > 0 {
-        console::log(&format!(
+        logger().log(&format!(
             "Configuring cleanup with interval of {} seconds",
             interval_seconds
         ));
         CLEANUP_INTERVAL.store(interval_seconds, Ordering::SeqCst);
         LAST_CLEANUP.store(js_sys::Date::now() as i64 / 1000, Ordering::SeqCst);
     } else {
-        console::log("Disabling automatic cleanup");
+        logger().log("Disabling automatic cleanup");
         CLEANUP_INTERVAL.store(0, Ordering::SeqCst);
     }
 }

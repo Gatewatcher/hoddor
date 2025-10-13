@@ -14,7 +14,7 @@ use web_sys::AuthenticationExtensionsPrfValues;
 pub fn gen_random() -> [u8; 32] {
     thread_rng().gen::<[u8; 32]>()
 }
-use crate::console;
+use crate::adapters::logger;
 use bech32::{ToBase32, Variant};
 use futures::io::{AllowStdIo, AsyncReadExt, AsyncWriteExt};
 use std::fmt;
@@ -52,7 +52,7 @@ pub async fn identity_from_passphrase(
 
     // Parse into Age identity
     let identity = encoded.parse::<Identity>().map_err(|e| {
-        console::log(&format!("Failed to parse identity string: {}", encoded));
+        logger().log(&format!("Failed to parse identity string: {}", encoded));
         JsValue::from_str(&format!("Failed to create identity: {}", e))
     })?;
 
@@ -316,7 +316,7 @@ pub fn identity_from_prf(
     sk_bytes.zeroize();
 
     let identity = encoded.parse::<Identity>().map_err(|e| {
-        console::log(&format!("Failed to parse identity string: {}", encoded));
+        logger().log(&format!("Failed to parse identity string: {}", encoded));
         JsValue::from_str(&format!("Failed to create identity: {}", e))
     })?;
 

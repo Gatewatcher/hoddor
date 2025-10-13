@@ -8,7 +8,7 @@ use web_sys::{
     PublicKeyCredentialType, PublicKeyCredentialUserEntity, UserVerificationRequirement,
 };
 
-use crate::{console::*, crypto::prf_inputs, global::window};
+use crate::{adapters::logger, crypto::prf_inputs, global::window};
 use sha2::{Digest, Sha256};
 
 /// Secure algorithms recommendation:
@@ -24,7 +24,7 @@ pub fn webauthn_create(
     name: &str,
     prf_salt: &Uint8Array,
 ) -> Result<Promise, JsValue> {
-    log(&"Create webauthn".to_string());
+    logger().log(&"Create webauthn".to_string());
 
     let pk_rp_entity = PublicKeyCredentialRpEntity::new(name);
 

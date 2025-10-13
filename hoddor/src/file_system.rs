@@ -1,5 +1,6 @@
+use crate::adapters::logger;
 use crate::errors::VaultError;
-use crate::{console::log, global::get_storage_manager};
+use crate::global::get_storage_manager;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 
@@ -126,14 +127,14 @@ pub async fn remove_directory_with_contents(
     root: &FileSystemDirectoryHandle,
     dir_name: &str,
 ) -> Result<(), VaultError> {
-    log(&format!("Attempting to remove directory: {}", dir_name));
+    logger().log(&format!("Attempting to remove directory: {}", dir_name));
 
     if let Ok(dir_handle) = JsFuture::from(root.get_directory_handle(dir_name))
         .await
         .map(|h| h.unchecked_into::<FileSystemDirectoryHandle>())
     {
         if let Err(e) = cleanup_directory(&dir_handle).await {
-            log(&format!("Error cleaning up directory contents: {:?}", e));
+            logger().log(&format!("Error cleaning up directory contents: {:?}", e));
             return Err(e);
         }
     }
@@ -151,7 +152,7 @@ pub async fn remove_file_from_directory(
     dir_handle: &FileSystemDirectoryHandle,
     filename: &str,
 ) -> Result<(), VaultError> {
-    log(&format!("Attempting to remove file: {}", filename));
+    logger().log(&format!("Attempting to remove file: {}", filename));
 
     JsFuture::from(dir_handle.remove_entry(filename))
         .await

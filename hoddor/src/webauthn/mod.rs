@@ -7,8 +7,9 @@ use webauthn::{webauthn_create, webauthn_get};
 
 use crate::vault::{get_vault, save_vault};
 use crate::{
-    console::*,
+    adapters::logger,
     crypto::{gen_random, identity_from_prf},
+
 };
 use rand::rngs::OsRng;
 use rand::RngCore;
@@ -24,7 +25,7 @@ pub async fn create_credential(
     vault_name: &str,
     username: &str,
 ) -> Result<IdentityHandle, JsValue> {
-    log(&"Init credential creation".to_string());
+    logger().log(&"Init credential creation".to_string());
 
     let challenge = Uint8Array::from(gen_random().as_slice());
     let new_salt = get_identity_from_vault()?;
@@ -88,7 +89,7 @@ pub async fn create_credential(
 
 #[wasm_bindgen]
 pub async fn get_credential(vault_name: &str, username: &str) -> Result<IdentityHandle, JsValue> {
-    log(&format!(
+    logger().log(&format!(
         "Init credential get for username: {}",
         username
     ));
@@ -104,7 +105,7 @@ pub async fn get_credential(vault_name: &str, username: &str) -> Result<Identity
         ))
     })?;
 
-    log(&format!(
+    logger().log(&format!(
         "Found public key for username: {}, {:?}",
         username, public_key
     ));
@@ -123,7 +124,7 @@ pub async fn get_credential(vault_name: &str, username: &str) -> Result<Identity
         JsValue::from_str(&format!("No salt found for public key: {}", public_key))
     })?;
 
-    log(&format!(
+    logger().log(&format!(
         "Found credential ID and salt for public key: {}, {:?}",
         public_key, salt
     ));
@@ -149,34 +150,34 @@ pub async fn get_credential(vault_name: &str, username: &str) -> Result<Identity
 
     let first = js_sys::Reflect::get(&results, &"first".into())
         .map_err(|_| JsValue::from_str("First PRF result not found"))?;
-    log(&format!("First value before conversion: {:?}", first));
+    logger().log(&format!("First value before conversion: {:?}", first));
     let first: js_sys::ArrayBuffer = first
         .dyn_into()
         .map_err(|_| JsValue::from_str("First PRF result is not an ArrayBuffer"))?;
     let first_array = Uint8Array::new(&first);
-    log(&format!(
+    logger().log(&format!(
         "First ArrayBuffer length: {}",
         first_array.length()
     ));
     if first_array.length() > 0 {
         let first_vec = first_array.to_vec();
-        log(&format!("First ArrayBuffer contents: {:?}", first_vec));
+        logger().log(&format!("First ArrayBuffer contents: {:?}", first_vec));
     }
 
     let second = js_sys::Reflect::get(&results, &"second".into())
         .ok()
         .and_then(|val| {
-            log(&format!("Second value before conversion: {:?}", val));
+            logger().log(&format!("Second value before conversion: {:?}", val));
             let second_buf = val.dyn_into::<js_sys::ArrayBuffer>();
             if let Ok(buf) = second_buf {
                 let second_array = Uint8Array::new(&buf);
-                log(&format!(
+                logger().log(&format!(
                     "Second ArrayBuffer length: {}",
                     second_array.length()
                 ));
                 if second_array.length() > 0 {
                     let second_vec = second_array.to_vec();
-                    log(&format!("Second ArrayBuffer contents: {:?}", second_vec));
+                    logger().log(&format!("Second ArrayBuffer contents: {:?}", second_vec));
                 }
                 Some(buf)
             } else {
@@ -189,7 +190,7 @@ pub async fn get_credential(vault_name: &str, username: &str) -> Result<Identity
         prf_values.set_second(&Uint8Array::new(&buf));
     }
 
-    log(&"PRF outputs processed successfully".to_string());
+    logger().log(&"PRF outputs processed successfully".to_string());
 
     let identity = identity_from_prf(&prf_values)?;
 

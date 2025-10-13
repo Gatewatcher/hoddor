@@ -2,7 +2,8 @@
 
 extern crate wasm_bindgen_test;
 use hoddor::{
-    console,
+    adapters::logger,
+
     measure::get_performance,
     vault::{create_vault, read_from_vault, remove_vault, upsert_vault},
 };
@@ -67,7 +68,7 @@ async fn performance_test_bulk_upserts() {
         .await
         .expect("Failed to remove performance test vault");
 
-    console::log(&format!(
+    logger().log(&format!(
         "Performance Report for Bulk Upserts:\n\
         Vault creation: {:.3}ms\n\
         Upserting {} namespaces: {:.3}ms\n\
@@ -75,7 +76,7 @@ async fn performance_test_bulk_upserts() {
         vault_creation_time, num_upserts, upsert_time, num_upserts, read_time
     ));
 
-    console::log("Performance test for bulk upserts completed.");
+    logger().log("Performance test for bulk upserts completed.");
 }
 
 #[wasm_bindgen_test]
@@ -121,12 +122,12 @@ async fn performance_test_large_data() {
         .await
         .expect("Failed to remove large data vault");
 
-    console::log(&format!(
+    logger().log(&format!(
         "Performance Report for Large Data:\n\
         Vault creation with {} MB: {:.3}ms\n\
         Reading {} MB data: {:.3}ms\n",
         data_size_mb, vault_creation_time, data_size_mb, read_time
     ));
 
-    console::log("Performance test for large data completed.");
+    logger().log("Performance test for large data completed.");
 }

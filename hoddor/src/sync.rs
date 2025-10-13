@@ -7,7 +7,7 @@ use wasm_bindgen::JsValue;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::console;
+use crate::adapters::logger;
 use crate::webrtc::{AccessLevel, WebRtcPeer};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -58,12 +58,12 @@ impl SyncManager {
         let peer_id = if let Some(remote_id) = peer.borrow().remote_peer_id() {
             remote_id
         } else {
-            console::error("No remote peer ID found, skipping peer addition");
+            logger().error("No remote peer ID found, skipping peer addition");
             return;
         };
-        console::log(&format!("Adding peer {} to sync manager", peer_id));
+        logger().log(&format!("Adding peer {} to sync manager", peer_id));
         self.peers.insert(peer_id.clone(), peer);
-        console::log(&format!(
+        logger().log(&format!(
             "Current peers in sync manager: {:?}",
             self.peers.keys().collect::<Vec<_>>()
         ));
