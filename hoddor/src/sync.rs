@@ -7,7 +7,7 @@ use wasm_bindgen::JsValue;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::adapters::logger;
+use crate::platform::Platform;
 use crate::webrtc::{AccessLevel, WebRtcPeer};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -38,6 +38,7 @@ pub struct SyncMessage {
 }
 
 pub struct SyncManager {
+    platform: Platform,
     pub peer_id: String,
     pub vector_clock: HashMap<String, u64>,
     pub peers: HashMap<String, Rc<RefCell<WebRtcPeer>>>,
@@ -47,6 +48,7 @@ pub struct SyncManager {
 impl SyncManager {
     pub fn new(peer_id: String) -> Self {
         Self {
+            platform: Platform::new(),
             peer_id: peer_id.clone(),
             vector_clock: HashMap::from([(peer_id, 0)]),
             peers: HashMap::new(),
@@ -58,12 +60,12 @@ impl SyncManager {
         let peer_id = if let Some(remote_id) = peer.borrow().remote_peer_id() {
             remote_id
         } else {
-            logger().error("No remote peer ID found, skipping peer addition");
+            self.platform.logger().error("No remote peer ID found, skipping peer addition");
             return;
         };
-        logger().log(&format!("Adding peer {} to sync manager", peer_id));
+        self.platform.logger().log(&format!("Adding peer {} to sync manager", peer_id));
         self.peers.insert(peer_id.clone(), peer);
-        logger().log(&format!(
+        self.platform.logger().log(&format!(
             "Current peers in sync manager: {:?}",
             self.peers.keys().collect::<Vec<_>>()
         ));

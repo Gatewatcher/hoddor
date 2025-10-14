@@ -51,13 +51,15 @@ macro_rules! time_it {
         let debug = $crate::measure::DEBUG_MODE.load(std::sync::atomic::Ordering::SeqCst);
         if debug {
             if let Some(_) = $crate::measure::get_performance() {
-                $crate::adapters::logger().time($label);
+                let platform = $crate::platform::Platform::new();
+                platform.logger().time($label);
             }
         }
         let result = $block;
         if debug {
             if let Some(_) = $crate::measure::get_performance() {
-                $crate::adapters::logger().time_end($label);
+                let platform = $crate::platform::Platform::new();
+                platform.logger().time_end($label);
             }
         }
         result

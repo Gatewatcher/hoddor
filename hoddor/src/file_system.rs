@@ -1,4 +1,4 @@
-use crate::adapters::logger;
+use crate::platform::Platform;
 use crate::errors::VaultError;
 use crate::global::get_storage_manager;
 use wasm_bindgen::prelude::*;
@@ -127,14 +127,23 @@ pub async fn remove_directory_with_contents(
     root: &FileSystemDirectoryHandle,
     dir_name: &str,
 ) -> Result<(), VaultError> {
-    logger().log(&format!("Attempting to remove directory: {}", dir_name));
+    let platform = Platform::new();
+    remove_directory_with_contents_internal(&platform, root, dir_name).await
+}
+
+async fn remove_directory_with_contents_internal(
+    platform: &Platform,
+    root: &FileSystemDirectoryHandle,
+    dir_name: &str,
+) -> Result<(), VaultError> {
+    platform.logger().log(&format!("Attempting to remove directory: {}", dir_name));
 
     if let Ok(dir_handle) = JsFuture::from(root.get_directory_handle(dir_name))
         .await
         .map(|h| h.unchecked_into::<FileSystemDirectoryHandle>())
     {
         if let Err(e) = cleanup_directory(&dir_handle).await {
-            logger().log(&format!("Error cleaning up directory contents: {:?}", e));
+            platform.logger().log(&format!("Error cleaning up directory contents: {:?}", e));
             return Err(e);
         }
     }
@@ -152,7 +161,16 @@ pub async fn remove_file_from_directory(
     dir_handle: &FileSystemDirectoryHandle,
     filename: &str,
 ) -> Result<(), VaultError> {
-    logger().log(&format!("Attempting to remove file: {}", filename));
+    let platform = Platform::new();
+    remove_file_from_directory_internal(&platform, dir_handle, filename).await
+}
+
+async fn remove_file_from_directory_internal(
+    platform: &Platform,
+    dir_handle: &FileSystemDirectoryHandle,
+    filename: &str,
+) -> Result<(), VaultError> {
+    platform.logger().log(&format!("Attempting to remove file: {}", filename));
 
     JsFuture::from(dir_handle.remove_entry(filename))
         .await

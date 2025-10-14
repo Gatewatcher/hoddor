@@ -14,7 +14,7 @@ use web_sys::AuthenticationExtensionsPrfValues;
 pub fn gen_random() -> [u8; 32] {
     thread_rng().gen::<[u8; 32]>()
 }
-use crate::adapters::logger;
+use crate::platform::Platform;
 use bech32::{ToBase32, Variant};
 use futures::io::{AllowStdIo, AsyncReadExt, AsyncWriteExt};
 use std::fmt;
@@ -25,6 +25,15 @@ use zeroize::Zeroize;
 
 #[wasm_bindgen]
 pub async fn identity_from_passphrase(
+    passphrase: &str,
+    salt: &[u8],
+) -> Result<IdentityHandle, JsValue> {
+    let platform = Platform::new();
+    identity_from_passphrase_internal(&platform, passphrase, salt).await
+}
+
+async fn identity_from_passphrase_internal(
+    platform: &Platform,
     passphrase: &str,
     salt: &[u8],
 ) -> Result<IdentityHandle, JsValue> {
@@ -52,7 +61,7 @@ pub async fn identity_from_passphrase(
 
     // Parse into Age identity
     let identity = encoded.parse::<Identity>().map_err(|e| {
-        logger().log(&format!("Failed to parse identity string: {}", encoded));
+        platform.logger().log(&format!("Failed to parse identity string: {}", encoded));
         JsValue::from_str(&format!("Failed to create identity: {}", e))
     })?;
 
@@ -289,6 +298,14 @@ pub fn derive_key_from_outputs(
 pub fn identity_from_prf(
     prf_output: &web_sys::AuthenticationExtensionsPrfValues,
 ) -> Result<IdentityHandle, JsValue> {
+    let platform = Platform::new();
+    identity_from_prf_internal(&platform, prf_output)
+}
+
+fn identity_from_prf_internal(
+    platform: &Platform,
+    prf_output: &web_sys::AuthenticationExtensionsPrfValues,
+) -> Result<IdentityHandle, JsValue> {
     validate_prf_outputs(prf_output)?;
 
     let seed = derive_key_from_outputs(prf_output)?;
@@ -316,7 +333,7 @@ pub fn identity_from_prf(
     sk_bytes.zeroize();
 
     let identity = encoded.parse::<Identity>().map_err(|e| {
-        logger().log(&format!("Failed to parse identity string: {}", encoded));
+        platform.logger().log(&format!("Failed to parse identity string: {}", encoded));
         JsValue::from_str(&format!("Failed to create identity: {}", e))
     })?;
 

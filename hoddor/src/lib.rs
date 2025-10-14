@@ -3,6 +3,7 @@ extern crate console_error_panic_hook;
 // Hexagonal architecture modules
 pub mod ports;
 pub mod adapters;
+pub mod platform;
 
 // Existing modules
 pub mod crypto;

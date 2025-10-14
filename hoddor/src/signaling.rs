@@ -1,4 +1,4 @@
-use crate::adapters::logger;
+use crate::platform::Platform;
 use futures_channel::mpsc;
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use js_sys::Function;
@@ -38,6 +38,7 @@ pub enum SignalingMessage {
 }
 
 pub struct SignalingClient {
+    platform: Platform,
     ws: WebSocket,
     peer_id: String,
     #[allow(dead_code)]
@@ -55,7 +56,7 @@ impl SignalingClient {
         };
         let msg_str = serde_json::to_string(&offer_msg)
             .map_err(|e| JsValue::from_str(&format!("Failed to serialize message: {}", e)))?;
-        logger().log(&format!(
+        self.platform.logger().log(&format!(
             "Sending offer from {} to {}: {}",
             self.peer_id, to, msg_str
         ));
@@ -71,7 +72,7 @@ impl SignalingClient {
         };
         let msg_str = serde_json::to_string(&answer_msg)
             .map_err(|e| JsValue::from_str(&format!("Failed to serialize message: {}", e)))?;
-        logger().log(&format!(
+        self.platform.logger().log(&format!(
             "Sending answer from {} to {}: {}",
             self.peer_id, to, msg_str
         ));
@@ -87,7 +88,7 @@ impl SignalingClient {
         };
         let msg_str = serde_json::to_string(&ice_msg)
             .map_err(|e| JsValue::from_str(&format!("Failed to serialize message: {}", e)))?;
-        logger().log(&format!(
+        self.platform.logger().log(&format!(
             "Sending ICE candidate from {} to {}: {}",
             self.peer_id, to, msg_str
         ));
@@ -97,11 +98,12 @@ impl SignalingClient {
 
     pub fn set_message_handler(&mut self, sender: UnboundedSender<SignalingMessage>) {
         let peer_id = self.peer_id.clone();
+        let platform = self.platform; // Platform is Copy
 
         let onmessage_callback = Closure::wrap(Box::new(move |e: MessageEvent| {
             if let Ok(text) = e.data().dyn_into::<js_sys::JsString>() {
                 let text_str = String::from(text);
-                logger().log(&format!("Received message: {}", text_str));
+                platform.logger().log(&format!("Received message: {}", text_str));
 
                 match serde_json::from_str::<SignalingMessage>(&text_str) {
                     Ok(msg) => {
@@ -116,17 +118,17 @@ impl SignalingClient {
                         };
 
                         if is_for_us {
-                            logger().log(&format!("Processing message for {}: {:?}", peer_id, msg));
+                            platform.logger().log(&format!("Processing message for {}: {:?}", peer_id, msg));
                             match sender.unbounded_send(msg) {
                                 Ok(_) => (),
                                 Err(e) => {
                                     if e.is_disconnected() {
-                                        logger().log(&format!(
+                                        platform.logger().log(&format!(
                                             "Message channel disconnected for {}, ignoring message",
                                             peer_id
                                         ));
                                     } else {
-                                        logger().error(&format!(
+                                        platform.logger().error(&format!(
                                             "Failed to forward message: {:?}",
                                             e
                                         ));
@@ -134,10 +136,10 @@ impl SignalingClient {
                                 }
                             }
                         } else {
-                            logger().log("Message not for us, ignoring");
+                            platform.logger().log("Message not for us, ignoring");
                         }
                     }
-                    Err(e) => logger().error(&format!("Failed to parse message: {:?}", e)),
+                    Err(e) => platform.logger().error(&format!("Failed to parse message: {:?}", e)),
                 }
             }
         }) as Box<dyn FnMut(MessageEvent)>);
@@ -168,7 +170,8 @@ impl SignalingClient {
     }
 
     pub fn new(server_url: &str, peer_id: String) -> Result<Rc<RefCell<Self>>, JsValue> {
-        logger().log(&format!(
+        let platform = Platform::new();
+        platform.logger().log(&format!(
             "Creating new WebSocket connection to {}",
             server_url
         ));
@@ -176,23 +179,24 @@ impl SignalingClient {
 
         // Set up error handler with more detailed logging
         let onerror_callback = Closure::wrap(Box::new(move |e: ErrorEvent| {
-            logger().error(&format!("WebSocket error: {:?}", e));
+            platform.logger().error(&format!("WebSocket error: {:?}", e));
             // Try to log more error details if available
             if let Ok(err_details) = js_sys::Reflect::get(&e, &"error".into()) {
-                logger().error(&format!("Error details: {:?}", err_details));
+                platform.logger().error(&format!("Error details: {:?}", err_details));
             }
         }) as Box<dyn FnMut(ErrorEvent)>)
         .into_js_value();
 
         ws.set_onerror(Some(onerror_callback.unchecked_ref()));
 
-        logger().log(&format!("WebSocket setup complete for peer {}", peer_id));
+        platform.logger().log(&format!("WebSocket setup complete for peer {}", peer_id));
 
         let empty_callback =
             Closure::wrap(Box::new(move |_: MessageEvent| {}) as Box<dyn FnMut(MessageEvent)>)
                 .into_js_value();
 
         Ok(Rc::new(RefCell::new(Self {
+            platform,
             ws,
             peer_id,
             onmessage_callback: empty_callback.unchecked_into(),
@@ -202,6 +206,7 @@ impl SignalingClient {
 }
 
 pub struct SignalingManager {
+    platform: Platform,
     clients: RefCell<Vec<Rc<RefCell<SignalingClient>>>>,
 }
 
@@ -214,6 +219,7 @@ impl Default for SignalingManager {
 impl SignalingManager {
     pub fn new() -> Self {
         SignalingManager {
+            platform: Platform::new(),
             clients: RefCell::new(Vec::new()),
         }
     }
@@ -227,13 +233,13 @@ impl SignalingManager {
         let clients = self.clients.borrow();
         if let Some(client) = clients.first() {
             let client = client.borrow();
-            logger().log(&format!(
+            self.platform.logger().log(&format!(
                 "SignalingManager: Sending offer from {} to {}",
                 client.peer_id, to_peer_id
             ));
             client.send_offer(to_peer_id, sdp)?;
         } else {
-            logger().error("No local client found to send offer");
+            self.platform.logger().error("No local client found to send offer");
         }
         Ok(())
     }
@@ -242,13 +248,13 @@ impl SignalingManager {
         let clients = self.clients.borrow();
         if let Some(client) = clients.first() {
             let client = client.borrow();
-            logger().log(&format!(
+            self.platform.logger().log(&format!(
                 "SignalingManager: Sending answer from {} to {}",
                 client.peer_id, to_peer_id
             ));
             client.send_answer(to_peer_id, sdp)?;
         } else {
-            logger().error("No local client found to send answer");
+            self.platform.logger().error("No local client found to send answer");
         }
         Ok(())
     }
@@ -257,13 +263,13 @@ impl SignalingManager {
         let clients = self.clients.borrow();
         if let Some(client) = clients.first() {
             let client = client.borrow();
-            logger().log(&format!(
+            self.platform.logger().log(&format!(
                 "SignalingManager: Sending ICE candidate from {} to {}",
                 client.peer_id, to_peer_id
             ));
             client.send_ice_candidate(to_peer_id, candidate)?;
         } else {
-            logger().error("No local client found to send ICE candidate");
+            self.platform.logger().error("No local client found to send ICE candidate");
         }
         Ok(())
     }
@@ -292,12 +298,12 @@ impl SignalingManager {
                         peer_id: peer_id.clone(),
                     };
                     if let Ok(msg_str) = serde_json::to_string(&join_msg) {
-                        logger().log(&format!(
+                        self.platform.logger().log(&format!(
                             "Sending join message on existing connection: {}",
                             msg_str
                         ));
                         if let Err(e) = client_ref.get_websocket().send_with_str(&msg_str) {
-                            logger().error(&format!("Failed to send join message: {:?}", e));
+                            self.platform.logger().error(&format!("Failed to send join message: {:?}", e));
                         }
                     }
                 }
@@ -314,7 +320,7 @@ impl SignalingManager {
         }
 
         self.clients.borrow_mut().push(client);
-        logger().log(&format!("Added new signaling client for peer {}", peer_id));
+        self.platform.logger().log(&format!("Added new signaling client for peer {}", peer_id));
 
         Ok(receiver)
     }
