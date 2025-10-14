@@ -29,7 +29,7 @@ getrandom_1 = { package = "getrandom", version = "0.1", features = [
     "wasm-bindgen",
 ] }
 getrandom = { version = "0.2.15", features = ["js", "wasm-bindgen"] }
-age = { version = "0.9", features = ["armor", "async", "web-sys"] }
+age = { version = "0.10.1", features = ["armor", "async", "web-sys"] }
 rand = "0.8.5"
 rand_core = "0.6.4"
 argon2 = "0.5.3"

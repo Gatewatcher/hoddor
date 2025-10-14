@@ -243,6 +243,9 @@ pub async fn upsert_vault(
     expires_in_seconds: Option<i64>,
     replace_if_exists: bool,
 ) -> Result<(), JsValue> {
+    // Validate namespace first
+    validate_namespace(namespace)?;
+
     let mut retries = 10;
     let mut delay = 50;
     let mut last_error = None;

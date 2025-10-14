@@ -159,6 +159,110 @@ instance().method("arg");  // No trait import needed!
   - Migrated: 13 files, 199+ call sites
   - Global: `adapters::logger()`
 
+### Pattern: Platform (Dependency Injection Container)
+
+**Purpose:** Store port references in structs instead of calling globals repeatedly.
+
+```rust
+// @location: src/platform.rs
+#[derive(Clone, Copy)]
+pub struct Platform {
+    logger: &'static dyn LoggerPort,
+}
+
+impl Platform {
+    pub fn new() -> Self {
+        Self { logger: crate::adapters::logger() }
+    }
+
+    pub fn logger(&self) -> &'static dyn LoggerPort {
+        self.logger
+    }
+}
+```
+
+**Usage Pattern:**
+
+```rust
+// 1. Store in struct
+pub struct MyStruct {
+    platform: Platform,  // Store once
+    // ... other fields
+}
+
+impl MyStruct {
+    pub fn new() -> Self {
+        Self {
+            platform: Platform::new(),  // Initialize once
+            // ...
+        }
+    }
+
+    pub fn method(&self) {
+        self.platform.logger().log("message");  // Use stored Platform
+    }
+
+    // For closures: Platform is Copy
+    pub fn with_closure(&self) {
+        let platform = self.platform;  // Copy for closure
+        let callback = move || {
+            platform.logger().log("in closure");
+        };
+    }
+}
+```
+
+**WASM Entry Points Pattern:**
+
+```rust
+#[wasm_bindgen]
+pub async fn entry_point(arg: &str) -> Result<T, JsValue> {
+    let platform = Platform::new();  // Create once per entry
+    internal_logic(&platform, arg).await
+}
+
+async fn internal_logic(platform: &Platform, arg: &str) -> Result<T, JsValue> {
+    platform.logger().log("processing");
+    // Business logic
+}
+```
+
+**Decision Tree:**
+
+```
+Does struct have lifetime/state?
+├─ YES → Store Platform field + initialize in constructor
+│         Examples: WebRtcPeer, SignalingClient, SyncManager
+│
+└─ NO → Use dual-layer pattern (Platform::new() in entry point)
+          Examples: WASM functions (create_credential, save_vault)
+```
+
+**When to use:**
+- ✅ Structs with methods → store as field
+- ✅ WASM entry points → create once, pass to internal
+- ✅ Closures → copy Platform (it's Copy)
+- ❌ Don't call Platform::new() in loops
+- ❌ Don't pass Platform through many layers (store in struct instead)
+
+**Migration:**
+```rust
+// BEFORE (global singleton)
+use crate::adapters::logger;
+logger().log("msg");
+
+// AFTER (Platform in struct)
+pub struct Foo {
+    platform: Platform,
+}
+self.platform.logger().log("msg");
+```
+
+**Stats:**
+- Structs with Platform: 4 (WebRtcPeer, SignalingClient, SignalingManager, SyncManager)
+- WASM entry points: 20 (webauthn, crypto, file_system, vault)
+- Zero direct logger() calls remaining
+
 ### Next Migration Candidates (Priority)
 1. **ClockPort** (measure.rs) - Simple, get_performance/now functions
 2. **PersistencePort** (persistence.rs) - 3 functions, localStorage API

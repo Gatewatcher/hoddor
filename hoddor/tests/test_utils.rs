@@ -1,7 +1,7 @@
 #![cfg(target_arch = "wasm32")]
 extern crate wasm_bindgen_test;
 
-use hoddor::adapters::logger;
+use hoddor::platform::Platform;
 use hoddor::file_system::{get_root_directory_handle, remove_directory_with_contents};
 use hoddor::vault::list_vaults;
 
@@ -20,7 +20,7 @@ pub async fn cleanup_all_vaults() {
 
     for vault_name in vault_list {
         if let Err(e) = remove_directory_with_contents(&root, &vault_name).await {
-            logger().log(&format!(
+            Platform::new().logger().log(&format!(
                 "Failed to remove vault directory {}: {:?}",
                 vault_name, e
             ));
