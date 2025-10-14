@@ -1,4 +1,3 @@
-use crate::measure::now;
 use crate::vault::{IdentitySalts, VaultMetadata};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -83,7 +82,7 @@ impl SyncManager {
             operation_type,
             data,
             nonce,
-            timestamp: (now() / 1000.0) as u64,
+            timestamp: (self.platform.clock().now() / 1000.0) as u64,
             author: self.peer_id.clone(),
         }
     }

@@ -3,7 +3,6 @@
 extern crate wasm_bindgen_test;
 use hoddor::{
     platform::Platform,
-    measure::get_performance,
     vault::{create_vault, read_from_vault, remove_vault, upsert_vault, vault_identity_from_passphrase},
 };
 use wasm_bindgen::JsValue;
@@ -18,10 +17,11 @@ async fn performance_test_bulk_upserts() {
     let password = "perf_password";
     let namespace_base = "bulk_namespace";
     let data_base = "bulk_data_";
+    let platform = Platform::new();
 
     test_utils::cleanup_all_vaults().await;
 
-    let t0 = get_performance().unwrap().now();
+    let t0 = platform.clock().now();
     create_vault(JsValue::from_str(vault_name))
         .await
         .expect("Failed to create vault for performance test");
@@ -41,11 +41,11 @@ async fn performance_test_bulk_upserts() {
     .await
     .expect("Failed to upsert initial data");
 
-    let t1 = get_performance().unwrap().now();
+    let t1 = platform.clock().now();
     let vault_creation_time = t1 - t0;
 
     let num_upserts = 10;
-    let t2 = get_performance().unwrap().now();
+    let t2 = platform.clock().now();
     for i in 0..num_upserts {
         let namespace = format!("{}{}", namespace_base, i);
         let data = format!("{}{}", data_base, i);
@@ -60,24 +60,24 @@ async fn performance_test_bulk_upserts() {
         .await
         .expect("Failed to upsert data in bulk");
     }
-    let t3 = get_performance().unwrap().now();
+    let t3 = platform.clock().now();
     let upsert_time = t3 - t2;
 
-    let t4 = get_performance().unwrap().now();
+    let t4 = platform.clock().now();
     for i in 0..num_upserts {
         let namespace = format!("{}{}", namespace_base, i);
         read_from_vault(vault_name, &identity, JsValue::from_str(&namespace))
             .await
             .expect("Failed to read data in bulk");
     }
-    let t5 = get_performance().unwrap().now();
+    let t5 = platform.clock().now();
     let read_time = t5 - t4;
 
     remove_vault(vault_name)
         .await
         .expect("Failed to remove performance test vault");
 
-    Platform::new().logger().log(&format!(
+    platform.logger().log(&format!(
         "Performance Report for Bulk Upserts:\n\
         Vault creation: {:.3}ms\n\
         Upserting {} namespaces: {:.3}ms\n\
@@ -85,7 +85,7 @@ async fn performance_test_bulk_upserts() {
         vault_creation_time, num_upserts, upsert_time, num_upserts, read_time
     ));
 
-    Platform::new().logger().log("Performance test for bulk upserts completed.");
+    platform.logger().log("Performance test for bulk upserts completed.");
 }
 
 #[wasm_bindgen_test]
@@ -93,6 +93,7 @@ async fn performance_test_large_data() {
     let vault_name = "perf_large_data_vault";
     let password = "perf_large_password";
     let namespace = "perf_large_namespace";
+    let platform = Platform::new();
 
     test_utils::cleanup_all_vaults().await;
 
@@ -101,7 +102,7 @@ async fn performance_test_large_data() {
     let large_string = "X".repeat(data_size);
     let data = JsValue::from_str(&large_string);
 
-    let t0 = get_performance().unwrap().now();
+    let t0 = platform.clock().now();
     create_vault(JsValue::from_str(vault_name))
         .await
         .expect("Failed to create vault");
@@ -120,14 +121,14 @@ async fn performance_test_large_data() {
     )
     .await
     .expect("Failed to create vault with large data");
-    let t1 = get_performance().unwrap().now();
+    let t1 = platform.clock().now();
     let vault_creation_time = t1 - t0;
 
-    let t2 = get_performance().unwrap().now();
+    let t2 = platform.clock().now();
     let read_data = read_from_vault(vault_name, &identity, JsValue::from_str(namespace))
         .await
         .expect("Failed to read large data");
-    let t3 = get_performance().unwrap().now();
+    let t3 = platform.clock().now();
     let read_time = t3 - t2;
 
     assert_eq!(
@@ -140,12 +141,12 @@ async fn performance_test_large_data() {
         .await
         .expect("Failed to remove large data vault");
 
-    Platform::new().logger().log(&format!(
+    platform.logger().log(&format!(
         "Performance Report for Large Data:\n\
         Vault creation with {} MB: {:.3}ms\n\
         Reading {} MB data: {:.3}ms\n",
         data_size_mb, vault_creation_time, data_size_mb, read_time
     ));
 
-    Platform::new().logger().log("Performance test for large data completed.");
+    platform.logger().log("Performance test for large data completed.");
 }

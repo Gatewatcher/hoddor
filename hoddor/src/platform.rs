@@ -4,10 +4,11 @@
 /// - Stateless ports: `&'static` references (zero-cost)
 /// - Stateful ports: `Arc<dyn Trait>` (ref-counted, when needed)
 
-use crate::ports::LoggerPort;
+use crate::ports::{ClockPort, LoggerPort};
 
 #[derive(Clone, Copy)]
 pub struct Platform {
+    clock: &'static dyn ClockPort,
     logger: &'static dyn LoggerPort,
 }
 
@@ -15,8 +16,14 @@ impl Platform {
     /// Creates a new Platform with default adapters for the current target.
     pub fn new() -> Self {
         Self {
+            clock: crate::adapters::clock(),
             logger: crate::adapters::logger(),
         }
+    }
+
+    #[inline]
+    pub fn clock(&self) -> &'static dyn ClockPort {
+        self.clock
     }
 
     #[inline]
@@ -58,8 +65,14 @@ mod tests {
     fn test_platform_logger_access() {
         let platform = Platform::new();
         let logger = platform.logger();
-        logger.log("test 1");
-        logger.warn("test 2");
-        logger.error("test 3");
+        logger.log("test"); // Verify we can call without panic
+    }
+
+    #[test]
+    fn test_platform_clock_access() {
+        let platform = Platform::new();
+        let clock = platform.clock();
+        assert!(clock.is_available(), "Clock should be accessible");
+        let _timestamp = clock.now(); // Verify we can call now() without panic
     }
 }

@@ -42,3 +42,25 @@ impl LoggerPort for ConsoleLogger {
         println!("[TIME:END] {}", label);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_logger_creation() {
+        let logger = ConsoleLogger::new();
+        logger.log("test"); // Smoke test - verify no panic
+    }
+
+    #[test]
+    fn test_logger_all_methods() {
+        let logger = ConsoleLogger::new();
+        // Smoke tests - verify all methods can be called without panic
+        logger.log("test log");
+        logger.warn("test warn");
+        logger.error("test error");
+        logger.time("test_timer");
+        logger.time_end("test_timer");
+    }
+}

@@ -1,4 +1,4 @@
-# Hoddor Hexagonal Architecture - AI Context
+# Hexagonal Architecture - AI Context
 
 ## Architecture Type
 Hexagonal (Ports & Adapters) - Supports WASM + Native with shared business logic
@@ -115,7 +115,7 @@ pub async fn business_logic() {
 ### RULE: Dual Implementation
 - CREATE: Both WASM and native adapters together
 - REASON: Avoids rust-analyzer "inactive code" warnings
-- PATTERN: Native can be simple stub initially (stdout/stderr for logger)
+- PATTERN: Native can be simple stub initially (minimal implementation)
 
 ### RULE: Send + Sync
 - ALWAYS: Include on all port traits
@@ -150,16 +150,7 @@ use crate::adapters::instance;
 instance().method("arg");  // No trait import needed!
 ```
 
-## Current Implementation Status
-
-### Completed Ports
-- **LoggerPort** (`ports/logger.rs`)
-  - WASM: ConsoleLogger (browser console FFI)
-  - Native: ConsoleLogger (stdout/stderr)
-  - Migrated: 13 files, 199+ call sites
-  - Global: `adapters::logger()`
-
-### Pattern: Platform (Dependency Injection Container)
+## Pattern: Platform (Dependency Injection Container)
 
 **Purpose:** Store port references in structs instead of calling globals repeatedly.
 
@@ -167,16 +158,24 @@ instance().method("arg");  // No trait import needed!
 // @location: src/platform.rs
 #[derive(Clone, Copy)]
 pub struct Platform {
-    logger: &'static dyn LoggerPort,
+    port1: &'static dyn Port1Trait,
+    port2: &'static dyn Port2Trait,
 }
 
 impl Platform {
     pub fn new() -> Self {
-        Self { logger: crate::adapters::logger() }
+        Self {
+            port1: crate::adapters::port1(),
+            port2: crate::adapters::port2(),
+        }
     }
 
-    pub fn logger(&self) -> &'static dyn LoggerPort {
-        self.logger
+    pub fn port1(&self) -> &'static dyn Port1Trait {
+        self.port1
+    }
+
+    pub fn port2(&self) -> &'static dyn Port2Trait {
+        self.port2
     }
 }
 ```
@@ -199,14 +198,14 @@ impl MyStruct {
     }
 
     pub fn method(&self) {
-        self.platform.logger().log("message");  // Use stored Platform
+        self.platform.port1().operation("data");  // Use stored Platform
     }
 
     // For closures: Platform is Copy
     pub fn with_closure(&self) {
         let platform = self.platform;  // Copy for closure
         let callback = move || {
-            platform.logger().log("in closure");
+            platform.port1().operation("data");
         };
     }
 }
@@ -222,7 +221,7 @@ pub async fn entry_point(arg: &str) -> Result<T, JsValue> {
 }
 
 async fn internal_logic(platform: &Platform, arg: &str) -> Result<T, JsValue> {
-    platform.logger().log("processing");
+    platform.port1().operation("processing");
     // Business logic
 }
 ```
@@ -232,10 +231,9 @@ async fn internal_logic(platform: &Platform, arg: &str) -> Result<T, JsValue> {
 ```
 Does struct have lifetime/state?
 ├─ YES → Store Platform field + initialize in constructor
-│         Examples: WebRtcPeer, SignalingClient, SyncManager
 │
 └─ NO → Use dual-layer pattern (Platform::new() in entry point)
-          Examples: WASM functions (create_credential, save_vault)
+          For stateless WASM entry points or standalone functions
 ```
 
 **When to use:**
@@ -248,27 +246,15 @@ Does struct have lifetime/state?
 **Migration:**
 ```rust
 // BEFORE (global singleton)
-use crate::adapters::logger;
-logger().log("msg");
+use crate::adapters::instance;
+instance().operation("msg");
 
 // AFTER (Platform in struct)
 pub struct Foo {
     platform: Platform,
 }
-self.platform.logger().log("msg");
+self.platform.port().operation("msg");
 ```
-
-**Stats:**
-- Structs with Platform: 4 (WebRtcPeer, SignalingClient, SignalingManager, SyncManager)
-- WASM entry points: 20 (webauthn, crypto, file_system, vault)
-- Zero direct logger() calls remaining
-
-### Next Migration Candidates (Priority)
-1. **ClockPort** (measure.rs) - Simple, get_performance/now functions
-2. **PersistencePort** (persistence.rs) - 3 functions, localStorage API
-3. **LockPort** (lock.rs) - Medium complexity, retry logic
-4. **StoragePort** (file_system.rs) - Complex, OPFS API, many functions
-5. **Domain extraction** (vault.rs) - Most complex, business logic separation
 
 ## Anti-Patterns
 
@@ -329,23 +315,27 @@ pub trait GoodPort: Send + Sync {
 
 ## Native Implementation Pattern
 
-### Simple Stub Example (Logger)
+### Simple Stub Example
 ```rust
-// src/adapters/native/console_logger.rs
-pub struct ConsoleLogger;
+// src/adapters/native/[name].rs
+pub struct NativeAdapter;
 
-impl LoggerPort for ConsoleLogger {
-    fn log(&self, message: &str) {
-        println!("[LOG] {}", message);
+impl NativeAdapter {
+    pub fn new() -> Self { Self }
+}
+
+impl PortName for NativeAdapter {
+    fn operation(&self, input: &str) -> Result<Output, Error> {
+        // Simple implementation using std lib
+        Ok(output)
     }
-    // ... other methods
 }
 ```
 
-Native can be:
-- Simple stub (stdout/stderr)
-- Full implementation (tracing crate)
-- Decided later (YAGNI for now)
+Native implementations can be:
+- Simple stub (minimal functionality)
+- Full implementation (complete with external crates)
+- Decided later (YAGNI approach)
 
 ### Dependencies Pattern
 ```toml
@@ -360,37 +350,96 @@ web-sys = { version = "0.3" }
 tokio = { version = "1", features = ["full"] }
 ```
 
-## Testing Pattern
+## Testing Strategy
 
-### Port Contract Test
-```rust
-fn test_contract<T: PortTrait>(adapter: &T) {
-    assert!(adapter.operation("test").is_ok());
-}
+### Three-Level Testing Hierarchy
 
-#[cfg(all(test, target_arch = "wasm32"))]
-#[wasm_bindgen_test]
-fn test_wasm() {
-    test_contract(&WasmAdapter::new());
-}
+**PRINCIPLE:** Avoid redundancy - each level tests different concerns.
+
 ```
+Level 1: Platform (src/platform.rs)
+  → Integration: Interface accessibility only (1 test per port)
+
+Level 2: WASM Adapter (src/adapters/wasm/[name].rs)
+  → Unit: WASM-specific implementation + behaviors (3-5 tests)
+
+Level 3: Native Adapter (src/adapters/native/[name].rs)
+  → Unit: Native-specific implementation + behaviors (3-5 tests)
+```
+
+### Test Responsibilities by Level
+
+**Platform (Integration) - src/platform.rs**
+- ✅ Port accessible via Platform
+- ✅ Basic call doesn't panic
+- ❌ NO detailed behaviors
+- ❌ NO edge cases
+- **Target:** ONE simple test per port
+
+**WASM Adapter (Unit) - src/adapters/wasm/[name].rs**
+- ✅ All port methods work correctly
+- ✅ WASM-specific behaviors (web_sys, js_sys APIs)
+- ✅ Edge cases, precision, validation
+- **Patterns:**
+  - Module: `#[cfg(all(test, target_arch = "wasm32"))]`
+  - Tests: `#[wasm_bindgen_test]`
+  - Configure: `wasm_bindgen_test_configure!(run_in_browser);`
+  - **Important:** Tests only run in WASM (module not compiled in Native)
+
+**Native Adapter (Unit) - src/adapters/native/[name].rs**
+- ✅ All port methods work correctly
+- ✅ Native-specific behaviors (std lib, tokio)
+- ✅ Platform guarantees, real delays (thread::sleep)
+- **Patterns:**
+  - Standard `#[test]` attributes
+  - Test native-specific functionality
+
+### Test Execution
+
+```bash
+cargo test --lib                               # Native unit tests
+wasm-pack test --headless --chrome            # WASM tests (unit + integration)
+cargo test --lib adapters::native::[name]::tests   # Specific adapter
+```
+
+### Checklist for New Port Tests
+
+1. **Platform:** ONE integration test (access + no panic)
+2. **WASM:** 3-5 unit tests (implementation + WASM-specific)
+3. **Native:** 3-5 unit tests (implementation + Native-specific)
+4. **Verify:** Run both `cargo test --lib` and `wasm-pack test --headless --chrome`
+
+### Anti-Patterns
+
+❌ **Redundant tests across levels** - Same behavior tested in Platform AND adapters
+❌ **Detailed testing in Platform** - Implementation details belong in adapters
+❌ **Missing `wasm_bindgen_test_configure`** - WASM tests won't run in browser
+❌ **Testing same edge cases in both adapters** - Only test platform-specific behaviors
+
+### Expected Coverage per Port
+
+- Platform: 1 test (integration)
+- WASM Adapter: 3-5 tests (unit + WASM-specific)
+- Native Adapter: 3-5 tests (unit + Native-specific)
+- **Target: 7-11 tests total per port, zero redundancy**
 
 ## Critical Constraints
 
 ### Binary Compatibility
 - Domain output MUST be byte-identical across platforms
-- Vault format MUST match exactly
-- Test: Create in WASM → Read in Native (both directions)
+- Data format MUST match exactly between WASM and Native
+- Test: Create data in WASM → Read in Native (and reverse)
 
 ### No Regression
-- WASM performance: max 5% degradation
-- Benchmark before/after each port
-- Reject if performance loss
+- Performance: max 5% degradation acceptable
+- Benchmark before/after each port migration
+- Reject changes causing performance loss
 
 ### Progressive Migration
-- One module at a time
-- Old code continues working
+- Migrate one port at a time
+- Existing code continues working during migration
 - Test after each port addition
+- Maintain backward compatibility
 
 ## Quick Reference
 

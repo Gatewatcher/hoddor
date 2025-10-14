@@ -8,7 +8,6 @@ use crate::file_system::{
 };
 use crate::global::get_global_scope;
 use crate::lock::acquire_vault_lock;
-use crate::measure::get_performance;
 use crate::measure::time_it;
 use crate::persistence::{
     check_storage_persistence, has_requested_persistence, request_persistence_storage,
@@ -396,7 +395,7 @@ async fn read_from_vault_internal(
     let namespace_str: String = from_value(namespace.clone())?;
     validate_namespace(&namespace_str)?;
     let namespace_str = namespace.as_string().unwrap_or_default();
-    if get_performance().is_some() {
+    if platform.clock().is_available() {
         platform.logger().time(&format!("read_from_vault {} {}", vault_name, namespace_str));
     }
 
@@ -455,7 +454,7 @@ async fn read_from_vault_internal(
         })
     });
 
-    if get_performance().is_some() {
+    if platform.clock().is_available() {
         platform.logger().time_end(&format!("read_from_vault {} {}", vault_name, namespace_str));
     }
 

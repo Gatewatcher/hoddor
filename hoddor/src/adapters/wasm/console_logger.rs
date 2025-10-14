@@ -61,3 +61,28 @@ impl LoggerPort for ConsoleLogger {
         time_end(label);
     }
 }
+
+#[cfg(all(test, target_arch = "wasm32"))]
+mod tests {
+    use super::*;
+    use wasm_bindgen_test::*;
+
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    #[wasm_bindgen_test]
+    fn test_logger_creation() {
+        let logger = ConsoleLogger::new();
+        logger.log("test"); // Smoke test - verify no panic
+    }
+
+    #[wasm_bindgen_test]
+    fn test_logger_all_methods() {
+        let logger = ConsoleLogger::new();
+        // Smoke tests - verify all methods can be called without panic
+        logger.log("test log");
+        logger.warn("test warn");
+        logger.error("test error");
+        logger.time("test_timer");
+        logger.time_end("test_timer");
+    }
+}
