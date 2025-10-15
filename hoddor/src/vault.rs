@@ -12,7 +12,6 @@ use wasm_bindgen::prelude::*;
 use crate::platform::Platform;
 use core::str;
 use serde_wasm_bindgen::{from_value, to_value};
-use std::collections::HashMap;
 use std::sync::atomic::{AtomicI64, Ordering};
 
 use rand::RngCore;
@@ -27,7 +26,7 @@ const DEFAULT_STUN_SERVER: &str = "stun:stun.l.google.com:19302";
 
 pub use crate::domain::vault::{IdentitySalts, NamespaceData, Vault, VaultMetadata};
 use crate::domain::vault::expiration::{cleanup_expired_namespaces, create_expiration, is_expired};
-use crate::domain::vault::operations::get_namespace_filename;
+use crate::domain::vault::operations::{create_vault_from_sync, delete_namespace_file};
 use crate::domain::vault::validation::{validate_namespace, validate_passphrase, validate_vault_name};
 
 #[wasm_bindgen]
@@ -253,12 +252,10 @@ pub async fn remove_from_vault(
         return Err(VaultError::NamespaceNotFound.into());
     }
 
-    let namespace_filename = get_namespace_filename(&namespace);
-    let namespace_path = format!("{}/{}", vault_name, namespace_filename);
-
     let platform = Platform::new();
-    let storage = platform.storage();
-    storage.delete_file(&namespace_path).await.map_err(|e| JsValue::from_str(&format!("{:?}", e)))?;
+    delete_namespace_file(&platform, vault_name, &namespace)
+        .await
+        .map_err(|e| JsValue::from_str(&format!("{:?}", e)))?;
 
     save_vault(vault_name, vault).await?;
     Ok(())
@@ -960,23 +957,11 @@ async fn update_vault_from_sync_internal(
         }) => {
             platform.logger().log(&format!("Creating new vault {} for sync", vault_name));
 
-            let vault = Vault {
-                metadata: sync_msg.vault_metadata.ok_or_else(|| {
-                    VaultError::JsError(
-                        "Missing vault metadata in sync message for new vault".to_string(),
-                    )
-                })?,
-                identity_salts: sync_msg
-                    .identity_salts
-                    .clone()
-                    .unwrap_or_else(IdentitySalts::new),
-                username_pk: match sync_msg.username_pk {
-                    Some(username_pk) => username_pk,
-                    None => HashMap::new(),
-                },
-                namespaces: HashMap::new(),
-                sync_enabled: true,
-            };
+            let vault = create_vault_from_sync(
+                sync_msg.vault_metadata,
+                sync_msg.identity_salts.clone(),
+                sync_msg.username_pk,
+            ).await?;
 
             save_vault(vault_name, vault.clone()).await?;
 
