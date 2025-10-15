@@ -8,10 +8,9 @@ Hexagonal (Ports & Adapters) - Supports WASM + Native with shared business logic
 src/
   ports/           # Trait definitions (interfaces)
   adapters/        # Platform implementations
-    global_*.rs    # Singletons with #[cfg]
     wasm/          # Browser implementations
-    native/        # Native implementations (create when needed)
-  domain/          # Pure business logic (future)
+    native/        # Native implementations
+  platform.rs      # Dependency injection container
   [modules]/       # Existing code (progressive migration)
 ```
 
@@ -27,7 +26,7 @@ pub trait PortName: Send + Sync {
 ```
 
 **Rules:**
-- ALWAYS: `Send + Sync` bounds (async/lazy_static/tokio compatibility)
+- ALWAYS: `Send + Sync` bounds (async and multi-threading compatibility)
 - ALWAYS: `&self` methods (stateless or internal mutability)
 - PREFER: Borrowed types (`&str`, `&[u8]`) over owned
 - SINGLE: One responsibility per port
@@ -37,45 +36,48 @@ pub trait PortName: Send + Sync {
 // @location: src/adapters/wasm/[name].rs
 use crate::ports::PortName;
 
-pub struct WasmAdapter;
+#[derive(Clone, Copy)]
+pub struct Adapter;
 
-impl WasmAdapter {
+impl Adapter {
     pub fn new() -> Self { Self }
 }
 
-impl PortName for WasmAdapter {
+impl PortName for Adapter {
     fn operation(&self, input: &str) -> Result<Output, Error> {
         // Use web_sys, js_sys, or existing FFI
     }
 }
 ```
 
-### Pattern: Global Singleton
+**Key points:**
+- Always `#[derive(Clone, Copy)]` on adapters (zero-sized types)
+- Simple `new()` constructor
+- Implements the port trait
+
+### Pattern: Native Adapter
 ```rust
-// @location: src/adapters/global_[name].rs
+// @location: src/adapters/native/[name].rs
 use crate::ports::PortName;
-use lazy_static::lazy_static;
 
-#[cfg(target_arch = "wasm32")]
-use crate::adapters::wasm::WasmAdapter;
-#[cfg(not(target_arch = "wasm32"))]
-use crate::adapters::native::NativeAdapter;
+#[derive(Clone, Copy)]
+pub struct Adapter;
 
-lazy_static! {
-    pub static ref INSTANCE: WasmAdapter = WasmAdapter::new();
-    // OR: pub static ref INSTANCE: NativeAdapter = NativeAdapter::new();
+impl Adapter {
+    pub fn new() -> Self { Self }
 }
 
-/// Returns trait object - no trait import needed at call sites
-pub fn instance() -> &'static dyn PortName {
-    &*INSTANCE
+impl PortName for Adapter {
+    fn operation(&self, input: &str) -> Result<Output, Error> {
+        // Use std lib or external crates
+    }
 }
 ```
 
 **Key points:**
-- Single lazy_static (cfg selects type at compile time)
-- Returns `&'static dyn Trait` (trait object)
-- No need to import trait at usage sites
+- Same structure as WASM adapter
+- Native-specific implementation (std, tokio, etc.)
+- Can be simple stub initially
 
 ### Pattern: Module Exports
 ```rust
@@ -84,28 +86,28 @@ pub mod port_name;
 pub use port_name::PortName;
 
 // @location: src/adapters/mod.rs
-pub mod global_name;
-pub use global_name::{instance, INSTANCE};
+#[cfg(target_arch = "wasm32")]
+pub mod wasm;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod native;
+
+#[cfg(target_arch = "wasm32")]
+pub use wasm::{Adapter1, Adapter2, Adapter3};
+#[cfg(not(target_arch = "wasm32"))]
+pub use native::{Adapter1, Adapter2, Adapter3};
 ```
 
-### Pattern: Usage in Code
-```rust
-// @required: Only import adapter accessor (trait object pattern)
-use crate::adapters::instance;
-
-pub async fn business_logic() {
-    instance().operation("data")?;  // Works directly - no trait import needed
-}
-```
-
-**Why no trait import?** We return `&'static dyn Trait`, so methods are available directly.
+**Key points:**
+- Use `#[cfg]` to select platform at compile-time
+- Export concrete adapter types (not trait objects)
+- Same names across platforms for seamless switching
 
 ## Decision Rules
 
-### RULE: Global vs Injection
-- USE: Global singleton via `lazy_static`
-- REASON: Non-invasive, zero-cost, matches codebase
-- EXCEPTION: None currently
+### RULE: Dependency Injection via Platform
+- USE: Platform struct stores concrete adapter instances
+- REASON: Zero-cost abstraction, no lazy initialization needed
+- PATTERN: `Platform::new()` creates all adapters at once
 
 ### RULE: Target Selection
 - USE: `#[cfg(target_arch = "wasm32")]` for WASM
@@ -119,25 +121,26 @@ pub async fn business_logic() {
 
 ### RULE: Send + Sync
 - ALWAYS: Include on all port traits
-- REASON: Required for lazy_static (Sync), async (Send), tokio
+- REASON: Required for async (Send), multi-threading safety
 - COST: Zero (compile-time only)
 
-### RULE: Trait Object Return
-- PATTERN: Functions return `&'static dyn Trait`
-- BENEFIT: No trait import needed at call sites
-- BENEFIT: Rust-analyzer sees all code as active
+### RULE: Clone + Copy Adapters
+- ALWAYS: `#[derive(Clone, Copy)]` on all adapters
+- REASON: Makes Platform `Copy`, enables easy use in closures
+- REQUIREMENT: Adapters must be zero-sized types (ZST)
 
 ## Migration Checklist
 
 ### Adding New Port
 - [ ] Create `src/ports/[name].rs` with trait (Send + Sync, &self, borrowed types)
-- [ ] Create `src/adapters/wasm/[name].rs` with WASM implementation
-- [ ] Create `src/adapters/native/[name].rs` with native implementation (can be stub)
-- [ ] Create `src/adapters/global_[name].rs` returning `&'static dyn Trait`
+- [ ] Create `src/adapters/wasm/[name].rs` with WASM implementation (`#[derive(Clone, Copy)]`)
+- [ ] Create `src/adapters/native/[name].rs` with native implementation (`#[derive(Clone, Copy)]`)
 - [ ] Export from `src/ports/mod.rs`
-- [ ] Export from `src/adapters/mod.rs` with #[cfg] for wasm/native modules
-- [ ] Migrate usage sites: replace direct calls with `instance().method()`
-- [ ] Test both targets: `cargo check` and `cargo check --target wasm32-unknown-unknown`
+- [ ] Export from `src/adapters/mod.rs` with #[cfg] for both platforms
+- [ ] Add adapter to `Platform` struct in `src/platform.rs`
+- [ ] Add accessor method to Platform returning `&dyn Trait`
+- [ ] Write tests for all three levels (Platform, WASM adapter, Native adapter)
+- [ ] Test both targets: `cargo test --lib` and `wasm-pack test --headless --chrome`
 
 ### Migration Transform
 ```rust
@@ -146,39 +149,58 @@ use crate::platform_module::function;
 function("arg");
 
 // AFTER
-use crate::adapters::instance;
-instance().method("arg");  // No trait import needed!
+use crate::Platform;
+let platform = Platform::new();
+platform.port_name().method("arg");
 ```
 
 ## Pattern: Platform (Dependency Injection Container)
 
-**Purpose:** Store port references in structs instead of calling globals repeatedly.
+**Purpose:** Central container for all adapters, creates instances on demand.
 
 ```rust
 // @location: src/platform.rs
+use crate::adapters::{Clock, ConsoleLogger, Persistence};
+use crate::ports::{ClockPort, LoggerPort, PersistencePort};
+
 #[derive(Clone, Copy)]
 pub struct Platform {
-    port1: &'static dyn Port1Trait,
-    port2: &'static dyn Port2Trait,
+    clock: Clock,
+    logger: ConsoleLogger,
+    persistence: Persistence,
 }
 
 impl Platform {
     pub fn new() -> Self {
         Self {
-            port1: crate::adapters::port1(),
-            port2: crate::adapters::port2(),
+            clock: Clock::new(),
+            logger: ConsoleLogger::new(),
+            persistence: Persistence::new(),
         }
     }
 
-    pub fn port1(&self) -> &'static dyn Port1Trait {
-        self.port1
+    #[inline]
+    pub fn clock(&self) -> &dyn ClockPort {
+        &self.clock
     }
 
-    pub fn port2(&self) -> &'static dyn Port2Trait {
-        self.port2
+    #[inline]
+    pub fn logger(&self) -> &dyn LoggerPort {
+        &self.logger
+    }
+
+    #[inline]
+    pub fn persistence(&self) -> &dyn PersistencePort {
+        &self.persistence
     }
 }
 ```
+
+**Key points:**
+- Stores concrete adapter instances (not references)
+- Returns `&dyn Trait` from accessors (enables trait methods without import)
+- `Copy` enables easy use in closures
+- Zero-cost: all adapters are ZSTs
 
 **Usage Pattern:**
 
@@ -245,15 +267,23 @@ Does struct have lifetime/state?
 
 **Migration:**
 ```rust
-// BEFORE (global singleton)
-use crate::adapters::instance;
-instance().operation("msg");
+// Direct usage (stateless functions)
+use crate::Platform;
+let platform = Platform::new();
+platform.port().operation("msg");
 
-// AFTER (Platform in struct)
+// In struct (stateful components)
 pub struct Foo {
     platform: Platform,
 }
-self.platform.port().operation("msg");
+impl Foo {
+    pub fn new() -> Self {
+        Self { platform: Platform::new() }
+    }
+    pub fn method(&self) {
+        self.platform.port().operation("msg");
+    }
+}
 ```
 
 ## Anti-Patterns
@@ -272,25 +302,27 @@ pub mod wasm;
 pub mod native;
 ```
 
-### ❌ Returning Concrete Type Instead of Trait Object
+### ❌ Forgetting Clone + Copy on Adapters
 ```rust
-// WRONG - requires trait import at call sites
-pub fn instance() -> &'static WasmAdapter { ... }
+// WRONG - Platform won't be Copy
+pub struct MyAdapter;
 
-// CORRECT - trait object works without import
-pub fn instance() -> &'static dyn PortTrait { ... }
+// CORRECT - enables Platform to be Copy
+#[derive(Clone, Copy)]
+pub struct MyAdapter;
 ```
 
-### ❌ Missing Trait Import (Old Pattern - No Longer Needed)
+### ❌ Returning Concrete Type from Platform
 ```rust
-// WRONG - won't compile
-use crate::adapters::instance;
-instance().method("arg");  // Error: method not found
+// WRONG - exposes implementation details
+pub fn clock(&self) -> Clock {
+    self.clock
+}
 
-// CORRECT
-use crate::adapters::instance;
-use crate::ports::PortTrait;  // Required!
-instance().method("arg");
+// CORRECT - returns trait object
+pub fn clock(&self) -> &dyn ClockPort {
+    &self.clock
+}
 ```
 
 ### ❌ Platform Code in Domain
@@ -313,18 +345,36 @@ pub trait GoodPort: Send + Sync {
 }
 ```
 
+### ❌ Creating Platform in Loops
+```rust
+// WRONG - wasteful (even if zero-cost)
+for item in items {
+    let platform = Platform::new();
+    platform.logger().log("...");
+}
+
+// CORRECT - create once
+let platform = Platform::new();
+for item in items {
+    platform.logger().log("...");
+}
+```
+
 ## Native Implementation Pattern
 
 ### Simple Stub Example
 ```rust
 // src/adapters/native/[name].rs
-pub struct NativeAdapter;
+use crate::ports::PortName;
 
-impl NativeAdapter {
+#[derive(Clone, Copy)]
+pub struct Adapter;
+
+impl Adapter {
     pub fn new() -> Self { Self }
 }
 
-impl PortName for NativeAdapter {
+impl PortName for Adapter {
     fn operation(&self, input: &str) -> Result<Output, Error> {
         // Simple implementation using std lib
         Ok(output)
@@ -340,15 +390,21 @@ Native implementations can be:
 ### Dependencies Pattern
 ```toml
 [dependencies]
-lazy_static = "1.5"
+# Shared dependencies
+async-trait = "0.1"  # If using async trait methods
 
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-wasm-bindgen = "0.2"
-web-sys = { version = "0.3" }
+[dependencies.web-sys]
+version = "0.3"
+features = ["Window", "Performance", ...]  # WASM-specific APIs
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1", features = ["full"] }  # Native async runtime
 ```
+
+**Key points:**
+- No lazy_static needed (direct instantiation)
+- WASM deps in main `[dependencies]` (only compiled for WASM target)
+- Native-only deps in target-specific section
 
 ## Testing Strategy
 
@@ -446,11 +502,23 @@ cargo test --lib adapters::native::[name]::tests   # Specific adapter
 ### When creating port:
 `Send + Sync + &self + borrowed types`
 
-### When using port:
-`use adapters::instance;` (no trait import needed)
+### When creating adapter:
+`#[derive(Clone, Copy)] + pub fn new() -> Self`
 
-### When adding native:
-`Create native/adapter.rs + add cfg to global_*.rs`
+### When using ports:
+```rust
+let platform = Platform::new();
+platform.port().method();
+```
+
+### When adding to Platform:
+1. Add adapter field to Platform struct
+2. Initialize in `Platform::new()`
+3. Add accessor returning `&dyn Trait`
 
 ### Compilation check:
-`cargo check --target wasm32-unknown-unknown`
+```bash
+cargo check --lib                    # Native
+cargo test --lib                     # Native tests
+wasm-pack test --headless --chrome   # WASM tests
+```
