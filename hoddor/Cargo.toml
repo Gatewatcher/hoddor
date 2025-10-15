@@ -51,6 +51,7 @@ hex = "0.4.3"
 futures-channel = "0.3.31"
 hkdf = "0.12.4"
 x25519-dalek = { version = "2.0.1", features = ["static_secrets"] }
+async-trait = "0.1.89"
 
 [dependencies.web-sys]
 version = "0.3.77"

@@ -9,9 +9,6 @@ use crate::file_system::{
 use crate::global::get_global_scope;
 use crate::lock::acquire_vault_lock;
 use crate::measure::time_it;
-use crate::persistence::{
-    check_storage_persistence, has_requested_persistence, request_persistence_storage,
-};
 use crate::sync::{get_sync_manager, OperationType, SyncMessage};
 use crate::webrtc::{AccessLevel, WebRtcPeer};
 use std::cell::RefCell;
@@ -939,11 +936,11 @@ async fn save_vault_internal(
     dir_handle: &FileSystemDirectoryHandle,
     vault: Vault,
 ) -> Result<(), VaultError> {
-    if !has_requested_persistence() {
-        let is_persisted = check_storage_persistence().await.unwrap_or(false);
+    if !platform.persistence().has_requested() {
+        let is_persisted = platform.persistence().check().await.unwrap_or(false);
 
         if !is_persisted {
-            let result = request_persistence_storage().await;
+            let result = platform.persistence().request().await;
 
             match result {
                 Ok(is_granted) => {

@@ -6,6 +6,8 @@
 
 pub mod clock;
 pub mod logger;
+pub mod persistence;
 
 pub use clock::ClockPort;
 pub use logger::LoggerPort;
+pub use persistence::PersistencePort;
