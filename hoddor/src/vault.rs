@@ -21,6 +21,10 @@ use argon2::password_hash::rand_core::OsRng;
 
 use futures_channel::mpsc::UnboundedReceiver;
 
+// Constants
+const VAULT_MAGIC_NUMBER: &[u8; 6] = b"VAULT1";
+const DEFAULT_STUN_SERVER: &str = "stun:stun.l.google.com:19302";
+
 pub use crate::domain::vault::{IdentitySalts, NamespaceData, Vault, VaultMetadata};
 use crate::domain::vault::expiration::{cleanup_expired_namespaces, create_expiration, is_expired};
 use crate::domain::vault::operations::get_namespace_filename;
@@ -393,14 +397,10 @@ pub async fn remove_vault(vault_name: &str) -> Result<(), JsValue> {
 #[wasm_bindgen]
 pub async fn list_vaults() -> Result<JsValue, JsValue> {
     let platform = Platform::new();
-    list_vaults_internal(&platform)
+    crate::domain::vault::operations::list_vaults(&platform)
         .await
         .map(|vaults| to_value(&vaults).unwrap())
         .map_err(|e| e.into())
-}
-
-async fn list_vaults_internal(platform: &Platform) -> Result<Vec<String>, VaultError> {
-    crate::domain::vault::operations::list_vaults(platform).await
 }
 
 #[wasm_bindgen]
@@ -466,8 +466,7 @@ async fn export_vault_internal(
 ) -> Result<JsValue, VaultError> {
     let vault = read_vault_with_name(vault_name).await?;
 
-    // Create binary format with magic number "VAULT1"
-    let magic = b"VAULT1";
+    // Create binary format with magic number
     let serialized = serde_json::to_vec(&vault).map_err(|e| {
         platform.logger().log(&format!("Serialization error: {:?}", e));
         VaultError::SerializationError {
@@ -475,17 +474,17 @@ async fn export_vault_internal(
         }
     })?;
 
-    let total_size = magic.len() + 4 + serialized.len();
+    let total_size = VAULT_MAGIC_NUMBER.len() + 4 + serialized.len();
     let mut vault_bytes = Vec::with_capacity(total_size);
 
-    vault_bytes.extend_from_slice(magic);
+    vault_bytes.extend_from_slice(VAULT_MAGIC_NUMBER);
     vault_bytes.extend_from_slice(&(serialized.len() as u32).to_be_bytes());
     vault_bytes.extend_from_slice(&serialized);
 
     platform.logger().log(&format!(
         "Exporting vault data: {} bytes (magic: {}, length: 4, content: {})",
         vault_bytes.len(),
-        magic.len(),
+        VAULT_MAGIC_NUMBER.len(),
         serialized.len()
     ));
 
@@ -522,7 +521,7 @@ async fn import_vault_internal(
         vault_bytes.len()
     ));
 
-    if vault_bytes.len() < 10 || &vault_bytes[..6] != b"VAULT1" {
+    if vault_bytes.len() < 10 || &vault_bytes[..6] != VAULT_MAGIC_NUMBER {
         return Err(VaultError::SerializationError {
             message: "Invalid vault file: missing or incorrect magic number",
         });
@@ -668,11 +667,7 @@ async fn enable_sync_internal(
         vault.metadata.peer_id = Some(hex::encode(peer_id));
     }
 
-    let mut updated_vault = vault.clone();
-    updated_vault.sync_enabled = true;
-
-    let vault = updated_vault.clone();
-
+    vault.sync_enabled = true;
     save_vault(vault_name, vault.clone()).await?;
 
     let (mut peer, _receiver): (WebRtcPeer, UnboundedReceiver<Vec<u8>>) =
@@ -735,7 +730,7 @@ async fn connect_to_peer_internal(
 
     platform.logger().log("Creating WebRTC peer...");
     let stun_servers = js_sys::Array::new();
-    stun_servers.push(&"stun:stun.l.google.com:19302".into());
+    stun_servers.push(&DEFAULT_STUN_SERVER.into());
     let stun_servers: Vec<String> = stun_servers
         .iter()
         .map(|s| s.as_string().unwrap_or_default())
