@@ -3,6 +3,7 @@ use crate::global::get_global_scope;
 use wasm_bindgen::JsCast;
 use web_sys::{Performance, WorkerGlobalScope};
 
+#[derive(Clone, Copy)]
 pub struct Clock;
 
 impl Clock {

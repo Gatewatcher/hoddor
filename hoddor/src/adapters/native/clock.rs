@@ -1,6 +1,7 @@
 use crate::ports::clock::ClockPort;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+#[derive(Clone, Copy)]
 pub struct Clock;
 
 impl Clock {

@@ -7,6 +7,7 @@ use wasm_bindgen_futures::JsFuture;
 
 static PERSISTENCE_REQUESTED: AtomicBool = AtomicBool::new(false);
 
+#[derive(Clone, Copy)]
 pub struct Persistence;
 
 impl Persistence {

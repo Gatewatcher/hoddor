@@ -6,6 +6,7 @@ use crate::ports::PersistencePort;
 ///
 /// In native environments, storage is always persistent by default.
 /// This adapter always returns true for all operations.
+#[derive(Clone, Copy)]
 pub struct Persistence;
 
 impl Persistence {

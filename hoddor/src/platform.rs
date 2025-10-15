@@ -1,41 +1,41 @@
 /// Platform - Dependency injection container for all ports.
 ///
-/// Hybrid approach:
-/// - Stateless ports: `&'static` references (zero-cost)
-/// - Stateful ports: `Arc<dyn Trait>` (ref-counted, when needed)
+/// Stores concrete adapter instances directly.
+/// Platform selection happens at compile-time via #[cfg].
 
+use crate::adapters::{Clock, ConsoleLogger, Persistence};
 use crate::ports::{ClockPort, LoggerPort, PersistencePort};
 
 #[derive(Clone, Copy)]
 pub struct Platform {
-    clock: &'static dyn ClockPort,
-    logger: &'static dyn LoggerPort,
-    persistence: &'static dyn PersistencePort,
+    clock: Clock,
+    logger: ConsoleLogger,
+    persistence: Persistence,
 }
 
 impl Platform {
     /// Creates a new Platform with default adapters for the current target.
     pub fn new() -> Self {
         Self {
-            clock: crate::adapters::clock(),
-            logger: crate::adapters::logger(),
-            persistence: crate::adapters::persistence(),
+            clock: Clock::new(),
+            logger: ConsoleLogger::new(),
+            persistence: Persistence::new(),
         }
     }
 
     #[inline]
-    pub fn clock(&self) -> &'static dyn ClockPort {
-        self.clock
+    pub fn clock(&self) -> &dyn ClockPort {
+        &self.clock
     }
 
     #[inline]
-    pub fn logger(&self) -> &'static dyn LoggerPort {
-        self.logger
+    pub fn logger(&self) -> &dyn LoggerPort {
+        &self.logger
     }
 
     #[inline]
-    pub fn persistence(&self) -> &'static dyn PersistencePort {
-        self.persistence
+    pub fn persistence(&self) -> &dyn PersistencePort {
+        &self.persistence
     }
 }
 
