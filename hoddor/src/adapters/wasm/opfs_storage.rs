@@ -358,3 +358,83 @@ impl OPFSStorage {
         Ok(entries)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use wasm_bindgen_test::*;
+
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    #[wasm_bindgen_test]
+    async fn test_opfs_storage_creation() {
+        let _storage = OPFSStorage::new();
+    }
+
+    #[wasm_bindgen_test]
+    async fn test_file_lifecycle() {
+        let storage = OPFSStorage::new();
+        let test_dir = "test_lifecycle_opfs";
+        let test_file = "test_lifecycle_opfs/test.txt";
+        let content = "test content";
+
+        storage.create_directory(test_dir).await.unwrap();
+        assert!(storage.directory_exists(test_dir).await.unwrap());
+
+        storage.write_file(test_file, content).await.unwrap();
+        let read_content = storage.read_file(test_file).await.unwrap();
+        assert_eq!(read_content, content);
+
+        storage.delete_file(test_file).await.unwrap();
+        storage.delete_directory(test_dir).await.unwrap();
+        assert!(!storage.directory_exists(test_dir).await.unwrap());
+    }
+
+    #[wasm_bindgen_test]
+    async fn test_list_entries() {
+        let storage = OPFSStorage::new();
+        let test_dir = "test_list_opfs";
+
+        storage.create_directory(test_dir).await.unwrap();
+        storage.write_file("test_list_opfs/file1.txt", "content1").await.unwrap();
+        storage.write_file("test_list_opfs/file2.txt", "content2").await.unwrap();
+        storage.write_file("test_list_opfs/file3.txt", "content3").await.unwrap();
+
+        let entries = storage.list_entries(test_dir).await.unwrap();
+        assert_eq!(entries.len(), 3);
+        assert!(entries.contains(&"file1.txt".to_string()));
+        assert!(entries.contains(&"file2.txt".to_string()));
+        assert!(entries.contains(&"file3.txt".to_string()));
+
+        storage.delete_directory(test_dir).await.unwrap();
+    }
+
+    #[wasm_bindgen_test]
+    async fn test_delete_directory_with_contents() {
+        let storage = OPFSStorage::new();
+        let test_dir = "test_delete_opfs";
+
+        storage.create_directory(test_dir).await.unwrap();
+        storage.write_file("test_delete_opfs/file1.txt", "content1").await.unwrap();
+        storage.write_file("test_delete_opfs/file2.txt", "content2").await.unwrap();
+        storage.create_directory("test_delete_opfs/subdir").await.unwrap();
+        storage.write_file("test_delete_opfs/subdir/file3.txt", "content3").await.unwrap();
+
+        storage.delete_directory(test_dir).await.unwrap();
+        assert!(!storage.directory_exists(test_dir).await.unwrap());
+    }
+
+    #[wasm_bindgen_test]
+    async fn test_directory_exists() {
+        let storage = OPFSStorage::new();
+        let test_dir = "test_exists_opfs";
+
+        assert!(!storage.directory_exists(test_dir).await.unwrap());
+
+        storage.create_directory(test_dir).await.unwrap();
+        assert!(storage.directory_exists(test_dir).await.unwrap());
+
+        storage.delete_directory(test_dir).await.unwrap();
+        assert!(!storage.directory_exists(test_dir).await.unwrap());
+    }
+}

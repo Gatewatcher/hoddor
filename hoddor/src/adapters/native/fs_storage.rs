@@ -118,4 +118,83 @@ mod tests {
         let path = storage.get_full_path(".");
         assert_eq!(path.to_str().unwrap(), "./hoddor_data");
     }
+
+    #[test]
+    fn test_file_lifecycle() {
+        use futures::executor::block_on;
+        let storage = FsStorage::new();
+        let test_dir = "test_lifecycle";
+        let test_file = "test_lifecycle/test.txt";
+        let content = "test content";
+
+        block_on(async {
+            storage.create_directory(test_dir).await.unwrap();
+            assert!(storage.directory_exists(test_dir).await.unwrap());
+
+            storage.write_file(test_file, content).await.unwrap();
+            let read_content = storage.read_file(test_file).await.unwrap();
+            assert_eq!(read_content, content);
+
+            storage.delete_file(test_file).await.unwrap();
+            storage.delete_directory(test_dir).await.unwrap();
+            assert!(!storage.directory_exists(test_dir).await.unwrap());
+        });
+    }
+
+    #[test]
+    fn test_list_entries() {
+        use futures::executor::block_on;
+        let storage = FsStorage::new();
+        let test_dir = "test_list";
+
+        block_on(async {
+            storage.create_directory(test_dir).await.unwrap();
+            storage.write_file("test_list/file1.txt", "content1").await.unwrap();
+            storage.write_file("test_list/file2.txt", "content2").await.unwrap();
+            storage.write_file("test_list/file3.txt", "content3").await.unwrap();
+
+            let entries = storage.list_entries(test_dir).await.unwrap();
+            assert_eq!(entries.len(), 3);
+            assert!(entries.contains(&"file1.txt".to_string()));
+            assert!(entries.contains(&"file2.txt".to_string()));
+            assert!(entries.contains(&"file3.txt".to_string()));
+
+            storage.delete_directory(test_dir).await.unwrap();
+        });
+    }
+
+    #[test]
+    fn test_delete_directory_with_contents() {
+        use futures::executor::block_on;
+        let storage = FsStorage::new();
+        let test_dir = "test_delete";
+
+        block_on(async {
+            storage.create_directory(test_dir).await.unwrap();
+            storage.write_file("test_delete/file1.txt", "content1").await.unwrap();
+            storage.write_file("test_delete/file2.txt", "content2").await.unwrap();
+            storage.create_directory("test_delete/subdir").await.unwrap();
+            storage.write_file("test_delete/subdir/file3.txt", "content3").await.unwrap();
+
+            storage.delete_directory(test_dir).await.unwrap();
+            assert!(!storage.directory_exists(test_dir).await.unwrap());
+        });
+    }
+
+    #[test]
+    fn test_directory_exists() {
+        use futures::executor::block_on;
+        let storage = FsStorage::new();
+        let test_dir = "test_exists";
+
+        block_on(async {
+            assert!(!storage.directory_exists(test_dir).await.unwrap());
+
+            storage.create_directory(test_dir).await.unwrap();
+            assert!(storage.directory_exists(test_dir).await.unwrap());
+
+            storage.delete_directory(test_dir).await.unwrap();
+            assert!(!storage.directory_exists(test_dir).await.unwrap());
+        });
+    }
 }
