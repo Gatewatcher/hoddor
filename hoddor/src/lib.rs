@@ -12,7 +12,6 @@ pub mod file_system;
 pub mod global;
 pub mod measure;
 pub mod notifications;
-pub mod persistence;
 pub mod signaling;
 pub mod sync;
 pub mod vault;
