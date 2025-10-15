@@ -1,6 +1,7 @@
 extern crate console_error_panic_hook;
 
 // Hexagonal architecture modules
+pub mod domain;
 pub mod ports;
 pub mod adapters;
 pub mod platform;
@@ -18,8 +19,9 @@ pub mod webauthn;
 pub mod webrtc;
 
 // Re-exports for testing
+pub use domain::vault::{IdentitySalts, NamespaceData, Vault, VaultMetadata};
 pub use platform::Platform;
-pub use vault::{read_vault_with_name, save_vault, Vault, VaultMetadata, IdentitySalts, NamespaceData};
+pub use vault::{read_vault_with_name, save_vault};
 
 use wasm_bindgen::prelude::*;
 

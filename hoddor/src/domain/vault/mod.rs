@@ -1,0 +1,12 @@
+pub mod expiration;
+pub mod operations;
+pub mod types;
+pub mod validation;
+
+pub use expiration::{cleanup_expired_namespaces, create_expiration, is_expired};
+pub use operations::{
+    create_vault, delete_vault, get_metadata_filename, get_namespace_filename, get_vault_dirname,
+    list_vaults, read_vault, save_vault,
+};
+pub use types::{Expiration, IdentitySalts, NamespaceData, Vault, VaultMetadata};
+pub use validation::{validate_namespace, validate_passphrase, validate_vault_name};

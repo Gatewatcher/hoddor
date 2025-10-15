@@ -21,116 +21,10 @@ use argon2::password_hash::rand_core::OsRng;
 
 use futures_channel::mpsc::UnboundedReceiver;
 
-#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
-struct Expiration {
-    expires_at: i64,
-}
-
-#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
-pub struct NamespaceData {
-    data: Vec<u8>,
-    expiration: Option<Expiration>,
-}
-
-#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
-pub struct VaultMetadata {
-    pub peer_id: Option<String>,
-}
-
-#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
-pub struct IdentitySalts {
-    salts: HashMap<String, [u8; 32]>,
-    credential_ids: HashMap<String, Vec<u8>>,
-}
-
-impl Default for IdentitySalts {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl IdentitySalts {
-    pub fn new() -> Self {
-        Self {
-            salts: HashMap::new(),
-            credential_ids: HashMap::new(),
-        }
-    }
-
-    pub fn get_salt(&self, public_key: &str) -> Option<&[u8; 32]> {
-        self.salts.get(public_key)
-    }
-
-    pub fn set_salt(&mut self, public_key: String, salt: [u8; 32]) {
-        self.salts.insert(public_key, salt);
-    }
-
-    pub fn get_all_salts(&self) -> impl Iterator<Item = &[u8; 32]> {
-        self.salts.values()
-    }
-
-    pub fn get_all_credential_ids(&self) -> impl Iterator<Item = &Vec<u8>> {
-        self.credential_ids.values()
-    }
-
-    pub fn get_credential_id(&self, public_key: &str) -> Option<&Vec<u8>> {
-        self.credential_ids.get(public_key)
-    }
-
-    pub fn set_credential_id(&mut self, public_key: String, credential_id: Vec<u8>) {
-        self.credential_ids.insert(public_key, credential_id);
-    }
-
-    pub fn get_public_keys_with_credentials(&self) -> impl Iterator<Item = &String> {
-        self.credential_ids.keys()
-    }
-}
-
-#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
-pub struct Vault {
-    pub metadata: VaultMetadata,
-    pub identity_salts: IdentitySalts,
-    pub username_pk: HashMap<String, String>,
-    pub namespaces: HashMap<String, NamespaceData>,
-    pub sync_enabled: bool,
-}
-
-pub fn get_vault_dirname(vault_name: &str) -> String {
-    vault_name.to_string()
-}
-
-fn get_metadata_filename() -> String {
-    "metadata.json".to_string()
-}
-
-fn get_namespace_filename(namespace: &str) -> String {
-    format!("{}.ns", namespace)
-}
-
-fn validate_namespace(namespace: &str) -> Result<(), VaultError> {
-    if namespace.trim().is_empty() {
-        return Err(VaultError::IoError {
-            message: "Namespace cannot be empty or whitespace only",
-        });
-    }
-
-    let invalid_chars = ['/', '\\', '<', '>', ':', '"', '|', '?', '*'];
-    if namespace.chars().any(|c| invalid_chars.contains(&c)) {
-        return Err(VaultError::IoError {
-            message: "Namespace contains invalid characters",
-        });
-    }
-    Ok(())
-}
-
-fn validate_passphrase(passphrase: &str) -> Result<(), VaultError> {
-    if passphrase.trim().is_empty() {
-        return Err(VaultError::JsError(
-            "Passphrase cannot be empty or whitespace".to_string(),
-        ));
-    }
-    Ok(())
-}
+pub use crate::domain::vault::{IdentitySalts, NamespaceData, Vault, VaultMetadata};
+use crate::domain::vault::expiration::{cleanup_expired_namespaces, create_expiration, is_expired};
+use crate::domain::vault::operations::{get_namespace_filename, get_vault_dirname};
+use crate::domain::vault::validation::{validate_namespace, validate_passphrase, validate_vault_name};
 
 #[wasm_bindgen]
 pub async fn vault_identity_from_passphrase(
@@ -161,7 +55,7 @@ async fn vault_identity_from_passphrase_internal(
     };
 
     // Try to find an existing identity by iterating over stored salts
-    for (stored_pubkey, salt) in &vault.identity_salts.salts {
+    for (stored_pubkey, salt) in vault.identity_salts.salts_iter() {
         platform.logger().log(&format!("Checking stored public key: {}", stored_pubkey));
 
         // Validate salt length
@@ -409,13 +303,11 @@ async fn read_from_vault_internal(
             .get(&namespace)
             .ok_or(VaultError::NamespaceNotFound)?;
 
-        if let Some(expiration) = &encrypted_namespace.expiration {
-            let now = js_sys::Date::now() as i64 / 1000;
-            if now >= expiration.expires_at {
-                vault.namespaces.remove(&namespace);
-                save_vault(vault_name, vault.clone()).await?;
-                return Err(VaultError::DataExpired.into());
-            }
+        let now = js_sys::Date::now() as i64 / 1000;
+        if is_expired(&encrypted_namespace.expiration, now) {
+            vault.namespaces.remove(&namespace);
+            save_vault(vault_name, vault.clone()).await?;
+            return Err(VaultError::DataExpired.into());
         }
 
         let decrypted_data = time_it!("Decryption", {
@@ -493,9 +385,9 @@ pub async fn remove_vault(vault_name: &str) -> Result<(), JsValue> {
     let platform = Platform::new();
     let _lock = platform.locks().acquire(vault_name).await?;
 
-    let dirname = get_vault_dirname(vault_name);
-    let storage = platform.storage();
-    storage.delete_directory(&dirname).await.map_err(|e| JsValue::from_str(&format!("{:?}", e)))?;
+    crate::domain::vault::operations::delete_vault(&platform, vault_name)
+        .await
+        .map_err(|e| JsValue::from_str(&format!("{:?}", e)))?;
 
     Ok(())
 }
@@ -510,30 +402,7 @@ pub async fn list_vaults() -> Result<JsValue, JsValue> {
 }
 
 async fn list_vaults_internal(platform: &Platform) -> Result<Vec<String>, VaultError> {
-    platform.logger().log("Listing vaults from root directory");
-
-    let storage = platform.storage();
-    let vault_names = storage.list_entries(".").await?;
-
-    platform
-        .logger()
-        .log(&format!("Found {} vaults in total", vault_names.len()));
-    Ok(vault_names)
-}
-
-fn validate_vault_name(name: &str) -> Result<(), VaultError> {
-    if name.trim().is_empty() {
-        return Err(VaultError::IoError {
-            message: "Vault name cannot be empty or whitespace only",
-        });
-    }
-    if name.contains(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '-') {
-        return Err(VaultError::IoError {
-            message:
-                "Vault name can only contain alphanumeric characters, underscores, and hyphens",
-        });
-    }
-    Ok(())
+    crate::domain::vault::operations::list_vaults(platform).await
 }
 
 #[wasm_bindgen]
@@ -555,13 +424,9 @@ async fn create_vault_internal(vault_name: &str) -> Result<(), JsValue> {
         )));
     }
 
-    let vault = Vault {
-        metadata: VaultMetadata { peer_id: None },
-        identity_salts: IdentitySalts::new(),
-        username_pk: HashMap::new(),
-        namespaces: HashMap::new(),
-        sync_enabled: false,
-    };
+    let vault = crate::domain::vault::operations::create_vault(vault_name)
+        .await
+        .map_err(|e| JsValue::from_str(&format!("Failed to create vault: {:?}", e)))?;
 
     save_vault(vault_name, vault)
         .await
@@ -709,39 +574,7 @@ pub async fn read_vault_with_name(
     vault_name: &str,
 ) -> Result<Vault, VaultError> {
     let platform = Platform::new();
-    let storage = platform.storage();
-    let dirname = get_vault_dirname(vault_name);
-
-    let metadata_path = format!("{}/{}", dirname, get_metadata_filename());
-    let metadata_text = storage.read_file(&metadata_path).await?;
-
-    let mut vault: Vault =
-        serde_json::from_str(&metadata_text).map_err(|_| VaultError::SerializationError {
-            message: "Failed to deserialize vault metadata",
-        })?;
-
-    vault.namespaces.clear();
-
-    let entries = storage.list_entries(&dirname).await?;
-
-    for entry_name in entries {
-        if entry_name.ends_with(".ns") {
-            let namespace_path = format!("{}/{}", dirname, entry_name);
-            let namespace_text = storage.read_file(&namespace_path).await?;
-
-            let namespace_data: NamespaceData =
-                serde_json::from_str(&namespace_text).map_err(|_| {
-                    VaultError::SerializationError {
-                        message: "Failed to deserialize namespace data",
-                    }
-                })?;
-
-            let namespace = entry_name[..entry_name.len() - 3].to_string();
-            vault.namespaces.insert(namespace, namespace_data);
-        }
-    }
-
-    Ok(vault)
+    crate::domain::vault::operations::read_vault(&platform, vault_name).await
 }
 
 pub async fn save_vault(
@@ -749,64 +582,7 @@ pub async fn save_vault(
     vault: Vault,
 ) -> Result<(), VaultError> {
     let platform = Platform::new();
-    save_vault_internal(&platform, vault_name, vault).await
-}
-
-async fn save_vault_internal(
-    platform: &Platform,
-    vault_name: &str,
-    vault: Vault,
-) -> Result<(), VaultError> {
-    if !platform.persistence().has_requested() {
-        let is_persisted = platform.persistence().check().await.unwrap_or(false);
-
-        if !is_persisted {
-            let result = platform.persistence().request().await;
-
-            match result {
-                Ok(is_granted) => {
-                    platform.logger().log(&format!("persistence request granted: {}", is_granted));
-                }
-                Err(VaultError::JsError(message)) => {
-                    platform.logger().error(&message);
-                }
-                _ => {}
-            }
-        }
-    }
-
-    let storage = platform.storage();
-    let dirname = get_vault_dirname(vault_name);
-
-    storage.create_directory(&dirname).await?;
-
-    let mut metadata_vault = vault.clone();
-    metadata_vault.namespaces.clear();
-
-    let metadata_json =
-        serde_json::to_string(&metadata_vault).map_err(|_| VaultError::IoError {
-            message: "Failed to serialize vault metadata",
-        })?;
-
-    let metadata_path = format!("{}/{}", dirname, get_metadata_filename());
-    storage.write_file(&metadata_path, &metadata_json).await?;
-
-    for (namespace, data) in &vault.namespaces {
-        let namespace_json = serde_json::to_string(&data).map_err(|_| VaultError::IoError {
-            message: "Failed to serialize namespace data",
-        })?;
-
-        let namespace_path = format!("{}/{}", dirname, get_namespace_filename(namespace));
-        storage.write_file(&namespace_path, &namespace_json).await?;
-    }
-
-    let vault_bytes = serde_json::to_vec(&vault).map_err(|_| VaultError::IoError {
-        message: "Failed to serialize vault for notification",
-    })?;
-
-    let _ = platform.notifier().notify_vault_update(vault_name, &vault_bytes);
-
-    Ok(())
+    crate::domain::vault::operations::save_vault(&platform, vault_name, vault).await
 }
 
 async fn cleanup_expired_data(
@@ -815,35 +591,7 @@ async fn cleanup_expired_data(
     vault_name: &str,
 ) -> Result<bool, VaultError> {
     let now = js_sys::Date::now() as i64 / 1000;
-    let mut data_removed = false;
-
-    let expired_namespaces: Vec<String> = vault
-        .namespaces
-        .iter()
-        .filter_map(|(namespace, encrypted)| {
-            if let Some(expiration) = &encrypted.expiration {
-                if now >= expiration.expires_at {
-                    Some(namespace.clone())
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
-        })
-        .collect();
-
-    let dirname = get_vault_dirname(vault_name);
-    let storage = platform.storage();
-
-    for namespace in expired_namespaces {
-        let namespace_filename = get_namespace_filename(&namespace);
-        let namespace_path = format!("{}/{}", dirname, namespace_filename);
-        let _ = storage.delete_file(&namespace_path).await;
-        vault.namespaces.remove(&namespace);
-        data_removed = true;
-        platform.logger().log(&format!("Removed expired namespace: {}", namespace));
-    }
+    let data_removed = cleanup_expired_namespaces(platform, vault, vault_name, now).await?;
 
     if data_removed {
         save_vault(vault_name, vault.clone()).await?;
@@ -877,18 +625,8 @@ async fn insert_namespace_data(
     let recipient = identity.to_public();
     let encrypted_data = encrypt_with_recipients(&data_bytes, &[recipient]).await?;
 
-    let expiration = if let Some(seconds) = expires_in_seconds {
-        if seconds <= 0 {
-            None
-        } else {
-            let now = js_sys::Date::now() as i64 / 1000;
-            Some(Expiration {
-                expires_at: now + seconds,
-            })
-        }
-    } else {
-        None
-    };
+    let now = js_sys::Date::now() as i64 / 1000;
+    let expiration = create_expiration(expires_in_seconds, now);
 
     let namespace_data = NamespaceData {
         data: encrypted_data,
