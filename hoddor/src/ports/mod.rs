@@ -5,9 +5,11 @@
 /// decoupling the business logic from platform-specific implementations.
 
 pub mod clock;
+pub mod lock;
 pub mod logger;
 pub mod persistence;
 
 pub use clock::ClockPort;
+pub use lock::{LockGuard, LockPort};
 pub use logger::LoggerPort;
 pub use persistence::PersistencePort;

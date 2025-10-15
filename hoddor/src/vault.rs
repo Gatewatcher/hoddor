@@ -7,7 +7,6 @@ use crate::file_system::{
     get_root_directory_handle, remove_directory_with_contents, remove_file_from_directory,
 };
 use crate::global::get_global_scope;
-use crate::lock::acquire_vault_lock;
 use crate::measure::time_it;
 use crate::sync::{get_sync_manager, OperationType, SyncMessage};
 use crate::webrtc::{AccessLevel, WebRtcPeer};
@@ -239,6 +238,8 @@ pub async fn upsert_vault(
     expires_in_seconds: Option<i64>,
     replace_if_exists: bool,
 ) -> Result<(), JsValue> {
+    let platform = Platform::new();
+
     // Validate namespace first
     validate_namespace(namespace)?;
 
@@ -247,7 +248,7 @@ pub async fn upsert_vault(
     let mut last_error = None;
 
     while retries > 0 {
-        let lock = match acquire_vault_lock(vault_name).await {
+        let lock = match platform.locks().acquire(vault_name).await {
             Ok(lock) => lock,
             Err(e) => {
                 retries -= 1;
@@ -495,7 +496,8 @@ async fn list_namespaces_internal(
 
 #[wasm_bindgen]
 pub async fn remove_vault(vault_name: &str) -> Result<(), JsValue> {
-    let _lock = acquire_vault_lock(vault_name).await?;
+    let platform = Platform::new();
+    let _lock = platform.locks().acquire(vault_name).await?;
 
     let dirname = get_vault_dirname(vault_name);
     let root_handle = get_root_directory_handle().await?;
@@ -1117,7 +1119,7 @@ async fn cleanup_expired_data(
 #[wasm_bindgen]
 pub async fn force_cleanup_vault(vault_name: &str) -> Result<(), JsValue> {
     let platform = Platform::new();
-    let _lock = acquire_vault_lock(vault_name).await?;
+    let _lock = platform.locks().acquire(vault_name).await?;
     let (file_handle, mut vault) = read_vault_with_name(vault_name).await?;
 
     while cleanup_expired_data(&platform, &mut vault, &file_handle).await? {}

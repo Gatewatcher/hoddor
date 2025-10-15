@@ -10,7 +10,6 @@ pub mod crypto;
 pub mod errors;
 pub mod file_system;
 pub mod global;
-pub mod lock;
 pub mod measure;
 pub mod notifications;
 pub mod persistence;
