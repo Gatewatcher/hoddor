@@ -59,3 +59,75 @@ pub async fn cleanup_expired_namespaces(
 
     Ok(data_removed)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_expired_with_no_expiration() {
+        let now = 1000;
+        assert!(!is_expired(&None, now));
+    }
+
+    #[test]
+    fn test_is_expired_with_future_expiration() {
+        let now = 1000;
+        let expiration = Some(Expiration { expires_at: 2000 });
+        assert!(!is_expired(&expiration, now));
+    }
+
+    #[test]
+    fn test_is_expired_with_exact_expiration() {
+        let now = 1000;
+        let expiration = Some(Expiration { expires_at: 1000 });
+        assert!(is_expired(&expiration, now));
+    }
+
+    #[test]
+    fn test_is_expired_with_past_expiration() {
+        let now = 2000;
+        let expiration = Some(Expiration { expires_at: 1000 });
+        assert!(is_expired(&expiration, now));
+    }
+
+    #[test]
+    fn test_create_expiration_with_none() {
+        let now = 1000;
+        let result = create_expiration(None, now);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_create_expiration_with_zero() {
+        let now = 1000;
+        let result = create_expiration(Some(0), now);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_create_expiration_with_negative() {
+        let now = 1000;
+        let result = create_expiration(Some(-100), now);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_create_expiration_with_positive() {
+        let now = 1000;
+        let result = create_expiration(Some(500), now);
+        assert!(result.is_some());
+        let expiration = result.unwrap();
+        assert_eq!(expiration.expires_at, 1500);
+    }
+
+    #[test]
+    fn test_create_expiration_large_duration() {
+        let now = 1000;
+        let one_year_seconds = 365 * 24 * 60 * 60;
+        let result = create_expiration(Some(one_year_seconds), now);
+        assert!(result.is_some());
+        let expiration = result.unwrap();
+        assert_eq!(expiration.expires_at, now + one_year_seconds);
+    }
+}
