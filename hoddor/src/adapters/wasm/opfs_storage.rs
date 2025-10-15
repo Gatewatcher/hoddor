@@ -273,19 +273,34 @@ impl StoragePort for OPFSStorage {
 }
 
 impl OPFSStorage {
-    /// Helper to clean up all files in a directory.
-    async fn cleanup_directory(&self, dir_handle: &FileSystemDirectoryHandle) -> Result<(), VaultError> {
-        let entries = self.list_entries_from_handle(dir_handle).await?;
+    /// Helper to recursively clean up all files and subdirectories in a directory.
+    fn cleanup_directory<'a>(
+        &'a self,
+        dir_handle: &'a FileSystemDirectoryHandle,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), VaultError>> + 'a>> {
+        Box::pin(async move {
+            let entries = self.list_entries_from_handle(dir_handle).await?;
 
-        for entry_name in entries {
-            JsFuture::from(dir_handle.remove_entry(&entry_name))
-                .await
-                .map_err(|_| VaultError::IoError {
-                    message: "Failed to remove entry",
-                })?;
-        }
+            for entry_name in entries {
+                // Try to get it as a directory first
+                if let Ok(subdir_handle) = JsFuture::from(dir_handle.get_directory_handle(&entry_name))
+                    .await
+                    .map(|h| h.unchecked_into::<FileSystemDirectoryHandle>())
+                {
+                    // It's a directory - recursively clean it up first
+                    self.cleanup_directory(&subdir_handle).await?;
+                }
 
-        Ok(())
+                // Now remove the entry (either a file or an empty directory)
+                JsFuture::from(dir_handle.remove_entry(&entry_name))
+                    .await
+                    .map_err(|_| VaultError::IoError {
+                        message: "Failed to remove entry",
+                    })?;
+            }
+
+            Ok(())
+        })
     }
 
     /// Helper to list entries from a directory handle.

@@ -3,14 +3,15 @@
 /// Stores concrete adapter instances directly.
 /// Platform selection happens at compile-time via #[cfg].
 
-use crate::adapters::{Clock, ConsoleLogger, Locks, Persistence, Storage};
-use crate::ports::{ClockPort, LockPort, LoggerPort, PersistencePort, StoragePort};
+use crate::adapters::{Clock, ConsoleLogger, Locks, Notifier, Persistence, Storage};
+use crate::ports::{ClockPort, LockPort, LoggerPort, NotifierPort, PersistencePort, StoragePort};
 
 #[derive(Clone, Copy)]
 pub struct Platform {
     clock: Clock,
     logger: ConsoleLogger,
     locks: Locks,
+    notifier: Notifier,
     persistence: Persistence,
     storage: Storage,
 }
@@ -22,6 +23,7 @@ impl Platform {
             clock: Clock::new(),
             logger: ConsoleLogger::new(),
             locks: Locks::new(),
+            notifier: Notifier::new(),
             persistence: Persistence::new(),
             storage: Storage::new(),
         }
@@ -50,6 +52,11 @@ impl Platform {
     #[inline]
     pub fn storage(&self) -> &dyn StoragePort {
         &self.storage
+    }
+
+    #[inline]
+    pub fn notifier(&self) -> &dyn NotifierPort {
+        &self.notifier
     }
 }
 

@@ -2,11 +2,6 @@ use crate::crypto::{
     decrypt_with_identity, encrypt_with_recipients, identity_from_passphrase, IdentityHandle,
 };
 use crate::errors::VaultError;
-use crate::file_system::{
-    get_or_create_directory_handle, get_or_create_file_handle_in_directory,
-    get_root_directory_handle, remove_directory_with_contents, remove_file_from_directory,
-};
-use crate::global::get_global_scope;
 use crate::measure::time_it;
 use crate::sync::{get_sync_manager, OperationType, SyncMessage};
 use crate::webrtc::{AccessLevel, WebRtcPeer};
@@ -19,17 +14,12 @@ use core::str;
 use serde_wasm_bindgen::{from_value, to_value};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicI64, Ordering};
-use wasm_bindgen_futures::JsFuture;
-
-use web_sys::{self, FileSystemDirectoryHandle};
 
 use rand::RngCore;
 
 use argon2::password_hash::rand_core::OsRng;
 
 use futures_channel::mpsc::UnboundedReceiver;
-
-use crate::notifications;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 struct Expiration {
@@ -160,7 +150,7 @@ async fn vault_identity_from_passphrase_internal(
     validate_vault_name(vault_name)?;
 
     let dirname = get_vault_dirname(vault_name);
-    let (dir_handle, mut vault) = match read_vault_with_name(&dirname).await {
+    let mut vault = match read_vault_with_name(&dirname).await {
         Ok(result) => result,
         Err(_) => {
             return Err(JsValue::from_str(&format!(
@@ -221,7 +211,7 @@ async fn vault_identity_from_passphrase_internal(
         .identity_salts
         .set_salt(identity.public_key(), new_salt);
 
-    save_vault(&dir_handle, vault).await.map_err(|e| {
+    save_vault(&dirname, vault).await.map_err(|e| {
         platform.logger().error(&format!("Failed to save vault: {:?}", e));
         JsValue::from_str(&format!("Failed to save vault: {:?}", e))
     })?;
@@ -266,7 +256,7 @@ pub async fn upsert_vault(
 
         let result = async {
             let mut vault = match read_vault_with_name(vault_name).await {
-                Ok((_, v)) => v,
+                Ok(v) => v,
                 Err(VaultError::IoError { message })
                     if message.contains("Failed to get directory handle") =>
                 {
@@ -286,8 +276,7 @@ pub async fn upsert_vault(
                 .namespaces
                 .insert(namespace.to_string(), namespace_data.clone());
 
-            let (dir_handle, _) = read_vault_with_name(vault_name).await?;
-            save_vault(&dir_handle, vault.clone()).await?;
+            save_vault(vault_name, vault.clone()).await?;
 
             if let Ok(sync_manager) = get_sync_manager(vault_name) {
                 let mut sync_manager = sync_manager.borrow_mut();
@@ -361,16 +350,21 @@ pub async fn remove_from_vault(
 
     check_identity(vault_name, identity).await?;
 
-    let (dir_handle, mut vault) = read_vault_with_name(vault_name).await?;
+    let mut vault = read_vault_with_name(vault_name).await?;
 
     if vault.namespaces.remove(&namespace).is_none() {
         return Err(VaultError::NamespaceNotFound.into());
     }
 
+    let dirname = get_vault_dirname(vault_name);
     let namespace_filename = get_namespace_filename(&namespace);
-    remove_file_from_directory(&dir_handle, &namespace_filename).await?;
+    let namespace_path = format!("{}/{}", dirname, namespace_filename);
 
-    save_vault(&dir_handle, vault).await?;
+    let platform = Platform::new();
+    let storage = platform.storage();
+    storage.delete_file(&namespace_path).await.map_err(|e| JsValue::from_str(&format!("{:?}", e)))?;
+
+    save_vault(vault_name, vault).await?;
     Ok(())
 }
 
@@ -402,7 +396,7 @@ async fn read_from_vault_internal(
             message: "Invalid namespace format",
         })?;
 
-        let (dir_handle, mut vault) = match read_vault_with_name(vault_name).await {
+        let mut vault = match read_vault_with_name(vault_name).await {
             Ok(result) => result,
             Err(VaultError::IoError { .. }) => {
                 return Err(VaultError::NamespaceNotFound.into());
@@ -419,7 +413,7 @@ async fn read_from_vault_internal(
             let now = js_sys::Date::now() as i64 / 1000;
             if now >= expiration.expires_at {
                 vault.namespaces.remove(&namespace);
-                save_vault(&dir_handle, vault.clone()).await?;
+                save_vault(vault_name, vault.clone()).await?;
                 return Err(VaultError::DataExpired.into());
             }
         }
@@ -472,7 +466,7 @@ async fn list_namespaces_internal(
     platform: &Platform,
     vault_name: &str,
 ) -> Result<Vec<String>, VaultError> {
-    let (_, vault) = match read_vault_with_name(vault_name).await {
+    let vault = match read_vault_with_name(vault_name).await {
         Ok(result) => result,
         Err(VaultError::IoError { .. }) => {
             return Ok(Vec::new());
@@ -500,8 +494,8 @@ pub async fn remove_vault(vault_name: &str) -> Result<(), JsValue> {
     let _lock = platform.locks().acquire(vault_name).await?;
 
     let dirname = get_vault_dirname(vault_name);
-    let root_handle = get_root_directory_handle().await?;
-    remove_directory_with_contents(&root_handle, &dirname).await?;
+    let storage = platform.storage();
+    storage.delete_directory(&dirname).await.map_err(|e| JsValue::from_str(&format!("{:?}", e)))?;
 
     Ok(())
 }
@@ -516,75 +510,10 @@ pub async fn list_vaults() -> Result<JsValue, JsValue> {
 }
 
 async fn list_vaults_internal(platform: &Platform) -> Result<Vec<String>, VaultError> {
-    let root = get_root_directory_handle().await?;
     platform.logger().log("Listing vaults from root directory");
 
-    let entries_val = js_sys::Reflect::get(&root, &JsValue::from_str("entries"))
-        .map_err(|_| VaultError::IoError {
-            message: "Failed to get entries",
-        })?;
-    let entries_fn = entries_val
-        .dyn_ref::<js_sys::Function>()
-        .ok_or_else(|| VaultError::IoError {
-            message: "entries is not a function",
-        })?;
-
-    let iterator = entries_fn.call0(&root).map_err(|_| VaultError::IoError {
-        message: "Failed to call entries",
-    })?;
-    let mut vault_names = Vec::new();
-
-    loop {
-        let next_val = js_sys::Reflect::get(&iterator, &JsValue::from_str("next")).map_err(
-            |_| VaultError::IoError {
-                message: "Failed to get next",
-            },
-        )?;
-        let next_fn = next_val
-            .dyn_ref::<js_sys::Function>()
-            .ok_or_else(|| VaultError::IoError {
-                message: "next is not a function",
-            })?;
-
-        let next_result = JsFuture::from(
-            next_fn
-                .call0(&iterator)
-                .map_err(|_| VaultError::IoError {
-                    message: "Failed to call next",
-                })?
-                .dyn_into::<js_sys::Promise>()
-                .map_err(|_| VaultError::IoError {
-                    message: "Failed to convert to promise",
-                })?,
-        )
-        .await
-        .map_err(|_| VaultError::IoError {
-            message: "Failed to await next",
-        })?;
-
-        let done = js_sys::Reflect::get(&next_result, &JsValue::from_str("done"))
-            .map_err(|_| VaultError::IoError {
-                message: "Failed to get done",
-            })?
-            .as_bool()
-            .unwrap_or(true);
-
-        if done {
-            break;
-        }
-
-        if next_result.is_null() {
-            break;
-        }
-
-        if let Ok(value) = js_sys::Reflect::get(&next_result, &JsValue::from_str("value")) {
-            if let Some(array) = value.dyn_ref::<js_sys::Array>() {
-                if let Some(name) = array.get(0).as_string() {
-                    vault_names.push(name);
-                }
-            }
-        }
-    }
+    let storage = platform.storage();
+    let vault_names = storage.list_entries(".").await?;
 
     platform
         .logger()
@@ -617,8 +546,6 @@ pub async fn create_vault(vault_name: JsValue) -> Result<(), JsValue> {
 }
 
 async fn create_vault_internal(vault_name: &str) -> Result<(), JsValue> {
-    let dirname = get_vault_dirname(vault_name);
-
     validate_vault_name(vault_name).map_err(|e| JsValue::from_str(&format!("{}", e)))?;
 
     if let Ok(_) = read_vault_with_name(vault_name).await {
@@ -628,10 +555,6 @@ async fn create_vault_internal(vault_name: &str) -> Result<(), JsValue> {
         )));
     }
 
-    let dir_handle = get_or_create_directory_handle(&dirname)
-        .await
-        .map_err(|e| JsValue::from_str(&format!("Failed to create directory: {}", e)))?;
-
     let vault = Vault {
         metadata: VaultMetadata { peer_id: None },
         identity_salts: IdentitySalts::new(),
@@ -640,7 +563,7 @@ async fn create_vault_internal(vault_name: &str) -> Result<(), JsValue> {
         sync_enabled: false,
     };
 
-    save_vault(&dir_handle, vault)
+    save_vault(vault_name, vault)
         .await
         .map_err(|e| JsValue::from_str(&format!("Failed to save vault: {:?}", e)))?;
 
@@ -648,8 +571,8 @@ async fn create_vault_internal(vault_name: &str) -> Result<(), JsValue> {
 }
 
 async fn check_identity(vault_name: &str, identity: &IdentityHandle) -> Result<Vault, VaultError> {
-    let (_, vault) = match read_vault_with_name(vault_name).await {
-        Ok((handle, existing_vault)) => (handle, existing_vault),
+    let vault = match read_vault_with_name(vault_name).await {
+        Ok(existing_vault) => existing_vault,
 
         Err(VaultError::IoError { .. }) => {
             return Err(VaultError::VaultNotFound);
@@ -678,7 +601,7 @@ async fn export_vault_internal(
     platform: &Platform,
     vault_name: &str,
 ) -> Result<JsValue, VaultError> {
-    let vault = read_vault_with_name(vault_name).await?.1;
+    let vault = read_vault_with_name(vault_name).await?;
 
     // Create binary format with magic number "VAULT1"
     let magic = b"VAULT1";
@@ -777,50 +700,20 @@ async fn import_vault_internal(
         }
     };
 
-    let dir_handle = get_or_create_directory_handle(&get_vault_dirname(vault_name)).await?;
-    save_vault(&dir_handle, imported_vault).await?;
+    save_vault(vault_name, imported_vault).await?;
 
     Ok(())
 }
 
-pub async fn get_vault(vault_name: &str) -> Result<(FileSystemDirectoryHandle, Vault), JsValue> {
-    let dirname = get_vault_dirname(vault_name);
-    read_vault_with_name(&dirname)
-        .await
-        .map_err(|_| JsValue::from_str(&format!("Vault '{}' does not exist", vault_name)))
-}
-
 pub async fn read_vault_with_name(
     vault_name: &str,
-) -> Result<(FileSystemDirectoryHandle, Vault), VaultError> {
-    let root = get_root_directory_handle().await?;
+) -> Result<Vault, VaultError> {
+    let platform = Platform::new();
+    let storage = platform.storage();
     let dirname = get_vault_dirname(vault_name);
 
-    let dir_handle = JsFuture::from(root.get_directory_handle(&dirname))
-        .await
-        .map_err(|_| VaultError::IoError {
-            message: "Failed to get directory handle",
-        })?
-        .unchecked_into::<FileSystemDirectoryHandle>();
-
-    let metadata_handle =
-        get_or_create_file_handle_in_directory(&dir_handle, &get_metadata_filename()).await?;
-
-    let file = JsFuture::from(metadata_handle.get_file())
-        .await
-        .map_err(|_| VaultError::IoError {
-            message: "Failed to get metadata file",
-        })?;
-
-    let metadata_text = JsFuture::from(file.unchecked_into::<web_sys::File>().text())
-        .await
-        .map_err(|_| VaultError::IoError {
-            message: "Failed to read metadata file",
-        })?
-        .as_string()
-        .ok_or(VaultError::IoError {
-            message: "Failed to convert metadata data to string",
-        })?;
+    let metadata_path = format!("{}/{}", dirname, get_metadata_filename());
+    let metadata_text = storage.read_file(&metadata_path).await?;
 
     let mut vault: Vault =
         serde_json::from_str(&metadata_text).map_err(|_| VaultError::SerializationError {
@@ -829,113 +722,39 @@ pub async fn read_vault_with_name(
 
     vault.namespaces.clear();
 
-    if let Ok(entries_val) = js_sys::Reflect::get(&dir_handle, &JsValue::from_str("entries")) {
-        if let Some(entries_fn) = entries_val.dyn_ref::<js_sys::Function>() {
-            if let Ok(iterator) = entries_fn.call0(&dir_handle) {
-                loop {
-                    let next_val = js_sys::Reflect::get(&iterator, &JsValue::from_str("next"))
-                        .map_err(|_| VaultError::IoError {
-                            message: "Failed to get next entry",
-                        })?;
+    let entries = storage.list_entries(&dirname).await?;
 
-                    if let Some(next_fn) = next_val.dyn_ref::<js_sys::Function>() {
-                        if let Ok(promise) = next_fn.call0(&iterator) {
-                            let next_result = JsFuture::from(
-                                promise.dyn_into::<js_sys::Promise>().map_err(|_| {
-                                    VaultError::IoError {
-                                        message: "Failed to convert next result to promise",
-                                    }
-                                })?,
-                            )
-                            .await
-                            .map_err(|_| VaultError::IoError {
-                                message: "Failed to get next entry",
-                            })?;
+    for entry_name in entries {
+        if entry_name.ends_with(".ns") {
+            let namespace_path = format!("{}/{}", dirname, entry_name);
+            let namespace_text = storage.read_file(&namespace_path).await?;
 
-                            let done =
-                                js_sys::Reflect::get(&next_result, &JsValue::from_str("done"))
-                                    .map_err(|_| VaultError::IoError {
-                                        message: "Failed to get done status",
-                                    })?
-                                    .as_bool()
-                                    .unwrap_or(true);
-
-                            if done {
-                                break;
-                            }
-
-                            if next_result.is_null() {
-                                break;
-                            }
-
-                            if let Ok(value) =
-                                js_sys::Reflect::get(&next_result, &JsValue::from_str("value"))
-                            {
-                                if let Some(array) = value.dyn_ref::<js_sys::Array>() {
-                                    if let Some(name) = array.get(0).as_string() {
-                                        // Only process .ns files
-                                        if name.ends_with(".ns") {
-                                            let handle = array
-                                                .get(1)
-                                                .dyn_into::<web_sys::FileSystemFileHandle>()
-                                                .map_err(|_| VaultError::IoError {
-                                                    message: "Failed to get file handle",
-                                                })?;
-
-                                            let file = JsFuture::from(handle.get_file())
-                                                .await
-                                                .map_err(|_| VaultError::IoError {
-                                                    message: "Failed to get namespace file",
-                                                })?;
-
-                                            let namespace_text = JsFuture::from(
-                                                file.unchecked_into::<web_sys::File>().text(),
-                                            )
-                                            .await
-                                            .map_err(|_| VaultError::IoError {
-                                                message: "Failed to read namespace file",
-                                            })?
-                                            .as_string()
-                                            .ok_or(VaultError::IoError {
-                                                message:
-                                                    "Failed to convert namespace data to string",
-                                            })?;
-
-                                            let namespace_data: NamespaceData =
-                                                serde_json::from_str(&namespace_text).map_err(
-                                                    |_| VaultError::SerializationError {
-                                                        message:
-                                                            "Failed to deserialize namespace data",
-                                                    },
-                                                )?;
-
-                                            let namespace = name[..name.len() - 3].to_string();
-                                            vault.namespaces.insert(namespace, namespace_data);
-                                        }
-                                    }
-                                }
-                            }
-                        }
+            let namespace_data: NamespaceData =
+                serde_json::from_str(&namespace_text).map_err(|_| {
+                    VaultError::SerializationError {
+                        message: "Failed to deserialize namespace data",
                     }
-                }
-            }
+                })?;
+
+            let namespace = entry_name[..entry_name.len() - 3].to_string();
+            vault.namespaces.insert(namespace, namespace_data);
         }
     }
 
-    Ok((dir_handle, vault))
+    Ok(vault)
 }
 
 pub async fn save_vault(
-    dir_handle: &FileSystemDirectoryHandle,
+    vault_name: &str,
     vault: Vault,
 ) -> Result<(), VaultError> {
     let platform = Platform::new();
-    save_vault_internal(&platform, dir_handle, vault).await
+    save_vault_internal(&platform, vault_name, vault).await
 }
 
 async fn save_vault_internal(
     platform: &Platform,
-    dir_handle: &FileSystemDirectoryHandle,
+    vault_name: &str,
     vault: Vault,
 ) -> Result<(), VaultError> {
     if !platform.persistence().has_requested() {
@@ -956,123 +775,36 @@ async fn save_vault_internal(
         }
     }
 
-    let mut namespace_data = Vec::new();
-    for (namespace, data) in &vault.namespaces {
-        let namespace_json = serde_json::to_string(&data).map_err(|_| VaultError::IoError {
-            message: "Failed to serialize namespace data",
-        })?;
-        namespace_data.push((namespace.clone(), namespace_json));
-    }
+    let storage = platform.storage();
+    let dirname = get_vault_dirname(vault_name);
+
+    storage.create_directory(&dirname).await?;
 
     let mut metadata_vault = vault.clone();
     metadata_vault.namespaces.clear();
-
-    let metadata_handle =
-        get_or_create_file_handle_in_directory(dir_handle, &get_metadata_filename())
-            .await
-            .map_err(VaultError::from)?;
 
     let metadata_json =
         serde_json::to_string(&metadata_vault).map_err(|_| VaultError::IoError {
             message: "Failed to serialize vault metadata",
         })?;
 
-    let writer = JsFuture::from(metadata_handle.create_writable())
-        .await
-        .map_err(|_| VaultError::IoError {
-            message: "Failed to create writable",
+    let metadata_path = format!("{}/{}", dirname, get_metadata_filename());
+    storage.write_file(&metadata_path, &metadata_json).await?;
+
+    for (namespace, data) in &vault.namespaces {
+        let namespace_json = serde_json::to_string(&data).map_err(|_| VaultError::IoError {
+            message: "Failed to serialize namespace data",
         })?;
 
-    let promise = writer
-        .unchecked_ref::<web_sys::FileSystemWritableFileStream>()
-        .write_with_str(&metadata_json)
-        .map_err(|_| VaultError::IoError {
-            message: "Failed to create Promise for writing vault metadata",
-        })?;
-
-    JsFuture::from(promise)
-        .await
-        .map_err(|_| VaultError::IoError {
-            message: "Failed to write vault metadata",
-        })?;
-
-    JsFuture::from(
-        writer
-            .unchecked_ref::<web_sys::FileSystemWritableFileStream>()
-            .close(),
-    )
-    .await
-    .map_err(|_| VaultError::IoError {
-        message: "Failed to close writer",
-    })?;
-
-    for (namespace, namespace_json) in namespace_data {
-        let file_handle =
-            get_or_create_file_handle_in_directory(dir_handle, &get_namespace_filename(&namespace))
-                .await?;
-
-        let writer = JsFuture::from(file_handle.create_writable())
-            .await
-            .map_err(|_| VaultError::IoError {
-                message: "Failed to create writable",
-            })?;
-
-        match writer
-            .unchecked_ref::<web_sys::FileSystemWritableFileStream>()
-            .write_with_str(&namespace_json)
-        {
-            Ok(promise) => {
-                JsFuture::from(promise)
-                    .await
-                    .map_err(|_| VaultError::IoError {
-                        message: "Failed to write namespace data",
-                    })?;
-            }
-            Err(_) => {
-                return Err(VaultError::IoError {
-                    message: "Failed to create Promise for writing namespace data",
-                });
-            }
-        }
-
-        JsFuture::from(
-            writer
-                .unchecked_ref::<web_sys::FileSystemWritableFileStream>()
-                .close(),
-        )
-        .await
-        .map_err(|_| VaultError::IoError {
-            message: "Failed to close writer",
-        })?;
+        let namespace_path = format!("{}/{}", dirname, get_namespace_filename(namespace));
+        storage.write_file(&namespace_path, &namespace_json).await?;
     }
 
-    let global_scope = get_global_scope()?;
-    let msg = notifications::Message {
-        event: notifications::EventType::VaultUpdate,
-        data: vault.clone(),
-    };
-    let js_value = serde_wasm_bindgen::to_value(&msg).map_err(|_| VaultError::IoError {
-        message: "Failed to serialize",
+    let vault_bytes = serde_json::to_vec(&vault).map_err(|_| VaultError::IoError {
+        message: "Failed to serialize vault for notification",
     })?;
 
-    if let Ok(worker_scope) = global_scope
-        .clone()
-        .dyn_into::<web_sys::DedicatedWorkerGlobalScope>()
-    {
-        worker_scope.post_message(&js_value)?;
-        platform.logger().log("message posted using worker");
-    } else if let Ok(window) = global_scope.dyn_into::<web_sys::Window>() {
-        window
-            .post_message(&js_value, "*")
-            .map_err(|_| VaultError::IoError {
-                message: "Failed to post message to window",
-            })?;
-        platform.logger().log("message posted using window");
-    } else {
-        return Err(VaultError::IoError {
-            message: "Unknown global scope",
-        });
-    }
+    let _ = platform.notifier().notify_vault_update(vault_name, &vault_bytes);
 
     Ok(())
 }
@@ -1080,7 +812,7 @@ async fn save_vault_internal(
 async fn cleanup_expired_data(
     platform: &Platform,
     vault: &mut Vault,
-    dir_handle: &FileSystemDirectoryHandle,
+    vault_name: &str,
 ) -> Result<bool, VaultError> {
     let now = js_sys::Date::now() as i64 / 1000;
     let mut data_removed = false;
@@ -1101,16 +833,20 @@ async fn cleanup_expired_data(
         })
         .collect();
 
+    let dirname = get_vault_dirname(vault_name);
+    let storage = platform.storage();
+
     for namespace in expired_namespaces {
-        let filename = get_namespace_filename(&namespace);
-        let _ = remove_file_from_directory(dir_handle, &filename).await;
+        let namespace_filename = get_namespace_filename(&namespace);
+        let namespace_path = format!("{}/{}", dirname, namespace_filename);
+        let _ = storage.delete_file(&namespace_path).await;
         vault.namespaces.remove(&namespace);
         data_removed = true;
         platform.logger().log(&format!("Removed expired namespace: {}", namespace));
     }
 
     if data_removed {
-        save_vault_internal(platform, dir_handle, vault.clone()).await?;
+        save_vault(vault_name, vault.clone()).await?;
     }
 
     Ok(data_removed)
@@ -1120,9 +856,9 @@ async fn cleanup_expired_data(
 pub async fn force_cleanup_vault(vault_name: &str) -> Result<(), JsValue> {
     let platform = Platform::new();
     let _lock = platform.locks().acquire(vault_name).await?;
-    let (file_handle, mut vault) = read_vault_with_name(vault_name).await?;
+    let mut vault = read_vault_with_name(vault_name).await?;
 
-    while cleanup_expired_data(&platform, &mut vault, &file_handle).await? {}
+    while cleanup_expired_data(&platform, &mut vault, vault_name).await? {}
 
     Ok(())
 }
@@ -1199,10 +935,9 @@ async fn enable_sync_internal(
     let mut updated_vault = vault.clone();
     updated_vault.sync_enabled = true;
 
-    let dir_handle = get_or_create_directory_handle(&get_vault_dirname(vault_name)).await?;
     let vault = updated_vault.clone();
 
-    save_vault(&dir_handle, vault.clone()).await?;
+    save_vault(vault_name, vault.clone()).await?;
 
     let (mut peer, _receiver): (WebRtcPeer, UnboundedReceiver<Vec<u8>>) =
         WebRtcPeer::create_peer(vault.metadata.peer_id.clone().unwrap(), stun_servers_vec).await?;
@@ -1286,7 +1021,7 @@ async fn connect_to_peer_internal(
     sync_manager.borrow_mut().add_peer(peer_rc);
 
     platform.logger().log("Sending initial vault data to the peer...");
-    let vault = read_vault_with_name(vault_name).await?.1;
+    let vault = read_vault_with_name(vault_name).await?;
     let sync_manager = get_sync_manager(vault_name)?;
     let mut sync_manager = sync_manager.borrow_mut();
 
@@ -1487,15 +1222,12 @@ async fn update_vault_from_sync_internal(
     let sync_msg: SyncMessage = serde_json::from_slice(vault_data)
         .map_err(|e| VaultError::JsError(format!("Failed to deserialize sync message: {:?}", e)))?;
 
-    let (file_handle, mut current_vault) = match read_vault_with_name(vault_name).await {
-        Ok((handle, vault)) => (handle, vault),
+    let mut current_vault = match read_vault_with_name(vault_name).await {
+        Ok(vault) => vault,
         Err(VaultError::IoError {
             message: "Failed to get directory handle",
         }) => {
             platform.logger().log(&format!("Creating new vault {} for sync", vault_name));
-
-            let dirname = get_vault_dirname(vault_name);
-            let dir_handle = get_or_create_directory_handle(&dirname).await?;
 
             let vault = Vault {
                 metadata: sync_msg.vault_metadata.ok_or_else(|| {
@@ -1515,9 +1247,9 @@ async fn update_vault_from_sync_internal(
                 sync_enabled: true,
             };
 
-            save_vault(&dir_handle, vault.clone()).await?;
+            save_vault(vault_name, vault.clone()).await?;
 
-            (dir_handle, vault)
+            vault
         }
         Err(e) => return Err(e),
     };
@@ -1548,7 +1280,7 @@ async fn update_vault_from_sync_internal(
         }
     }
 
-    save_vault(&file_handle, current_vault).await?;
+    save_vault(vault_name, current_vault).await?;
 
     Ok(())
 }

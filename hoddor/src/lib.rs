@@ -8,7 +8,6 @@ pub mod platform;
 // Existing modules
 pub mod crypto;
 pub mod errors;
-pub mod file_system;
 pub mod global;
 pub mod measure;
 pub mod notifications;
@@ -17,6 +16,10 @@ pub mod sync;
 pub mod vault;
 pub mod webauthn;
 pub mod webrtc;
+
+// Re-exports for testing
+pub use platform::Platform;
+pub use vault::{read_vault_with_name, save_vault, Vault, VaultMetadata, IdentitySalts, NamespaceData};
 
 use wasm_bindgen::prelude::*;
 

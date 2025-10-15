@@ -6,6 +6,6 @@ pub mod wasm;
 pub mod native;
 
 #[cfg(target_arch = "wasm32")]
-pub use wasm::{Clock, ConsoleLogger, Locks, OPFSStorage as Storage, Persistence};
+pub use wasm::{Clock, ConsoleLogger, Locks, Notifier, OPFSStorage as Storage, Persistence};
 #[cfg(not(target_arch = "wasm32"))]
-pub use native::{Clock, ConsoleLogger, FsStorage as Storage, Locks, Persistence};
+pub use native::{Clock, ConsoleLogger, FsStorage as Storage, Locks, Notifier, Persistence};
