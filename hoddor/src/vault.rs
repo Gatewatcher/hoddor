@@ -23,7 +23,7 @@ use futures_channel::mpsc::UnboundedReceiver;
 
 pub use crate::domain::vault::{IdentitySalts, NamespaceData, Vault, VaultMetadata};
 use crate::domain::vault::expiration::{cleanup_expired_namespaces, create_expiration, is_expired};
-use crate::domain::vault::operations::{get_namespace_filename, get_vault_dirname};
+use crate::domain::vault::operations::get_namespace_filename;
 use crate::domain::vault::validation::{validate_namespace, validate_passphrase, validate_vault_name};
 
 #[wasm_bindgen]
@@ -43,8 +43,7 @@ async fn vault_identity_from_passphrase_internal(
     validate_passphrase(passphrase).map_err(|e| JsValue::from_str(&format!("{}", e)))?;
     validate_vault_name(vault_name)?;
 
-    let dirname = get_vault_dirname(vault_name);
-    let mut vault = match read_vault_with_name(&dirname).await {
+    let mut vault = match read_vault_with_name(vault_name).await {
         Ok(result) => result,
         Err(_) => {
             return Err(JsValue::from_str(&format!(
@@ -55,7 +54,7 @@ async fn vault_identity_from_passphrase_internal(
     };
 
     // Try to find an existing identity by iterating over stored salts
-    for (stored_pubkey, salt) in vault.identity_salts.salts_iter() {
+    for (stored_pubkey, salt) in vault.identity_salts.iter() {
         platform.logger().log(&format!("Checking stored public key: {}", stored_pubkey));
 
         // Validate salt length
@@ -105,7 +104,7 @@ async fn vault_identity_from_passphrase_internal(
         .identity_salts
         .set_salt(identity.public_key(), new_salt);
 
-    save_vault(&dirname, vault).await.map_err(|e| {
+    save_vault(vault_name, vault).await.map_err(|e| {
         platform.logger().error(&format!("Failed to save vault: {:?}", e));
         JsValue::from_str(&format!("Failed to save vault: {:?}", e))
     })?;
@@ -250,9 +249,8 @@ pub async fn remove_from_vault(
         return Err(VaultError::NamespaceNotFound.into());
     }
 
-    let dirname = get_vault_dirname(vault_name);
     let namespace_filename = get_namespace_filename(&namespace);
-    let namespace_path = format!("{}/{}", dirname, namespace_filename);
+    let namespace_path = format!("{}/{}", vault_name, namespace_filename);
 
     let platform = Platform::new();
     let storage = platform.storage();
@@ -424,7 +422,7 @@ async fn create_vault_internal(vault_name: &str) -> Result<(), JsValue> {
         )));
     }
 
-    let vault = crate::domain::vault::operations::create_vault(vault_name)
+    let vault = crate::domain::vault::operations::create_vault()
         .await
         .map_err(|e| JsValue::from_str(&format!("Failed to create vault: {:?}", e)))?;
 

@@ -16,24 +16,15 @@ pub struct VaultMetadata {
     pub peer_id: Option<String>,
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, Default)]
 pub struct IdentitySalts {
     salts: HashMap<String, [u8; 32]>,
     credential_ids: HashMap<String, Vec<u8>>,
 }
 
-impl Default for IdentitySalts {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl IdentitySalts {
     pub fn new() -> Self {
-        Self {
-            salts: HashMap::new(),
-            credential_ids: HashMap::new(),
-        }
+        Self::default()
     }
 
     pub fn get_salt(&self, public_key: &str) -> Option<&[u8; 32]> {
@@ -44,16 +35,8 @@ impl IdentitySalts {
         self.salts.insert(public_key, salt);
     }
 
-    pub fn get_all_salts(&self) -> impl Iterator<Item = &[u8; 32]> {
-        self.salts.values()
-    }
-
-    pub fn salts_iter(&self) -> impl Iterator<Item = (&String, &[u8; 32])> {
+    pub fn iter(&self) -> impl Iterator<Item = (&String, &[u8; 32])> {
         self.salts.iter()
-    }
-
-    pub fn get_all_credential_ids(&self) -> impl Iterator<Item = &Vec<u8>> {
-        self.credential_ids.values()
     }
 
     pub fn get_credential_id(&self, public_key: &str) -> Option<&Vec<u8>> {

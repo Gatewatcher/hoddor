@@ -5,7 +5,7 @@ pub mod validation;
 
 pub use expiration::{cleanup_expired_namespaces, create_expiration, is_expired};
 pub use operations::{
-    create_vault, delete_vault, get_metadata_filename, get_namespace_filename, get_vault_dirname,
+    create_vault, delete_vault, get_namespace_filename,
     list_vaults, read_vault, save_vault,
 };
 pub use types::{Expiration, IdentitySalts, NamespaceData, Vault, VaultMetadata};

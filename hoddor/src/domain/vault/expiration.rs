@@ -1,28 +1,18 @@
 use crate::errors::VaultError;
 use crate::platform::Platform;
-use super::operations::{get_namespace_filename, get_vault_dirname};
+use super::operations::get_namespace_filename;
 use super::types::{Expiration, Vault};
 
 pub fn is_expired(expiration: &Option<Expiration>, now: i64) -> bool {
-    if let Some(exp) = expiration {
-        now >= exp.expires_at
-    } else {
-        false
-    }
+    expiration.as_ref().map_or(false, |exp| now >= exp.expires_at)
 }
 
 pub fn create_expiration(expires_in_seconds: Option<i64>, now: i64) -> Option<Expiration> {
-    if let Some(seconds) = expires_in_seconds {
-        if seconds <= 0 {
-            None
-        } else {
-            Some(Expiration {
-                expires_at: now + seconds,
-            })
-        }
-    } else {
-        None
-    }
+    expires_in_seconds
+        .filter(|&seconds| seconds > 0)
+        .map(|seconds| Expiration {
+            expires_at: now + seconds,
+        })
 }
 
 pub async fn cleanup_expired_namespaces(
@@ -45,12 +35,11 @@ pub async fn cleanup_expired_namespaces(
         })
         .collect();
 
-    let dirname = get_vault_dirname(vault_name);
     let storage = platform.storage();
 
     for namespace in expired_namespaces {
         let namespace_filename = get_namespace_filename(&namespace);
-        let namespace_path = format!("{}/{}", dirname, namespace_filename);
+        let namespace_path = format!("{}/{}", vault_name, namespace_filename);
         let _ = storage.delete_file(&namespace_path).await;
         vault.namespaces.remove(&namespace);
         data_removed = true;

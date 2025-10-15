@@ -3,16 +3,11 @@ use crate::platform::Platform;
 use super::types::{NamespaceData, Vault, VaultMetadata};
 use std::collections::HashMap;
 
-pub fn get_vault_dirname(vault_name: &str) -> String {
-    vault_name.to_string()
-}
-
-pub fn get_metadata_filename() -> String {
-    "metadata.json".to_string()
-}
+const METADATA_FILENAME: &str = "metadata.json";
+const NAMESPACE_EXTENSION: &str = ".ns";
 
 pub fn get_namespace_filename(namespace: &str) -> String {
-    format!("{}.ns", namespace)
+    format!("{}{}", namespace, NAMESPACE_EXTENSION)
 }
 
 pub async fn read_vault(
@@ -20,9 +15,8 @@ pub async fn read_vault(
     vault_name: &str,
 ) -> Result<Vault, VaultError> {
     let storage = platform.storage();
-    let dirname = get_vault_dirname(vault_name);
 
-    let metadata_path = format!("{}/{}", dirname, get_metadata_filename());
+    let metadata_path = format!("{}/{}", vault_name, METADATA_FILENAME);
     let metadata_text = storage.read_file(&metadata_path).await?;
 
     let mut vault: Vault =
@@ -32,11 +26,11 @@ pub async fn read_vault(
 
     vault.namespaces.clear();
 
-    let entries = storage.list_entries(&dirname).await?;
+    let entries = storage.list_entries(vault_name).await?;
 
     for entry_name in entries {
-        if entry_name.ends_with(".ns") {
-            let namespace_path = format!("{}/{}", dirname, entry_name);
+        if entry_name.ends_with(NAMESPACE_EXTENSION) {
+            let namespace_path = format!("{}/{}", vault_name, entry_name);
             let namespace_text = storage.read_file(&namespace_path).await?;
 
             let namespace_data: NamespaceData =
@@ -46,7 +40,7 @@ pub async fn read_vault(
                     }
                 })?;
 
-            let namespace = entry_name[..entry_name.len() - 3].to_string();
+            let namespace = entry_name.strip_suffix(NAMESPACE_EXTENSION).unwrap().to_string();
             vault.namespaces.insert(namespace, namespace_data);
         }
     }
@@ -78,9 +72,8 @@ pub async fn save_vault(
     }
 
     let storage = platform.storage();
-    let dirname = get_vault_dirname(vault_name);
 
-    storage.create_directory(&dirname).await?;
+    storage.create_directory(vault_name).await?;
 
     let mut metadata_vault = vault.clone();
     metadata_vault.namespaces.clear();
@@ -90,7 +83,7 @@ pub async fn save_vault(
             message: "Failed to serialize vault metadata",
         })?;
 
-    let metadata_path = format!("{}/{}", dirname, get_metadata_filename());
+    let metadata_path = format!("{}/{}", vault_name, METADATA_FILENAME);
     storage.write_file(&metadata_path, &metadata_json).await?;
 
     for (namespace, data) in &vault.namespaces {
@@ -98,7 +91,7 @@ pub async fn save_vault(
             message: "Failed to serialize namespace data",
         })?;
 
-        let namespace_path = format!("{}/{}", dirname, get_namespace_filename(namespace));
+        let namespace_path = format!("{}/{}", vault_name, get_namespace_filename(namespace));
         storage.write_file(&namespace_path, &namespace_json).await?;
     }
 
@@ -123,22 +116,19 @@ pub async fn list_vaults(platform: &Platform) -> Result<Vec<String>, VaultError>
     Ok(vault_names)
 }
 
-pub async fn create_vault(_vault_name: &str) -> Result<Vault, VaultError> {
-    let vault = Vault {
+pub async fn create_vault() -> Result<Vault, VaultError> {
+    Ok(Vault {
         metadata: VaultMetadata { peer_id: None },
         identity_salts: super::types::IdentitySalts::new(),
         username_pk: HashMap::new(),
         namespaces: HashMap::new(),
         sync_enabled: false,
-    };
-
-    Ok(vault)
+    })
 }
 
 pub async fn delete_vault(platform: &Platform, vault_name: &str) -> Result<(), VaultError> {
-    let dirname = get_vault_dirname(vault_name);
     let storage = platform.storage();
-    storage.delete_directory(&dirname).await?;
+    storage.delete_directory(vault_name).await?;
     Ok(())
 }
 
@@ -149,26 +139,10 @@ mod tests {
     use std::collections::HashMap;
 
     #[test]
-    fn test_get_vault_dirname() {
-        assert_eq!(get_vault_dirname("my_vault"), "my_vault");
-        assert_eq!(get_vault_dirname("test123"), "test123");
-        assert_eq!(get_vault_dirname("vault-name"), "vault-name");
-    }
-
-    #[test]
-    fn test_get_metadata_filename() {
-        assert_eq!(get_metadata_filename(), "metadata.json");
-    }
-
-    #[test]
     fn test_get_namespace_filename() {
         assert_eq!(get_namespace_filename("users"), "users.ns");
         assert_eq!(get_namespace_filename("config"), "config.ns");
         assert_eq!(get_namespace_filename("data-2024"), "data-2024.ns");
-    }
-
-    #[test]
-    fn test_get_namespace_filename_special_chars() {
         assert_eq!(get_namespace_filename("my_namespace"), "my_namespace.ns");
         assert_eq!(get_namespace_filename("test-123"), "test-123.ns");
     }
