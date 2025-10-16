@@ -3,8 +3,14 @@
 /// Stores concrete adapter instances directly.
 /// Platform selection happens at compile-time via #[cfg].
 
-use crate::adapters::{Clock, ConsoleLogger, Locks, Notifier, Persistence, Storage};
-use crate::ports::{ClockPort, LockPort, LoggerPort, NotifierPort, PersistencePort, StoragePort};
+use crate::adapters::{
+    AgeEncryption, AgeIdentity, Argon2Kdf, Clock, ConsoleLogger, Locks, Notifier, Persistence,
+    Prf, Storage,
+};
+use crate::ports::{
+    ClockPort, EncryptionPort, IdentityPort, KeyDerivationPort, LockPort, LoggerPort,
+    NotifierPort, PersistencePort, PrfPort, StoragePort,
+};
 
 #[derive(Clone, Copy)]
 pub struct Platform {
@@ -14,6 +20,11 @@ pub struct Platform {
     notifier: Notifier,
     persistence: Persistence,
     storage: Storage,
+    // Crypto ports
+    encryption: AgeEncryption,
+    identity: AgeIdentity,
+    kdf: Argon2Kdf,
+    prf: Prf,
 }
 
 impl Platform {
@@ -26,6 +37,10 @@ impl Platform {
             notifier: Notifier::new(),
             persistence: Persistence::new(),
             storage: Storage::new(),
+            encryption: AgeEncryption::new(),
+            identity: AgeIdentity::new(),
+            kdf: Argon2Kdf::new(),
+            prf: Prf::new(),
         }
     }
 
@@ -57,6 +72,26 @@ impl Platform {
     #[inline]
     pub fn notifier(&self) -> &dyn NotifierPort {
         &self.notifier
+    }
+
+    #[inline]
+    pub fn encryption(&self) -> &dyn EncryptionPort {
+        &self.encryption
+    }
+
+    #[inline]
+    pub fn identity(&self) -> &dyn IdentityPort {
+        &self.identity
+    }
+
+    #[inline]
+    pub fn kdf(&self) -> &dyn KeyDerivationPort {
+        &self.kdf
+    }
+
+    #[inline]
+    pub fn prf(&self) -> &dyn PrfPort {
+        &self.prf
     }
 }
 
@@ -121,5 +156,21 @@ mod tests {
     fn test_platform_storage_access() {
         let platform = Platform::new();
         let _storage = platform.storage();
+    }
+
+    #[test]
+    fn test_platform_crypto_access() {
+        let platform = Platform::new();
+        let _encryption = platform.encryption();
+        let _identity = platform.identity();
+        let _kdf = platform.kdf();
+        let _prf = platform.prf();
+    }
+
+    #[test]
+    fn test_platform_prf_availability() {
+        let platform = Platform::new();
+        let prf = platform.prf();
+        let _ = prf.is_available();
     }
 }
