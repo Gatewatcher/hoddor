@@ -33,6 +33,18 @@ pub fn bytes_to_js_value(bytes: &[u8]) -> Result<JsValue, JsValue> {
     }
 }
 
+/// Convert any error to JsValue
+/// Helper to eliminate repeated `.map_err(|e| JsValue::from_str(&e.to_string()))?` patterns
+pub fn to_js_error<E: std::fmt::Display>(error: E) -> JsValue {
+    JsValue::from_str(&error.to_string())
+}
+
+/// Convert any serializable type to JsValue
+/// Helper to eliminate repeated `to_value(&x).map_err(...)` patterns
+pub fn to_js_value<T: serde::Serialize>(value: &T) -> Result<JsValue, JsValue> {
+    to_value(value).map_err(to_js_error)
+}
+
 /// Convert JsValue to String
 pub fn js_value_to_string(value: JsValue) -> Result<String, JsValue> {
     value.as_string()
@@ -54,8 +66,6 @@ pub fn identity_keys_to_handle(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn test_js_value_to_string_conversion() {
         // This test validates the logic, actual JsValue tests need wasm-bindgen-test

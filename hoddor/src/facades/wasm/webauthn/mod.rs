@@ -1,4 +1,5 @@
 use super::crypto::IdentityHandle;
+use super::converters;
 use js_sys::Uint8Array;
 use wasm_bindgen::{prelude::wasm_bindgen, JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
@@ -42,7 +43,7 @@ async fn create_credential_internal(
 
     let mut vault = read_vault_with_name(vault_name)
         .await
-        .map_err(|e| JsValue::from_str(&format!("{:?}", e)))?;
+        .map_err(converters::to_js_error)?;
 
     let credential = JsFuture::from(webauthn_create(&challenge, username, &salt_array)?)
         .await?
@@ -93,7 +94,7 @@ async fn create_credential_internal(
 
     save_vault(vault_name, vault)
         .await
-        .map_err(|e| JsValue::from_str(&format!("Failed to save vault: {:?}", e)))?;
+        .map_err(|e| converters::to_js_error(format!("Failed to save vault: {:?}", e)))?;
 
     Ok(identity)
 }
@@ -118,7 +119,7 @@ async fn get_credential_internal(
 
     let vault = read_vault_with_name(vault_name)
         .await
-        .map_err(|e| JsValue::from_str(&format!("{:?}", e)))?;
+        .map_err(converters::to_js_error)?;
 
     let public_key = vault.username_pk.get(username).ok_or_else(|| {
         JsValue::from_str(&format!(
@@ -231,7 +232,7 @@ async fn get_credential_internal(
 pub async fn list_webauthn_public_keys(vault_name: &str) -> Result<JsValue, JsValue> {
     let vault = read_vault_with_name(vault_name)
         .await
-        .map_err(|e| JsValue::from_str(&format!("{:?}", e)))?;
+        .map_err(converters::to_js_error)?;
 
     let public_keys: Vec<String> = vault
         .identity_salts

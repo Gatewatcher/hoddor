@@ -4,6 +4,7 @@ use age::{
 };
 use crate::domain::crypto;
 use crate::platform::Platform;
+use super::converters;
 use std::fmt;
 use wasm_bindgen::prelude::*;
 
@@ -13,11 +14,11 @@ pub fn generate_identity() -> Result<IdentityHandle, JsValue> {
     let platform = Platform::new();
 
     let identity_str = crypto::generate_identity(&platform)
-        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        .map_err(converters::to_js_error)?;
 
     let identity: Identity = identity_str
         .parse()
-        .map_err(|e| JsValue::from_str(&format!("Failed to parse identity: {}", e)))?;
+        .map_err(|e| converters::to_js_error(format!("Failed to parse identity: {}", e)))?;
 
     Ok(IdentityHandle::from(identity))
 }
@@ -111,7 +112,7 @@ impl IdentityHandle {
 
         let identity = private_key
             .parse::<Identity>()
-            .map_err(|e| JsValue::from_str(&format!("Failed to parse identity: {}", e)))?;
+            .map_err(|e| converters::to_js_error(format!("Failed to parse identity: {}", e)))?;
 
         Ok(IdentityHandle::from(identity))
     }
