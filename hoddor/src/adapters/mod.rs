@@ -11,6 +11,6 @@ pub mod native;
 pub use shared::{AgeEncryption, AgeIdentity, Argon2Kdf};
 
 #[cfg(target_arch = "wasm32")]
-pub use wasm::{Clock, ConsoleLogger, Locks, Notifier, OPFSStorage as Storage, Persistence};
+pub use wasm::{Clock, ConsoleLogger, Locks, Notifier, OPFSStorage as Storage, Persistence, WebAuthnPrf};
 #[cfg(not(target_arch = "wasm32"))]
-pub use native::{Clock, ConsoleLogger, FsStorage as Storage, Locks, Notifier, Persistence};
+pub use native::{Clock, ConsoleLogger, FsStorage as Storage, Locks, MockPrf, Notifier, Persistence};
