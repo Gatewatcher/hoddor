@@ -217,7 +217,7 @@ pub async fn read_namespace(
     // Check expiration
     let now = get_current_timestamp();
     if let Some(exp_time) = &namespace_data.expiration {
-        if now > exp_time.expires_at {
+        if now >= exp_time.expires_at {
             // Remove expired namespace
             vault.namespaces.remove(namespace);
             save_vault(platform, vault_name, vault).await?;
