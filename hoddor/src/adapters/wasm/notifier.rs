@@ -17,7 +17,7 @@ impl NotifierPort for Notifier {
     fn notify_vault_update(&self, _vault_name: &str, vault_data: &[u8]) -> Result<(), String> {
         let global_scope = get_global_scope().map_err(|e| format!("{:?}", e))?;
 
-        let vault: crate::vault::Vault = serde_json::from_slice(vault_data)
+        let vault: crate::domain::vault::Vault = serde_json::from_slice(vault_data)
             .map_err(|e| format!("Failed to deserialize vault: {}", e))?;
 
         let msg = notifications::Message {

@@ -1,7 +1,7 @@
 use crate::platform::Platform;
 use crate::signaling::{with_signaling_manager, SignalingMessage};
 use crate::sync::SyncMessage;
-use crate::vault::update_vault_from_sync;
+use crate::facades::wasm::legacy::update_vault_from_sync;
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures::StreamExt;
 use futures_channel::mpsc;

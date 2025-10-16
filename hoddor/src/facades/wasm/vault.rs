@@ -8,7 +8,7 @@ use super::converters;
 
 /// Derive identity from passphrase for a vault (WASM facade)
 #[wasm_bindgen]
-pub async fn vault_identity_from_passphrase_v2(
+pub async fn vault_identity_from_passphrase(
     passphrase: &str,
     vault_name: &str,
 ) -> Result<IdentityHandle, JsValue> {
@@ -42,9 +42,8 @@ pub async fn vault_identity_from_passphrase_v2(
 }
 
 /// Insert or update data in a vault namespace (WASM facade)
-/// Temporary name during migration - will replace upsert_vault
 #[wasm_bindgen]
-pub async fn upsert_vault_v2(
+pub async fn upsert_vault(
     vault_name: &str,
     identity: &IdentityHandle,
     namespace: &str,
@@ -77,7 +76,7 @@ pub async fn upsert_vault_v2(
 
 /// Read and decrypt data from a vault namespace (WASM facade)
 #[wasm_bindgen]
-pub async fn read_from_vault_v2(
+pub async fn read_from_vault(
     vault_name: &str,
     identity: &IdentityHandle,
     namespace: JsValue,
@@ -107,7 +106,7 @@ pub async fn read_from_vault_v2(
 
 /// Remove a namespace from a vault (WASM facade)
 #[wasm_bindgen]
-pub async fn remove_from_vault_v2(
+pub async fn remove_from_vault(
     vault_name: &str,
     identity: &IdentityHandle,
     namespace: JsValue,
@@ -135,7 +134,7 @@ pub async fn remove_from_vault_v2(
 
 /// List all namespaces in a vault (WASM facade)
 #[wasm_bindgen]
-pub async fn list_namespaces_v2(vault_name: &str) -> Result<JsValue, JsValue> {
+pub async fn list_namespaces(vault_name: &str) -> Result<JsValue, JsValue> {
     let platform = Platform::new();
 
     let namespaces = operations::list_namespaces_in_vault(&platform, vault_name)
@@ -148,7 +147,7 @@ pub async fn list_namespaces_v2(vault_name: &str) -> Result<JsValue, JsValue> {
 
 /// Create a new vault (WASM facade)
 #[wasm_bindgen]
-pub async fn create_vault_v2(vault_name: JsValue) -> Result<(), JsValue> {
+pub async fn create_vault(vault_name: JsValue) -> Result<(), JsValue> {
     let platform = Platform::new();
 
     // Convert vault name
@@ -176,7 +175,7 @@ pub async fn create_vault_v2(vault_name: JsValue) -> Result<(), JsValue> {
 
 /// Remove a vault (WASM facade)
 #[wasm_bindgen]
-pub async fn remove_vault_v2(vault_name: &str) -> Result<(), JsValue> {
+pub async fn remove_vault(vault_name: &str) -> Result<(), JsValue> {
     let platform = Platform::new();
 
     operations::delete_vault(&platform, vault_name)
@@ -186,7 +185,7 @@ pub async fn remove_vault_v2(vault_name: &str) -> Result<(), JsValue> {
 
 /// List all vaults (WASM facade)
 #[wasm_bindgen]
-pub async fn list_vaults_v2() -> Result<JsValue, JsValue> {
+pub async fn list_vaults() -> Result<JsValue, JsValue> {
     let platform = Platform::new();
 
     let vaults = operations::list_vaults(&platform)
@@ -199,7 +198,7 @@ pub async fn list_vaults_v2() -> Result<JsValue, JsValue> {
 
 /// Export a vault as bytes (WASM facade)
 #[wasm_bindgen]
-pub async fn export_vault_v2(vault_name: &str) -> Result<JsValue, JsValue> {
+pub async fn export_vault(vault_name: &str) -> Result<JsValue, JsValue> {
     let platform = Platform::new();
 
     let vault_bytes = operations::export_vault_bytes(&platform, vault_name)
@@ -214,7 +213,7 @@ pub async fn export_vault_v2(vault_name: &str) -> Result<JsValue, JsValue> {
 
 /// Import a vault from bytes (WASM facade)
 #[wasm_bindgen]
-pub async fn import_vault_v2(vault_name: &str, data: JsValue) -> Result<(), JsValue> {
+pub async fn import_vault(vault_name: &str, data: JsValue) -> Result<(), JsValue> {
     let platform = Platform::new();
 
     // Convert data to bytes
@@ -234,7 +233,7 @@ pub async fn import_vault_v2(vault_name: &str, data: JsValue) -> Result<(), JsVa
 
 /// Force cleanup of expired data in a vault (WASM facade)
 #[wasm_bindgen]
-pub async fn force_cleanup_vault_v2(vault_name: &str) -> Result<(), JsValue> {
+pub async fn force_cleanup_vault(vault_name: &str) -> Result<(), JsValue> {
     let platform = Platform::new();
 
     // Run cleanup until no more expired data

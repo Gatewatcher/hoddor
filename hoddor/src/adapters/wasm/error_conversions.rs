@@ -10,3 +10,10 @@ impl From<JsValue> for VaultError {
         )
     }
 }
+
+/// Conversion from VaultError to JsValue for WASM boundary
+impl From<VaultError> for JsValue {
+    fn from(error: VaultError) -> Self {
+        JsValue::from_str(&error.to_string())
+    }
+}

@@ -5,7 +5,7 @@ use wasm_bindgen_futures::JsFuture;
 use web_sys::{AuthenticationExtensionsPrfValues, PublicKeyCredential};
 use webauthn::{webauthn_create, webauthn_get};
 
-use crate::vault::{read_vault_with_name, save_vault};
+use super::legacy::{read_vault_with_name, save_vault};
 use crate::platform::Platform;
 use rand::rngs::OsRng;
 use rand::RngCore;

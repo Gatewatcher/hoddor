@@ -1,4 +1,4 @@
-use crate::vault::{IdentitySalts, VaultMetadata};
+use crate::domain::vault::{IdentitySalts, VaultMetadata};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use wasm_bindgen::JsValue;

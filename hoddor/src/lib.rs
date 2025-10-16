@@ -20,8 +20,6 @@ pub mod signaling;
 #[cfg(target_arch = "wasm32")]
 pub mod sync;
 #[cfg(target_arch = "wasm32")]
-pub mod vault;
-#[cfg(target_arch = "wasm32")]
 pub mod webrtc;
 
 // Re-export crypto and webauthn from facades
@@ -32,9 +30,9 @@ pub use facades::wasm::{crypto, webauthn};
 pub use domain::vault::{IdentitySalts, NamespaceData, Vault, VaultMetadata};
 pub use platform::Platform;
 
-// WASM-only re-exports
+// WASM-only re-exports (legacy compatibility)
 #[cfg(target_arch = "wasm32")]
-pub use vault::{read_vault_with_name, save_vault};
+pub use facades::wasm::{read_vault_with_name, save_vault};
 
 // WASM initialization
 #[cfg(target_arch = "wasm32")]
