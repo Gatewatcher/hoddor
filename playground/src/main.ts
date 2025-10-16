@@ -16,7 +16,7 @@ import init, {
   set_debug_mode,
   upsert_vault,
   vault_identity_from_passphrase,
-} from '../../dist/hoddor.js';
+} from '../../hoddor/pkg/hoddor.js';
 import { runPerformanceTest } from './performance.js';
 import './style.old.css';
 import { VaultWorker } from './vault.js';

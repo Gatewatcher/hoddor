@@ -9,7 +9,7 @@ import init, {
   read_from_vault,
   remove_from_vault,
   upsert_vault,
-} from '../../dist/hoddor.js';
+} from '../../hoddor/pkg/hoddor.js';
 
 let initialized = false;
 

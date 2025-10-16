@@ -1,4 +1,4 @@
-import init from '../../dist/hoddor.js';
+import init from '../../hoddor/pkg/hoddor.js';
 
 export const initWasm = async () => {
   try {

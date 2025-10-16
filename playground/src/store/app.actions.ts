@@ -1,6 +1,6 @@
 import { createAction } from '@reduxjs/toolkit';
 
-import { IdentityHandle } from '../../../dist/hoddor';
+import { IdentityHandle } from '../../../hoddor/pkg/hoddor';
 
 enum Types {
   SET_VAULTS = 'app/SET_VAULTS',
