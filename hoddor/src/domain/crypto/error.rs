@@ -24,3 +24,30 @@ impl fmt::Display for CryptoError {
 }
 
 impl std::error::Error for CryptoError {}
+
+// Helper methods for ergonomic error construction
+impl CryptoError {
+    pub fn key_derivation_error(message: impl Into<String>) -> Self {
+        CryptoError::KeyDerivationError(message.into())
+    }
+
+    pub fn encryption_error(message: impl Into<String>) -> Self {
+        CryptoError::EncryptionError(message.into())
+    }
+
+    pub fn decryption_error(message: impl Into<String>) -> Self {
+        CryptoError::DecryptionError(message.into())
+    }
+
+    pub fn invalid_prf_output(message: impl Into<String>) -> Self {
+        CryptoError::InvalidPrfOutput(message.into())
+    }
+
+    pub fn invalid_identity(message: impl Into<String>) -> Self {
+        CryptoError::InvalidIdentity(message.into())
+    }
+
+    pub fn invalid_recipient(message: impl Into<String>) -> Self {
+        CryptoError::InvalidRecipient(message.into())
+    }
+}

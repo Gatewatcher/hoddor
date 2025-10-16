@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use crate::errors::{LockError, VaultError};
+use crate::domain::vault::error::VaultError;
 use crate::global::get_global_scope;
 use crate::ports::{LockGuard, LockPort};
 use wasm_bindgen::prelude::*;
@@ -33,9 +33,7 @@ impl Locks {
         } else if let Ok(window) = global.dyn_into::<web_sys::Window>() {
             Ok(window.navigator().locks())
         } else {
-            Err(VaultError::IoError {
-                message: "Could not access navigator",
-            })
+            Err(VaultError::io_error("Could not access navigator"))
         }
     }
 }
@@ -85,6 +83,6 @@ impl LockPort for Locks {
             }
         }
 
-        Err(LockError::AcquisitionFailed.into())
+        Err(VaultError::io_error("Failed to acquire lock"))
     }
 }

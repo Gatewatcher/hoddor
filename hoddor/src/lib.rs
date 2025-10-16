@@ -8,7 +8,6 @@ pub mod platform;
 
 // Existing modules
 pub mod crypto;
-pub mod errors;
 pub mod global;
 pub mod measure;
 pub mod notifications;

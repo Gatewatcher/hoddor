@@ -1,4 +1,4 @@
-use crate::errors::VaultError;
+use super::error::VaultError;
 use crate::platform::Platform;
 use super::types::{NamespaceData, Vault, VaultMetadata};
 use std::collections::HashMap;
@@ -19,10 +19,8 @@ pub async fn read_vault(
     let metadata_path = format!("{}/{}", vault_name, METADATA_FILENAME);
     let metadata_text = storage.read_file(&metadata_path).await?;
 
-    let mut vault: Vault =
-        serde_json::from_str(&metadata_text).map_err(|_| VaultError::SerializationError {
-            message: "Failed to deserialize vault metadata",
-        })?;
+    let mut vault: Vault = serde_json::from_str(&metadata_text)
+        .map_err(|_| VaultError::serialization_error("Failed to deserialize vault metadata"))?;
 
     vault.namespaces.clear();
 
@@ -34,11 +32,8 @@ pub async fn read_vault(
             let namespace_text = storage.read_file(&namespace_path).await?;
 
             let namespace_data: NamespaceData =
-                serde_json::from_str(&namespace_text).map_err(|_| {
-                    VaultError::SerializationError {
-                        message: "Failed to deserialize namespace data",
-                    }
-                })?;
+                serde_json::from_str(&namespace_text)
+                    .map_err(|_| VaultError::serialization_error("Failed to deserialize namespace data"))?;
 
             let namespace = entry_name.strip_suffix(NAMESPACE_EXTENSION).unwrap().to_string();
             vault.namespaces.insert(namespace, namespace_data);
@@ -63,10 +58,9 @@ pub async fn save_vault(
                 Ok(is_granted) => {
                     platform.logger().log(&format!("persistence request granted: {}", is_granted));
                 }
-                Err(VaultError::JsError(message)) => {
-                    platform.logger().error(&message);
+                Err(e) => {
+                    platform.logger().error(&format!("Persistence request failed: {}", e));
                 }
-                _ => {}
             }
         }
     }
@@ -79,25 +73,22 @@ pub async fn save_vault(
     metadata_vault.namespaces.clear();
 
     let metadata_json =
-        serde_json::to_string(&metadata_vault).map_err(|_| VaultError::IoError {
-            message: "Failed to serialize vault metadata",
-        })?;
+        serde_json::to_string(&metadata_vault)
+            .map_err(|_| VaultError::serialization_error("Failed to serialize vault metadata"))?;
 
     let metadata_path = format!("{}/{}", vault_name, METADATA_FILENAME);
     storage.write_file(&metadata_path, &metadata_json).await?;
 
     for (namespace, data) in &vault.namespaces {
-        let namespace_json = serde_json::to_string(&data).map_err(|_| VaultError::IoError {
-            message: "Failed to serialize namespace data",
-        })?;
+        let namespace_json = serde_json::to_string(&data)
+            .map_err(|_| VaultError::serialization_error("Failed to serialize namespace data"))?;
 
         let namespace_path = format!("{}/{}", vault_name, get_namespace_filename(namespace));
         storage.write_file(&namespace_path, &namespace_json).await?;
     }
 
-    let vault_bytes = serde_json::to_vec(&vault).map_err(|_| VaultError::IoError {
-        message: "Failed to serialize vault for notification",
-    })?;
+    let vault_bytes = serde_json::to_vec(&vault)
+        .map_err(|_| VaultError::serialization_error("Failed to serialize vault for notification"))?;
 
     let _ = platform.notifier().notify_vault_update(vault_name, &vault_bytes);
 
@@ -131,9 +122,9 @@ pub async fn create_vault_from_sync(
     identity_salts: Option<super::types::IdentitySalts>,
     username_pk: Option<HashMap<String, String>>,
 ) -> Result<Vault, VaultError> {
-    let metadata = metadata.ok_or_else(|| VaultError::JsError(
-        "Missing vault metadata in sync message for new vault".to_string(),
-    ))?;
+    let metadata = metadata.ok_or_else(||
+        VaultError::io_error("Missing vault metadata in sync message for new vault")
+    )?;
 
     Ok(Vault {
         metadata,

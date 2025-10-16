@@ -1,4 +1,4 @@
-use crate::errors::VaultError;
+use crate::domain::vault::error::VaultError;
 use async_trait::async_trait;
 
 /// Port for storage persistence operations.

@@ -1,7 +1,7 @@
 use crate::crypto::{
     decrypt_with_identity, encrypt_with_recipients, identity_from_passphrase, IdentityHandle,
 };
-use crate::errors::VaultError;
+use crate::domain::vault::error::VaultError;
 use crate::measure::time_it;
 use crate::sync::{get_sync_manager, OperationType, SyncMessage};
 use crate::webrtc::{AccessLevel, WebRtcPeer};
@@ -22,6 +22,13 @@ use futures_channel::mpsc::UnboundedReceiver;
 
 // Constants
 const DEFAULT_STUN_SERVER: &str = "stun:stun.l.google.com:19302";
+
+// Convert domain VaultError to JsValue for WASM boundary
+impl From<VaultError> for JsValue {
+    fn from(error: VaultError) -> Self {
+        JsValue::from_str(&error.to_string())
+    }
+}
 
 pub use crate::domain::vault::{IdentitySalts, NamespaceData, Vault, VaultMetadata};
 use crate::domain::vault::expiration::{cleanup_expired_namespaces, create_expiration, is_expired};
@@ -153,8 +160,8 @@ pub async fn upsert_vault(
         let result = async {
             let mut vault = match read_vault_with_name(vault_name).await {
                 Ok(v) => v,
-                Err(VaultError::IoError { message })
-                    if message.contains("Failed to get directory handle") =>
+                Err(VaultError::IoError(msg))
+                    if msg.contains("Failed to get directory handle") =>
                 {
                     create_vault_internal(vault_name).await?;
                     return Ok(());
@@ -227,10 +234,7 @@ pub async fn upsert_vault(
     }
 
     Err(last_error.unwrap_or_else(|| {
-        VaultError::IoError {
-            message: "Failed to access vault after retries",
-        }
-        .into()
+        VaultError::io_error("Failed to access vault after retries").into()
     }))
 }
 
@@ -285,13 +289,12 @@ async fn read_from_vault_internal(
     }
 
     let result = time_it!("Total read_from_vault", {
-        let namespace: String = from_value(namespace).map_err(|_| VaultError::IoError {
-            message: "Invalid namespace format",
-        })?;
+        let namespace: String = from_value(namespace)
+            .map_err(|_| VaultError::io_error("Invalid namespace format"))?;
 
         let mut vault = match read_vault_with_name(vault_name).await {
             Ok(result) => result,
-            Err(VaultError::IoError { .. }) => {
+            Err(VaultError::IoError(..)) => {
                 return Err(VaultError::NamespaceNotFound.into());
             }
             Err(e) => return Err(e.into()),
@@ -319,18 +322,12 @@ async fn read_from_vault_internal(
             // Attempt to parse as JSON.
             match serde_json::from_slice::<serde_json::Value>(&decrypted_data) {
                 Ok(json_value) => to_value(&json_value).map_err(|_| {
-                    VaultError::SerializationError {
-                        message: "Failed to convert JSON to JS value",
-                    }
-                    .into()
+                    VaultError::serialization_error("Failed to convert JSON to JS value").into()
                 }),
                 Err(_) => {
                     // If not JSON, return the raw bytes as a Uint8Array.
                     to_value(&decrypted_data).map_err(|_| {
-                        VaultError::SerializationError {
-                            message: "Failed to convert bytes to JS value",
-                        }
-                        .into()
+                        VaultError::serialization_error("Failed to convert bytes to JS value").into()
                     })
                 }
             }
@@ -359,7 +356,7 @@ async fn list_namespaces_internal(
 ) -> Result<Vec<String>, VaultError> {
     let vault = match read_vault_with_name(vault_name).await {
         Ok(result) => result,
-        Err(VaultError::IoError { .. }) => {
+        Err(VaultError::IoError(..)) => {
             return Ok(Vec::new());
         }
         Err(e) => return Err(e),
@@ -434,7 +431,7 @@ async fn check_identity(vault_name: &str, identity: &IdentityHandle) -> Result<V
     let vault = match read_vault_with_name(vault_name).await {
         Ok(existing_vault) => existing_vault,
 
-        Err(VaultError::IoError { .. }) => {
+        Err(VaultError::IoError(..)) => {
             return Err(VaultError::VaultNotFound);
         }
 
@@ -518,7 +515,7 @@ async fn import_vault_internal(
         Ok(_) => {
             return Err(VaultError::VaultAlreadyExists);
         }
-        Err(VaultError::IoError { .. }) => {
+        Err(VaultError::IoError(..)) => {
             platform.logger().log(&format!(
                 "No existing vault named '{}'; proceeding with import.",
                 vault_name
@@ -581,10 +578,8 @@ async fn insert_namespace_data(
     expires_in_seconds: Option<i64>,
 ) -> Result<NamespaceData, JsValue> {
     let data_json = from_value::<serde_json::Value>(data)?;
-    let data_bytes =
-        serde_json::to_vec(&data_json).map_err(|_| VaultError::SerializationError {
-            message: "Failed to serialize data",
-        })?;
+    let data_bytes = serde_json::to_vec(&data_json)
+        .map_err(|_| VaultError::serialization_error("Failed to serialize data"))?;
 
     let recipient = identity.to_public();
     let encrypted_data = encrypt_with_recipients(&data_bytes, &[recipient]).await?;
@@ -918,13 +913,12 @@ async fn update_vault_from_sync_internal(
     vault_data: &[u8],
 ) -> Result<(), VaultError> {
     let sync_msg: SyncMessage = serde_json::from_slice(vault_data)
-        .map_err(|e| VaultError::JsError(format!("Failed to deserialize sync message: {:?}", e)))?;
+        .map_err(|e| VaultError::serialization_error(format!("Failed to deserialize sync message: {:?}", e)))?;
 
     let mut current_vault = match read_vault_with_name(vault_name).await {
         Ok(vault) => vault,
-        Err(VaultError::IoError {
-            message: "Failed to get directory handle",
-        }) => {
+        Err(VaultError::IoError(msg))
+            if msg == "Failed to get directory handle" => {
             platform.logger().log(&format!("Creating new vault {} for sync", vault_name));
 
             let vault = create_vault_from_sync(

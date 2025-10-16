@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use crate::errors::VaultError;
+use crate::domain::vault::error::VaultError;
 use crate::ports::StoragePort;
 use std::fs;
 use std::path::PathBuf;
@@ -31,9 +31,7 @@ impl FsStorage {
 impl StoragePort for FsStorage {
     async fn read_file(&self, path: &str) -> Result<String, VaultError> {
         let full_path = self.get_full_path(path);
-        fs::read_to_string(&full_path).map_err(|_| VaultError::IoError {
-            message: "Failed to read file",
-        })
+        fs::read_to_string(&full_path).map_err(|_| VaultError::io_error("Failed to read file"))
     }
 
     async fn write_file(&self, path: &str, content: &str) -> Result<(), VaultError> {
@@ -41,35 +39,25 @@ impl StoragePort for FsStorage {
 
         // Create parent directories if needed
         if let Some(parent) = full_path.parent() {
-            fs::create_dir_all(parent).map_err(|_| VaultError::IoError {
-                message: "Failed to create parent directories",
-            })?;
+            fs::create_dir_all(parent).map_err(|_| VaultError::io_error("Failed to create parent directories"))?;
         }
 
-        fs::write(&full_path, content).map_err(|_| VaultError::IoError {
-            message: "Failed to write file",
-        })
+        fs::write(&full_path, content).map_err(|_| VaultError::io_error("Failed to write file"))
     }
 
     async fn delete_file(&self, path: &str) -> Result<(), VaultError> {
         let full_path = self.get_full_path(path);
-        fs::remove_file(&full_path).map_err(|_| VaultError::IoError {
-            message: "Failed to delete file",
-        })
+        fs::remove_file(&full_path).map_err(|_| VaultError::io_error("Failed to delete file"))
     }
 
     async fn create_directory(&self, path: &str) -> Result<(), VaultError> {
         let full_path = self.get_full_path(path);
-        fs::create_dir_all(&full_path).map_err(|_| VaultError::IoError {
-            message: "Failed to create directory",
-        })
+        fs::create_dir_all(&full_path).map_err(|_| VaultError::io_error("Failed to create directory"))
     }
 
     async fn delete_directory(&self, path: &str) -> Result<(), VaultError> {
         let full_path = self.get_full_path(path);
-        fs::remove_dir_all(&full_path).map_err(|_| VaultError::IoError {
-            message: "Failed to delete directory",
-        })
+        fs::remove_dir_all(&full_path).map_err(|_| VaultError::io_error("Failed to delete directory"))
     }
 
     async fn directory_exists(&self, path: &str) -> Result<bool, VaultError> {
@@ -79,9 +67,7 @@ impl StoragePort for FsStorage {
 
     async fn list_entries(&self, path: &str) -> Result<Vec<String>, VaultError> {
         let full_path = self.get_full_path(path);
-        let entries = fs::read_dir(&full_path).map_err(|_| VaultError::IoError {
-            message: "Failed to read directory",
-        })?;
+        let entries = fs::read_dir(&full_path).map_err(|_| VaultError::io_error("Failed to read directory"))?;
 
         let mut names = Vec::new();
         for entry in entries {

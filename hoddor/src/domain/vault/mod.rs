@@ -1,9 +1,11 @@
+pub mod error;
 pub mod expiration;
 pub mod operations;
 pub mod serialization;
 pub mod types;
 pub mod validation;
 
+pub use error::VaultError;
 pub use expiration::{cleanup_expired_namespaces, create_expiration, is_expired};
 pub use operations::{
     create_vault, create_vault_from_sync, delete_namespace_file, delete_vault,

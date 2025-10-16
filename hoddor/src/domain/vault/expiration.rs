@@ -1,4 +1,4 @@
-use crate::errors::VaultError;
+use super::error::VaultError;
 use crate::platform::Platform;
 use super::operations::get_namespace_filename;
 use super::types::{Expiration, Vault};

@@ -1,8 +1,8 @@
-use crate::errors::VaultError;
+use super::error::VaultError;
 
-fn validate_not_empty(value: &str, error_msg: &'static str) -> Result<(), VaultError> {
+fn validate_not_empty(value: &str, error_msg: &str) -> Result<(), VaultError> {
     if value.trim().is_empty() {
-        return Err(VaultError::IoError { message: error_msg });
+        return Err(VaultError::io_error(error_msg));
     }
     Ok(())
 }
@@ -12,9 +12,7 @@ pub fn validate_namespace(namespace: &str) -> Result<(), VaultError> {
 
     let invalid_chars = ['/', '\\', '<', '>', ':', '"', '|', '?', '*'];
     if namespace.chars().any(|c| invalid_chars.contains(&c)) {
-        return Err(VaultError::IoError {
-            message: "Namespace contains invalid characters",
-        });
+        return Err(VaultError::io_error("Namespace contains invalid characters"));
     }
     Ok(())
 }
@@ -26,10 +24,9 @@ pub fn validate_passphrase(passphrase: &str) -> Result<(), VaultError> {
 pub fn validate_vault_name(name: &str) -> Result<(), VaultError> {
     validate_not_empty(name, "Vault name cannot be empty or whitespace only")?;
     if name.contains(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '-') {
-        return Err(VaultError::IoError {
-            message:
-                "Vault name can only contain alphanumeric characters, underscores, and hyphens",
-        });
+        return Err(VaultError::io_error(
+            "Vault name can only contain alphanumeric characters, underscores, and hyphens",
+        ));
     }
     Ok(())
 }

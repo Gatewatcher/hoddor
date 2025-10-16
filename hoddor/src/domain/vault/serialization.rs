@@ -1,12 +1,11 @@
-use crate::errors::VaultError;
+use super::error::VaultError;
 use super::types::Vault;
 
 const VAULT_MAGIC_NUMBER: &[u8; 6] = b"VAULT1";
 
 pub fn serialize_vault(vault: &Vault) -> Result<Vec<u8>, VaultError> {
-    let serialized = serde_json::to_vec(vault).map_err(|_| VaultError::SerializationError {
-        message: "Failed to serialize vault for export",
-    })?;
+    let serialized = serde_json::to_vec(vault)
+        .map_err(|_| VaultError::serialization_error("Failed to serialize vault for export"))?;
 
     let total_size = VAULT_MAGIC_NUMBER.len() + 4 + serialized.len();
     let mut vault_bytes = Vec::with_capacity(total_size);
@@ -20,9 +19,9 @@ pub fn serialize_vault(vault: &Vault) -> Result<Vec<u8>, VaultError> {
 
 pub fn deserialize_vault(vault_bytes: &[u8]) -> Result<Vault, VaultError> {
     if vault_bytes.len() < 10 || &vault_bytes[..6] != VAULT_MAGIC_NUMBER {
-        return Err(VaultError::SerializationError {
-            message: "Invalid vault file: missing or incorrect magic number",
-        });
+        return Err(VaultError::serialization_error(
+            "Invalid vault file: missing or incorrect magic number",
+        ));
     }
 
     let length = u32::from_be_bytes([
@@ -33,16 +32,13 @@ pub fn deserialize_vault(vault_bytes: &[u8]) -> Result<Vault, VaultError> {
     ]) as usize;
 
     if vault_bytes.len() != length + 10 {
-        return Err(VaultError::SerializationError {
-            message: "Invalid vault file: content length mismatch",
-        });
+        return Err(VaultError::serialization_error(
+            "Invalid vault file: content length mismatch",
+        ));
     }
 
-    let vault: Vault = serde_json::from_slice(&vault_bytes[10..]).map_err(|_| {
-        VaultError::SerializationError {
-            message: "Failed to deserialize vault data",
-        }
-    })?;
+    let vault: Vault = serde_json::from_slice(&vault_bytes[10..])
+        .map_err(|_| VaultError::serialization_error("Failed to deserialize vault data"))?;
 
     Ok(vault)
 }
@@ -99,8 +95,8 @@ mod tests {
 
         assert!(result.is_err());
         match result {
-            Err(VaultError::SerializationError { message }) => {
-                assert!(message.contains("magic number"));
+            Err(VaultError::SerializationError(msg)) => {
+                assert!(msg.contains("magic number"));
             }
             _ => panic!("Expected SerializationError"),
         }
@@ -125,8 +121,8 @@ mod tests {
         let result = deserialize_vault(&bytes);
         assert!(result.is_err());
         match result {
-            Err(VaultError::SerializationError { message }) => {
-                assert!(message.contains("length mismatch"));
+            Err(VaultError::SerializationError(msg)) => {
+                assert!(msg.contains("length mismatch"));
             }
             _ => panic!("Expected SerializationError"),
         }

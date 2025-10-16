@@ -1,5 +1,5 @@
 use crate::platform::Platform;
-use super::types::CryptoError;
+use super::error::CryptoError;
 
 /// Derive an identity from a passphrase using Argon2 + Age
 pub async fn identity_from_passphrase(

@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use crate::errors::VaultError;
+use crate::domain::vault::error::VaultError;
 use crate::ports::{LockGuard, LockPort};
 
 pub struct NativeLockGuard;
