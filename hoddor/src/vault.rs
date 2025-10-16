@@ -21,12 +21,12 @@ use argon2::password_hash::rand_core::OsRng;
 use futures_channel::mpsc::UnboundedReceiver;
 
 // Constants
-const VAULT_MAGIC_NUMBER: &[u8; 6] = b"VAULT1";
 const DEFAULT_STUN_SERVER: &str = "stun:stun.l.google.com:19302";
 
 pub use crate::domain::vault::{IdentitySalts, NamespaceData, Vault, VaultMetadata};
 use crate::domain::vault::expiration::{cleanup_expired_namespaces, create_expiration, is_expired};
 use crate::domain::vault::operations::{create_vault_from_sync, delete_namespace_file};
+use crate::domain::vault::serialization::{deserialize_vault, serialize_vault};
 use crate::domain::vault::validation::{validate_namespace, validate_passphrase, validate_vault_name};
 
 #[wasm_bindgen]
@@ -463,26 +463,16 @@ async fn export_vault_internal(
 ) -> Result<JsValue, VaultError> {
     let vault = read_vault_with_name(vault_name).await?;
 
-    // Create binary format with magic number
-    let serialized = serde_json::to_vec(&vault).map_err(|e| {
+    // Serialize vault using domain function
+    let vault_bytes = serialize_vault(&vault).map_err(|e| {
         platform.logger().log(&format!("Serialization error: {:?}", e));
-        VaultError::SerializationError {
-            message: "Failed to serialize vault for export",
-        }
+        e
     })?;
 
-    let total_size = VAULT_MAGIC_NUMBER.len() + 4 + serialized.len();
-    let mut vault_bytes = Vec::with_capacity(total_size);
-
-    vault_bytes.extend_from_slice(VAULT_MAGIC_NUMBER);
-    vault_bytes.extend_from_slice(&(serialized.len() as u32).to_be_bytes());
-    vault_bytes.extend_from_slice(&serialized);
-
     platform.logger().log(&format!(
-        "Exporting vault data: {} bytes (magic: {}, length: 4, content: {})",
+        "Exporting vault data: {} bytes (magic: 6, length: 4, content: {})",
         vault_bytes.len(),
-        VAULT_MAGIC_NUMBER.len(),
-        serialized.len()
+        vault_bytes.len() - 10
     ));
 
     let array = js_sys::Uint8Array::new_with_length(vault_bytes.len() as u32);
@@ -518,30 +508,10 @@ async fn import_vault_internal(
         vault_bytes.len()
     ));
 
-    if vault_bytes.len() < 10 || &vault_bytes[..6] != VAULT_MAGIC_NUMBER {
-        return Err(VaultError::SerializationError {
-            message: "Invalid vault file: missing or incorrect magic number",
-        });
-    }
-
-    let length = u32::from_be_bytes([
-        vault_bytes[6],
-        vault_bytes[7],
-        vault_bytes[8],
-        vault_bytes[9],
-    ]) as usize;
-
-    if vault_bytes.len() != length + 10 {
-        return Err(VaultError::SerializationError {
-            message: "Invalid vault file: content length mismatch",
-        });
-    }
-
-    let imported_vault: Vault = serde_json::from_slice(&vault_bytes[10..]).map_err(|e| {
+    // Deserialize vault using domain function
+    let imported_vault = deserialize_vault(vault_bytes).map_err(|e| {
         platform.logger().log(&format!("Deserialization error: {:?}", e));
-        VaultError::SerializationError {
-            message: "Failed to deserialize vault data",
-        }
+        e
     })?;
 
     match read_vault_with_name(vault_name).await {
