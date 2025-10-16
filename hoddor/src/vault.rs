@@ -1,7 +1,6 @@
-use crate::crypto::{
-    decrypt_with_identity, encrypt_with_recipients, identity_from_passphrase, IdentityHandle,
-};
+use crate::crypto::IdentityHandle;
 use crate::domain::vault::error::VaultError;
+use age::x25519::Identity;
 use crate::measure::time_it;
 use crate::sync::{get_sync_manager, OperationType, SyncMessage};
 use crate::webrtc::{AccessLevel, WebRtcPeer};
@@ -35,6 +34,29 @@ use crate::domain::vault::expiration::{cleanup_expired_namespaces, create_expira
 use crate::domain::vault::operations::{create_vault_from_sync, delete_namespace_file};
 use crate::domain::vault::serialization::{deserialize_vault, serialize_vault};
 use crate::domain::vault::validation::{validate_namespace, validate_passphrase, validate_vault_name};
+
+/// Internal function to derive identity from passphrase
+async fn identity_from_passphrase(
+    passphrase: &str,
+    salt: &[u8],
+) -> Result<IdentityHandle, JsValue> {
+    let platform = Platform::new();
+
+    let identity_str = crate::domain::crypto::identity_from_passphrase(&platform, passphrase, salt)
+        .await
+        .map_err(|e| {
+            platform
+                .logger()
+                .log(&format!("Failed to derive identity: {}", e));
+            JsValue::from_str(&e.to_string())
+        })?;
+
+    let identity: Identity = identity_str
+        .parse()
+        .map_err(|e| JsValue::from_str(&format!("Failed to parse identity: {}", e)))?;
+
+    Ok(IdentityHandle::from(identity))
+}
 
 #[wasm_bindgen]
 pub async fn vault_identity_from_passphrase(
@@ -313,9 +335,13 @@ async fn read_from_vault_internal(
         }
 
         let decrypted_data = time_it!("Decryption", {
-            decrypt_with_identity(&encrypted_namespace.data, identity)
-                .await
-                .map_err(|_| VaultError::InvalidPassword)?
+            crate::domain::crypto::decrypt_with_identity(
+                platform,
+                &encrypted_namespace.data,
+                &identity.private_key(),
+            )
+            .await
+            .map_err(|_| VaultError::InvalidPassword)?
         });
 
         time_it!("JSON conversion", {
@@ -439,9 +465,14 @@ async fn check_identity(vault_name: &str, identity: &IdentityHandle) -> Result<V
     };
 
     if let Some((_, first_encrypted)) = vault.namespaces.iter().next() {
-        decrypt_with_identity(&first_encrypted.data, identity)
-            .await
-            .map_err(|_| VaultError::InvalidPassword)?;
+        let platform = Platform::new();
+        crate::domain::crypto::decrypt_with_identity(
+            &platform,
+            &first_encrypted.data,
+            &identity.private_key(),
+        )
+        .await
+        .map_err(|_| VaultError::InvalidPassword)?;
     }
     Ok(vault)
 }
@@ -581,8 +612,16 @@ async fn insert_namespace_data(
     let data_bytes = serde_json::to_vec(&data_json)
         .map_err(|_| VaultError::serialization_error("Failed to serialize data"))?;
 
+    let platform = Platform::new();
     let recipient = identity.to_public();
-    let encrypted_data = encrypt_with_recipients(&data_bytes, &[recipient]).await?;
+    let recipient_str = recipient.to_string();
+    let encrypted_data = crate::domain::crypto::encrypt_for_recipients(
+        &platform,
+        &data_bytes,
+        &[&recipient_str],
+    )
+    .await
+    .map_err(|e| JsValue::from_str(&e.to_string()))?;
 
     let now = js_sys::Date::now() as i64 / 1000;
     let expiration = create_expiration(expires_in_seconds, now);

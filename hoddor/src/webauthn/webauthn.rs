@@ -8,7 +8,8 @@ use web_sys::{
     PublicKeyCredentialType, PublicKeyCredentialUserEntity, UserVerificationRequirement,
 };
 
-use crate::{platform::Platform, crypto::prf_inputs, global::window};
+use crate::{platform::Platform, global::window};
+use super::prf_inputs;
 use sha2::{Digest, Sha256};
 
 /// Secure algorithms recommendation:

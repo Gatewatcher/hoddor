@@ -6,12 +6,13 @@ use web_sys::{AuthenticationExtensionsPrfValues, PublicKeyCredential};
 use webauthn::{webauthn_create, webauthn_get};
 
 use crate::vault::{read_vault_with_name, save_vault};
-use crate::{
-    platform::Platform,
-    crypto::{gen_random, identity_from_prf},
-};
+use crate::platform::Platform;
 use rand::rngs::OsRng;
 use rand::RngCore;
+
+mod crypto_helpers;
+pub use crypto_helpers::{gen_random, identity_from_prf, prf_inputs};
+
 pub mod webauthn;
 
 fn get_identity_from_vault() -> Result<[u8; 32], JsValue> {
