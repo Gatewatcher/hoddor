@@ -5,6 +5,7 @@ use crate::domain::vault::{error::VaultError, NamespaceData, Vault};
 use crate::domain::vault::operations::create_vault_from_sync;
 use crate::platform::Platform;
 use crate::sync::{OperationType, SyncMessage};
+use wasm_bindgen::prelude::*;
 
 /// Read a vault by name
 pub async fn read_vault_with_name(vault_name: &str) -> Result<Vault, VaultError> {
@@ -73,4 +74,15 @@ pub async fn update_vault_from_sync(vault_name: &str, vault_data: &[u8]) -> Resu
     save_vault(vault_name, current_vault).await?;
 
     Ok(())
+}
+
+/// Configure automatic cleanup of expired data
+///
+/// **Deprecated**: This function is a no-op stub for backward compatibility.
+/// Cleanup is now handled automatically on read operations.
+#[wasm_bindgen]
+#[deprecated(note = "Cleanup is now automatic on read. This function does nothing.")]
+pub fn configure_cleanup(_interval_seconds: i64) {
+    // No-op for backward compatibility
+    // Cleanup now happens automatically when reading expired data
 }

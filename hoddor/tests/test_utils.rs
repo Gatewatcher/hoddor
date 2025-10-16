@@ -2,7 +2,7 @@
 extern crate wasm_bindgen_test;
 
 use hoddor::platform::Platform;
-use hoddor::vault::list_vaults;
+use hoddor::facades::wasm::vault::list_vaults;
 
 use serde_wasm_bindgen::from_value;
 use wasm_bindgen::JsValue;

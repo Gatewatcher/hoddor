@@ -5,10 +5,13 @@ use futures_util::future;
 use gloo_timers::future::TimeoutFuture;
 use hoddor::{
     platform::Platform,
-    vault::{
-        configure_cleanup, create_vault, export_vault, force_cleanup_vault, import_vault,
-        list_namespaces, list_vaults, read_from_vault, remove_from_vault, remove_vault,
-        upsert_vault, vault_identity_from_passphrase,
+    facades::wasm::{
+        configure_cleanup,
+        vault::{
+            create_vault, export_vault, force_cleanup_vault, import_vault,
+            list_namespaces, list_vaults, read_from_vault, remove_from_vault, remove_vault,
+            upsert_vault, vault_identity_from_passphrase,
+        },
     },
 };
 use serde_wasm_bindgen::from_value;

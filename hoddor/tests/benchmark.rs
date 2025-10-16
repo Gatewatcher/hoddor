@@ -3,7 +3,7 @@
 extern crate wasm_bindgen_test;
 use hoddor::{
     platform::Platform,
-    vault::{create_vault, read_from_vault, remove_vault, upsert_vault, vault_identity_from_passphrase},
+    facades::wasm::vault::{create_vault, read_from_vault, remove_vault, upsert_vault, vault_identity_from_passphrase},
 };
 use wasm_bindgen::JsValue;
 use wasm_bindgen_test::*;
