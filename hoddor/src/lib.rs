@@ -5,6 +5,7 @@ pub mod domain;
 pub mod ports;
 pub mod adapters;
 pub mod platform;
+pub mod facades;
 
 // Existing modules
 pub mod crypto;

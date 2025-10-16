@@ -1,6 +1,6 @@
 use super::error::VaultError;
 use crate::platform::Platform;
-use super::types::{NamespaceData, Vault, VaultMetadata};
+use super::types::{Expiration, NamespaceData, Vault, VaultMetadata};
 use std::collections::HashMap;
 
 const METADATA_FILENAME: &str = "metadata.json";
@@ -151,6 +151,244 @@ pub async fn delete_namespace_file(
 
     let storage = platform.storage();
     storage.delete_file(&namespace_path).await
+}
+
+/// Insert or update a namespace in a vault with encrypted data
+pub async fn upsert_namespace(
+    platform: &Platform,
+    vault_name: &str,
+    identity_public_key: &str,
+    namespace: &str,
+    data: Vec<u8>,
+    expires_in_seconds: Option<i64>,
+    replace_if_exists: bool,
+) -> Result<(), VaultError> {
+    let mut vault = read_vault(platform, vault_name).await?;
+
+    // Check if namespace exists
+    if vault.namespaces.contains_key(namespace) && !replace_if_exists {
+        return Err(VaultError::NamespaceAlreadyExists);
+    }
+
+    // Encrypt data for the recipient
+    let encrypted_data = crate::domain::crypto::encrypt_for_recipients(
+        platform,
+        &data,
+        &[identity_public_key],
+    )
+    .await
+    .map_err(|e| VaultError::io_error(e.to_string()))?;
+
+    // Calculate expiration
+    let expiration = expires_in_seconds.map(|secs| Expiration {
+        expires_at: get_current_timestamp() + secs,
+    });
+
+    // Create namespace data
+    let namespace_data = NamespaceData {
+        data: encrypted_data,
+        expiration,
+    };
+
+    // Insert into vault
+    vault.namespaces.insert(namespace.to_string(), namespace_data);
+
+    // Save vault
+    save_vault(platform, vault_name, vault).await?;
+
+    Ok(())
+}
+
+/// Read and decrypt data from a namespace
+pub async fn read_namespace(
+    platform: &Platform,
+    vault_name: &str,
+    identity_private_key: &str,
+    namespace: &str,
+) -> Result<Vec<u8>, VaultError> {
+    let mut vault = read_vault(platform, vault_name).await?;
+
+    // Get namespace data
+    let namespace_data = vault
+        .namespaces
+        .get(namespace)
+        .ok_or(VaultError::NamespaceNotFound)?;
+
+    // Check expiration
+    let now = get_current_timestamp();
+    if let Some(exp_time) = &namespace_data.expiration {
+        if now > exp_time.expires_at {
+            // Remove expired namespace
+            vault.namespaces.remove(namespace);
+            save_vault(platform, vault_name, vault).await?;
+            return Err(VaultError::DataExpired);
+        }
+    }
+
+    // Decrypt data
+    let decrypted_data = crate::domain::crypto::decrypt_with_identity(
+        platform,
+        &namespace_data.data,
+        identity_private_key,
+    )
+    .await
+    .map_err(|_| VaultError::InvalidPassword)?;
+
+    Ok(decrypted_data)
+}
+
+/// Remove a namespace from a vault
+pub async fn remove_namespace(
+    platform: &Platform,
+    vault_name: &str,
+    namespace: &str,
+) -> Result<(), VaultError> {
+    let mut vault = read_vault(platform, vault_name).await?;
+
+    // Remove namespace
+    if vault.namespaces.remove(namespace).is_none() {
+        return Err(VaultError::NamespaceNotFound);
+    }
+
+    // Delete namespace file
+    delete_namespace_file(platform, vault_name, namespace).await?;
+
+    // Save vault
+    save_vault(platform, vault_name, vault).await?;
+
+    Ok(())
+}
+
+/// List all namespaces in a vault
+pub async fn list_namespaces_in_vault(
+    platform: &Platform,
+    vault_name: &str,
+) -> Result<Vec<String>, VaultError> {
+    let vault = read_vault(platform, vault_name).await?;
+
+    platform.logger().log(&format!(
+        "Found {} namespaces in vault",
+        vault.namespaces.len()
+    ));
+
+    let namespaces: Vec<String> = vault.namespaces.keys().cloned().collect();
+
+    Ok(namespaces)
+}
+
+/// Export vault as bytes
+pub async fn export_vault_bytes(
+    platform: &Platform,
+    vault_name: &str,
+) -> Result<Vec<u8>, VaultError> {
+    let vault = read_vault(platform, vault_name).await?;
+
+    // Serialize vault using serialization module
+    let vault_bytes = super::serialization::serialize_vault(&vault)?;
+
+    platform.logger().log(&format!(
+        "Exporting vault data: {} bytes",
+        vault_bytes.len()
+    ));
+
+    Ok(vault_bytes)
+}
+
+/// Import vault from bytes
+pub async fn import_vault_from_bytes(
+    platform: &Platform,
+    vault_name: &str,
+    vault_bytes: &[u8],
+) -> Result<(), VaultError> {
+    platform.logger().log(&format!(
+        "Attempting to import vault data of size: {} bytes",
+        vault_bytes.len()
+    ));
+
+    // Deserialize vault
+    let imported_vault = super::serialization::deserialize_vault(vault_bytes)?;
+
+    // Check if vault already exists
+    match read_vault(platform, vault_name).await {
+        Ok(_) => {
+            return Err(VaultError::VaultAlreadyExists);
+        }
+        Err(VaultError::IoError(..)) => {
+            platform.logger().log(&format!(
+                "No existing vault named '{}'; proceeding with import.",
+                vault_name
+            ));
+        }
+        Err(e) => {
+            return Err(e);
+        }
+    }
+
+    // Save imported vault
+    save_vault(platform, vault_name, imported_vault).await?;
+
+    Ok(())
+}
+
+/// Clean expired namespaces from a vault
+pub async fn cleanup_vault(
+    platform: &Platform,
+    vault_name: &str,
+) -> Result<bool, VaultError> {
+    let mut vault = read_vault(platform, vault_name).await?;
+
+    let now = get_current_timestamp();
+    let data_removed = super::expiration::cleanup_expired_namespaces(
+        platform,
+        &mut vault,
+        vault_name,
+        now,
+    )
+    .await?;
+
+    if data_removed {
+        save_vault(platform, vault_name, vault).await?;
+    }
+
+    Ok(data_removed)
+}
+
+/// Verify that an identity can decrypt a vault
+pub async fn verify_vault_identity(
+    platform: &Platform,
+    vault_name: &str,
+    identity_private_key: &str,
+) -> Result<(), VaultError> {
+    let vault = read_vault(platform, vault_name).await?;
+
+    // Try to decrypt the first namespace to verify identity
+    if let Some((_, namespace_data)) = vault.namespaces.iter().next() {
+        crate::domain::crypto::decrypt_with_identity(
+            platform,
+            &namespace_data.data,
+            identity_private_key,
+        )
+        .await
+        .map_err(|_| VaultError::InvalidPassword)?;
+    }
+
+    Ok(())
+}
+
+/// Get current Unix timestamp in seconds
+/// Platform-agnostic helper (works in both WASM and native)
+#[cfg(target_arch = "wasm32")]
+fn get_current_timestamp() -> i64 {
+    (js_sys::Date::now() / 1000.0) as i64
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn get_current_timestamp() -> i64 {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64
 }
 
 #[cfg(test)]
