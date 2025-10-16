@@ -43,13 +43,13 @@ pub fn js_value_to_string(value: JsValue) -> Result<String, JsValue> {
 /// Convert IdentityKeys to IdentityHandle
 pub fn identity_keys_to_handle(
     keys: crate::domain::authentication::types::IdentityKeys
-) -> Result<crate::crypto::IdentityHandle, JsValue> {
+) -> Result<super::crypto::IdentityHandle, JsValue> {
     use age::x25519::Identity;
 
     let identity: Identity = keys.private_key.parse()
         .map_err(|e| JsValue::from_str(&format!("Failed to parse identity: {}", e)))?;
 
-    Ok(crate::crypto::IdentityHandle::from(identity))
+    Ok(super::crypto::IdentityHandle::from(identity))
 }
 
 #[cfg(test)]

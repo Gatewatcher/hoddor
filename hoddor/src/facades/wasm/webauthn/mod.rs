@@ -1,4 +1,4 @@
-use crate::crypto::IdentityHandle;
+use super::crypto::IdentityHandle;
 use js_sys::Uint8Array;
 use wasm_bindgen::{prelude::wasm_bindgen, JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;

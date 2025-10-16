@@ -1,7 +1,7 @@
 /// WASM facade for vault operations
 /// This module provides JavaScript-compatible functions that delegate to domain logic
 use wasm_bindgen::prelude::*;
-use crate::crypto::IdentityHandle;
+use super::crypto::IdentityHandle;
 use crate::platform::Platform;
 use crate::domain::vault::{operations, validation};
 use super::converters;

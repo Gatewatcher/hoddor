@@ -1,4 +1,4 @@
-use crate::crypto::IdentityHandle;
+use crate::facades::wasm::crypto::IdentityHandle;
 use crate::domain::vault::error::VaultError;
 use age::x25519::Identity;
 use crate::measure::time_it;

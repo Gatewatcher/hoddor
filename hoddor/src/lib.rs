@@ -8,23 +8,39 @@ pub mod platform;
 pub mod facades;
 
 // Existing modules
-pub mod crypto;
-pub mod global;
-pub mod measure;
 pub mod notifications;
+
+// WASM-only modules
+#[cfg(target_arch = "wasm32")]
+pub mod global;
+#[cfg(target_arch = "wasm32")]
+pub mod measure;
+#[cfg(target_arch = "wasm32")]
 pub mod signaling;
+#[cfg(target_arch = "wasm32")]
 pub mod sync;
+#[cfg(target_arch = "wasm32")]
 pub mod vault;
-pub mod webauthn;
+#[cfg(target_arch = "wasm32")]
 pub mod webrtc;
+
+// Re-export crypto and webauthn from facades
+#[cfg(target_arch = "wasm32")]
+pub use facades::wasm::{crypto, webauthn};
 
 // Re-exports for testing
 pub use domain::vault::{IdentitySalts, NamespaceData, Vault, VaultMetadata};
 pub use platform::Platform;
+
+// WASM-only re-exports
+#[cfg(target_arch = "wasm32")]
 pub use vault::{read_vault_with_name, save_vault};
 
+// WASM initialization
+#[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
+#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen(start)]
 pub fn start_app() -> Result<(), JsValue> {
     #[cfg(feature = "console_error_panic_hook")]
