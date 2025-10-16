@@ -1,27 +1,18 @@
 use age::{
     secrecy::ExposeSecret,
     x25519::{Identity, Recipient},
-    Decryptor, Encryptor,
 };
-use argon2::Argon2;
-use hkdf::Hkdf;
+use crate::domain::crypto;
+use crate::platform::Platform;
 use js_sys::Uint8Array;
 use rand::{thread_rng, Rng};
-use sha2::{Digest, Sha256};
-use wasm_bindgen::prelude::JsValue;
+use std::fmt;
+use wasm_bindgen::prelude::*;
 use web_sys::AuthenticationExtensionsPrfValues;
 
 pub fn gen_random() -> [u8; 32] {
     thread_rng().gen::<[u8; 32]>()
 }
-use crate::platform::Platform;
-use bech32::{ToBase32, Variant};
-use futures::io::{AllowStdIo, AsyncReadExt, AsyncWriteExt};
-use std::fmt;
-use std::io::Cursor;
-use wasm_bindgen::prelude::*;
-use x25519_dalek::StaticSecret;
-use zeroize::Zeroize;
 
 #[wasm_bindgen]
 pub async fn identity_from_passphrase(
@@ -37,33 +28,18 @@ async fn identity_from_passphrase_internal(
     passphrase: &str,
     salt: &[u8],
 ) -> Result<IdentityHandle, JsValue> {
-    // Use Argon2 to derive a stable seed from the passphrase
-    let argon2 = Argon2::default();
-    let mut seed = [0u8; 32];
+    let identity_str = crypto::identity_from_passphrase(platform, passphrase, salt)
+        .await
+        .map_err(|e| {
+            platform
+                .logger()
+                .log(&format!("Failed to derive identity: {}", e));
+            JsValue::from_str(&e.to_string())
+        })?;
 
-    argon2
-        .hash_password_into(passphrase.as_bytes(), salt, &mut seed)
-        .map_err(|e| JsValue::from_str(&format!("Key derivation failed: {:?}", e)))?;
-
-    // Create a static secret from the derived key
-    let secret = StaticSecret::from(seed);
-
-    // Create a secret string in the format Age expects
-    let mut sk_bytes = secret.to_bytes();
-    let sk_base32 = sk_bytes.to_base32();
-    let encoded = bech32::encode("age-secret-key-", sk_base32, Variant::Bech32)
-        .map_err(|e| JsValue::from_str(&format!("Failed to encode identity: {}", e)))?
-        .to_uppercase();
-
-    // Clear sensitive data
-    sk_bytes.zeroize();
-    seed.zeroize();
-
-    // Parse into Age identity
-    let identity = encoded.parse::<Identity>().map_err(|e| {
-        platform.logger().log(&format!("Failed to parse identity string: {}", encoded));
-        JsValue::from_str(&format!("Failed to create identity: {}", e))
-    })?;
+    let identity: Identity = identity_str
+        .parse()
+        .map_err(|e| JsValue::from_str(&format!("Failed to parse identity: {}", e)))?;
 
     Ok(IdentityHandle::from(identity))
 }
@@ -71,7 +47,14 @@ async fn identity_from_passphrase_internal(
 /// Generate a new Age identity (key pair)
 #[wasm_bindgen]
 pub fn generate_identity() -> Result<IdentityHandle, JsValue> {
-    let identity = Identity::generate();
+    let platform = Platform::new();
+
+    let identity_str = crypto::generate_identity(&platform)
+        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+
+    let identity: Identity = identity_str
+        .parse()
+        .map_err(|e| JsValue::from_str(&format!("Failed to parse identity: {}", e)))?;
 
     Ok(IdentityHandle::from(identity))
 }
@@ -79,6 +62,12 @@ pub fn generate_identity() -> Result<IdentityHandle, JsValue> {
 /// Parse a recipient string into an Age recipient
 #[wasm_bindgen]
 pub fn parse_recipient(recipient: &str) -> Result<RecipientHandle, JsValue> {
+    let platform = Platform::new();
+
+    crypto::parse_recipient(&platform, recipient)
+        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+
+    // If validation passed, parse the recipient
     recipient
         .parse::<Recipient>()
         .map(Into::into)
@@ -90,31 +79,13 @@ pub async fn encrypt_with_recipients(
     data: &[u8],
     recipients: &[RecipientHandle],
 ) -> Result<Vec<u8>, JsValue> {
-    let recipients: Vec<_> = recipients.iter().map(|r| r.as_ref()).collect();
-    let encryptor = Encryptor::with_recipients(
-        recipients
-            .iter()
-            .map(|r| Box::new((*r).clone()) as Box<dyn age::Recipient + Send>)
-            .collect(),
-    )
-    .ok_or_else(|| JsValue::from_str("No recipients provided"))?;
+    let platform = Platform::new();
+    let recipient_strs: Vec<String> = recipients.iter().map(|r| r.to_string()).collect();
+    let recipient_refs: Vec<&str> = recipient_strs.iter().map(|s| s.as_str()).collect();
 
-    let mut encrypted = vec![];
-    let cursor = Cursor::new(&mut encrypted);
-    let async_cursor = AllowStdIo::new(cursor);
-    let mut writer = encryptor
-        .wrap_output(Box::new(async_cursor))
-        .map_err(|e| JsValue::from_str(&format!("Failed to initialize encryption: {}", e)))?;
-
-    AsyncWriteExt::write_all(&mut writer, data)
+    crypto::encrypt_for_recipients(&platform, data, &recipient_refs)
         .await
-        .map_err(|e| JsValue::from_str(&format!("Failed to encrypt data: {}", e)))?;
-
-    AsyncWriteExt::close(&mut writer)
-        .await
-        .map_err(|e| JsValue::from_str(&format!("Failed to finalize encryption: {}", e)))?;
-
-    Ok(encrypted)
+        .map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
 /// Decrypt data with an identity (private key)
@@ -122,32 +93,12 @@ pub async fn decrypt_with_identity(
     encrypted_data: &[u8],
     identity_handle: &IdentityHandle,
 ) -> Result<Vec<u8>, JsValue> {
-    let decryptor = match Decryptor::new(encrypted_data) {
-        Ok(d) => d,
-        Err(e) => {
-            return Err(JsValue::from_str(&format!(
-                "Failed to create decryptor: {}",
-                e
-            )));
-        }
-    };
+    let platform = Platform::new();
+    let identity_str = identity_handle.private_key();
 
-    match decryptor {
-        Decryptor::Recipients(d) => {
-            let mut decrypted = vec![];
-            let reader = d
-                .decrypt(std::iter::once(identity_handle.as_ref()))
-                .map_err(|e| JsValue::from_str(&format!("Failed to decrypt: {}", e)))?;
-
-            let mut async_reader = AllowStdIo::new(reader);
-            AsyncReadExt::read_to_end(&mut async_reader, &mut decrypted)
-                .await
-                .map_err(|e| JsValue::from_str(&format!("Failed to read decrypted data: {}", e)))?;
-
-            Ok(decrypted)
-        }
-        _ => Err(JsValue::from_str("File was not encrypted with recipients")),
-    }
+    crypto::decrypt_with_identity(&platform, encrypted_data, &identity_str)
+        .await
+        .map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
 #[wasm_bindgen]
@@ -268,31 +219,22 @@ pub fn prf_inputs(nonce: &Uint8Array) -> AuthenticationExtensionsPrfValues {
     prf_inputs
 }
 
-fn validate_prf_outputs(prf_output: &AuthenticationExtensionsPrfValues) -> Result<(), JsValue> {
-    if prf_output.get_first().is_undefined() {
+fn prf_outputs_from_js(
+    prf: &AuthenticationExtensionsPrfValues,
+) -> Result<(Vec<u8>, Vec<u8>), JsValue> {
+    let first = if !prf.get_first().is_undefined() {
+        Uint8Array::new(&prf.get_first()).to_vec()
+    } else {
         return Err(JsValue::from_str("Missing first PRF value"));
-    }
-    if prf_output.get_second().is_none() {
+    };
+
+    let second = if let Some(s) = prf.get_second() {
+        Uint8Array::new(&s).to_vec()
+    } else {
         return Err(JsValue::from_str("Missing second PRF value"));
-    }
-    Ok(())
-}
+    };
 
-pub fn derive_key_from_outputs(
-    prf_outputs: &AuthenticationExtensionsPrfValues,
-) -> Result<[u8; 32], JsValue> {
-    validate_prf_outputs(prf_outputs)?;
-
-    let first = Uint8Array::new(&prf_outputs.get_first());
-    let second = Uint8Array::new(&prf_outputs.get_second().unwrap());
-
-    let mut prf = first.to_vec();
-    prf.extend(second.to_vec());
-
-    let mixed_prf = Sha256::digest(&prf);
-
-    let (prk, _) = Hkdf::<Sha256>::extract(Some("hoddor/vault".as_bytes()), mixed_prf.as_slice());
-    Ok(prk.into())
+    Ok((first, second))
 }
 
 pub fn identity_from_prf(
@@ -306,42 +248,22 @@ fn identity_from_prf_internal(
     platform: &Platform,
     prf_output: &web_sys::AuthenticationExtensionsPrfValues,
 ) -> Result<IdentityHandle, JsValue> {
-    validate_prf_outputs(prf_output)?;
+    let (first, second) = prf_outputs_from_js(prf_output)?;
 
-    let seed = derive_key_from_outputs(prf_output)?;
-    if seed.iter().all(|&x| x == 0) {
-        return Err(JsValue::from_str("Invalid PRF seed (all zeros)"));
-    }
-
-    let secret = StaticSecret::from(seed);
-    let mut sk_bytes = secret.to_bytes();
-
-    // Validate key bytes
-    if sk_bytes.iter().all(|&x| x == 0) {
-        sk_bytes.zeroize();
-        return Err(JsValue::from_str("Generated invalid secret key"));
-    }
-
-    let sk_base32 = sk_bytes.to_base32();
-    let encoded = bech32::encode("age-secret-key-", sk_base32, Variant::Bech32)
-        .map_err(|e| {
-            sk_bytes.zeroize();
-            JsValue::from_str(&format!("Failed to encode identity: {}", e))
-        })?
-        .to_uppercase();
-
-    sk_bytes.zeroize();
-
-    let identity = encoded.parse::<Identity>().map_err(|e| {
-        platform.logger().log(&format!("Failed to parse identity string: {}", encoded));
-        JsValue::from_str(&format!("Failed to create identity: {}", e))
+    let identity_str = crypto::identity_from_prf(platform, &first, &second).map_err(|e| {
+        platform
+            .logger()
+            .log(&format!("Failed to derive identity from PRF: {}", e));
+        JsValue::from_str(&e.to_string())
     })?;
 
-    let handle = IdentityHandle {
-        identity: identity.clone(),
-    };
+    let identity: Identity = identity_str
+        .parse()
+        .map_err(|e| JsValue::from_str(&format!("Failed to parse identity: {}", e)))?;
 
-    // Validate the created handle
+    let handle = IdentityHandle::from(identity);
+
+    // Validate handle
     if handle.public_key().is_empty() || handle.private_key().is_empty() {
         return Err(JsValue::from_str("Generated invalid identity handle"));
     }
