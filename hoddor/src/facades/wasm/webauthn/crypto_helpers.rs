@@ -1,7 +1,7 @@
-use age::x25519::Identity;
 use crate::crypto::IdentityHandle;
 use crate::domain::crypto;
 use crate::platform::Platform;
+use age::x25519::Identity;
 use js_sys::Uint8Array;
 use rand::{thread_rng, Rng};
 use wasm_bindgen::prelude::*;

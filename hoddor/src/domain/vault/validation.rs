@@ -12,7 +12,9 @@ pub fn validate_namespace(namespace: &str) -> Result<(), VaultError> {
 
     let invalid_chars = ['/', '\\', '<', '>', ':', '"', '|', '?', '*'];
     if namespace.chars().any(|c| invalid_chars.contains(&c)) {
-        return Err(VaultError::io_error("Namespace contains invalid characters"));
+        return Err(VaultError::io_error(
+            "Namespace contains invalid characters",
+        ));
     }
     Ok(())
 }

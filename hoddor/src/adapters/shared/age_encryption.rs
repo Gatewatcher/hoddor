@@ -54,7 +54,11 @@ impl EncryptionPort for AgeEncryption {
         Ok(encrypted)
     }
 
-    async fn decrypt(&self, encrypted: &[u8], identity_str: &str) -> Result<Vec<u8>, Box<dyn Error>> {
+    async fn decrypt(
+        &self,
+        encrypted: &[u8],
+        identity_str: &str,
+    ) -> Result<Vec<u8>, Box<dyn Error>> {
         let identity: Identity = identity_str.parse()?;
 
         let decryptor = Decryptor::new(encrypted)?;

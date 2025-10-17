@@ -1,7 +1,7 @@
-use async_trait::async_trait;
 use crate::domain::vault::error::VaultError;
 use crate::global::get_storage_manager;
 use crate::ports::PersistencePort;
+use async_trait::async_trait;
 use std::sync::atomic::{AtomicBool, Ordering};
 use wasm_bindgen_futures::JsFuture;
 
@@ -30,7 +30,9 @@ impl PersistencePort for Persistence {
         let persist_promise = if let Ok(promise) = storage.persist() {
             promise
         } else {
-            return Err(VaultError::io_error("Unable to obtain a local storage shelf"));
+            return Err(VaultError::io_error(
+                "Unable to obtain a local storage shelf",
+            ));
         };
 
         let result = JsFuture::from(persist_promise).await?;
@@ -43,7 +45,9 @@ impl PersistencePort for Persistence {
         let persisted_promise = if let Ok(promise) = storage.persisted() {
             promise
         } else {
-            return Err(VaultError::io_error("Unable to obtain a local storage shelf"));
+            return Err(VaultError::io_error(
+                "Unable to obtain a local storage shelf",
+            ));
         };
         let result = JsFuture::from(persisted_promise).await?;
         let is_persisted = result.as_bool().unwrap_or(false);

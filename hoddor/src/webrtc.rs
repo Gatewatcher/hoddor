@@ -1,7 +1,7 @@
+use crate::facades::wasm::legacy::update_vault_from_sync;
 use crate::platform::Platform;
 use crate::signaling::{with_signaling_manager, SignalingMessage};
 use crate::sync::SyncMessage;
-use crate::facades::wasm::legacy::update_vault_from_sync;
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures::StreamExt;
 use futures_channel::mpsc;
@@ -133,7 +133,9 @@ impl WebRtcPeer {
 
     async fn setup_connection(&mut self) -> Result<(), JsValue> {
         let platform = self.platform;
-        platform.logger().log("Setting up WebRTC connection handlers...");
+        platform
+            .logger()
+            .log("Setting up WebRTC connection handlers...");
 
         let connected_flag = Rc::new(RefCell::new(false));
         let connected_flag_clone = connected_flag.clone();
@@ -144,7 +146,9 @@ impl WebRtcPeer {
 
         let onicegatheringstatechange_callback = Closure::wrap(Box::new(move |_: web_sys::Event| {
             let state = connection_ref.ice_gathering_state();
-            platform.logger().log(&format!("ICE gathering state changed to: {:?}", state));
+            platform
+                .logger()
+                .log(&format!("ICE gathering state changed to: {:?}", state));
 
             match state {
                 web_sys::RtcIceGatheringState::New => {
@@ -236,7 +240,9 @@ impl WebRtcPeer {
                     platform.logger().log("ICE connection is new");
                 }
                 web_sys::RtcIceConnectionState::Checking => {
-                    platform.logger().log("ICE connection is checking candidates...");
+                    platform
+                        .logger()
+                        .log("ICE connection is checking candidates...");
                 }
                 web_sys::RtcIceConnectionState::Connected => {
                     platform.logger().log("ICE connection established!");
@@ -300,7 +306,9 @@ impl WebRtcPeer {
                                 let websocket = signaling_ref.get_websocket();
 
                                 if websocket.ready_state() != web_sys::WebSocket::OPEN {
-                                    platform.logger().warn("WebSocket not ready, cannot send ICE candidate");
+                                    platform
+                                        .logger()
+                                        .warn("WebSocket not ready, cannot send ICE candidate");
                                     return;
                                 }
 
@@ -311,9 +319,9 @@ impl WebRtcPeer {
                                             msg_str
                                         ));
                                         match websocket.send_with_str(&msg_str) {
-                                            Ok(_) => {
-                                                platform.logger().log("ICE candidate sent successfully")
-                                            }
+                                            Ok(_) => platform
+                                                .logger()
+                                                .log("ICE candidate sent successfully"),
                                             Err(e) => platform.logger().error(&format!(
                                                 "Failed to send ICE candidate: {:?}",
                                                 e
@@ -332,10 +340,14 @@ impl WebRtcPeer {
                             }
                         });
                     } else {
-                        platform.logger().warn("Generated ICE candidate but no remote peer ID set yet");
+                        platform
+                            .logger()
+                            .warn("Generated ICE candidate but no remote peer ID set yet");
                     }
                 } else {
-                    platform.logger().log("ICE candidate gathering complete (null candidate)");
+                    platform
+                        .logger()
+                        .log("ICE candidate gathering complete (null candidate)");
                 }
             })
                 as Box<dyn FnMut(web_sys::RtcPeerConnectionIceEvent)>)
@@ -354,7 +366,9 @@ impl WebRtcPeer {
             let data_channel_ref = Rc::new(RefCell::new(self.data_channel.clone()));
 
             Closure::wrap(Box::new(move |ev: web_sys::RtcDataChannelEvent| {
-                platform.logger().log("Data channel received from remote peer");
+                platform
+                    .logger()
+                    .log("Data channel received from remote peer");
                 let channel = ev.channel();
                 *data_channel_ref.borrow_mut() = Some(channel.clone());
 
@@ -373,7 +387,9 @@ impl WebRtcPeer {
                 onclose.forget();
 
                 let onerror = Closure::wrap(Box::new(move |e: web_sys::Event| {
-                    platform.logger().error(&format!("Data channel error: {:?}", e));
+                    platform
+                        .logger()
+                        .error(&format!("Data channel error: {:?}", e));
                 }) as Box<dyn FnMut(web_sys::Event)>);
                 channel.set_onerror(Some(onerror.as_ref().unchecked_ref()));
                 onerror.forget();
@@ -385,7 +401,9 @@ impl WebRtcPeer {
                         let array = js_sys::Uint8Array::new(&data);
                         let mut vec = vec![0; array.length() as usize];
                         array.copy_to(&mut vec[..]);
-                        platform.logger().log(&format!("Received message of {} bytes", vec.len()));
+                        platform
+                            .logger()
+                            .log(&format!("Received message of {} bytes", vec.len()));
 
                         match serde_json::from_slice::<SyncMessage>(&vec) {
                             Ok(sync_msg) => {
@@ -414,7 +432,9 @@ impl WebRtcPeer {
                                 });
                             }
                             Err(e) => {
-                                platform.logger().error(&format!("Failed to parse sync message: {}", e));
+                                platform
+                                    .logger()
+                                    .error(&format!("Failed to parse sync message: {}", e));
                             }
                         }
 
@@ -449,7 +469,9 @@ impl WebRtcPeer {
                 *channel_open_clone.borrow_mut() = true;
                 *connected_flag.borrow_mut() = true;
                 let _ = state_sender.unbounded_send(true);
-                platform.logger().log("channel_open and connected flags set to true");
+                platform
+                    .logger()
+                    .log("channel_open and connected flags set to true");
             }) as Box<dyn FnMut(web_sys::Event)>);
             channel.set_onopen(Some(onopen.as_ref().unchecked_ref()));
             onopen.forget();
@@ -467,7 +489,9 @@ impl WebRtcPeer {
             let connected_flag = self.connected.clone();
             let state_sender = self.connection_state_sender.clone();
             let onerror = Closure::wrap(Box::new(move |e: web_sys::Event| {
-                platform.logger().error(&format!("Data channel error: {:?}", e));
+                platform
+                    .logger()
+                    .error(&format!("Data channel error: {:?}", e));
                 *connected_flag.borrow_mut() = false;
                 let _ = state_sender.unbounded_send(false);
             }) as Box<dyn FnMut(web_sys::Event)>);
@@ -481,7 +505,9 @@ impl WebRtcPeer {
                     let array = js_sys::Uint8Array::new(&data);
                     let mut vec = vec![0; array.length() as usize];
                     array.copy_to(&mut vec[..]);
-                    platform.logger().log(&format!("Received message of {} bytes", vec.len()));
+                    platform
+                        .logger()
+                        .log(&format!("Received message of {} bytes", vec.len()));
 
                     match serde_json::from_slice::<SyncMessage>(&vec) {
                         Ok(sync_msg) => {
@@ -491,7 +517,9 @@ impl WebRtcPeer {
                             ));
                         }
                         Err(e) => {
-                            platform.logger().error(&format!("Failed to parse sync message: {}", e));
+                            platform
+                                .logger()
+                                .error(&format!("Failed to parse sync message: {}", e));
                         }
                     }
 
@@ -502,7 +530,9 @@ impl WebRtcPeer {
             onmessage.forget();
         }
 
-        platform.logger().log("WebRTC connection handlers setup complete");
+        platform
+            .logger()
+            .log("WebRTC connection handlers setup complete");
         Ok(())
     }
 
@@ -522,7 +552,9 @@ impl WebRtcPeer {
                 .set_local_description(&rtc_session_description_init),
         )
         .await?;
-        self.platform.logger().log("Local description set successfully");
+        self.platform
+            .logger()
+            .log("Local description set successfully");
 
         Ok(sdp)
     }
@@ -546,7 +578,9 @@ impl WebRtcPeer {
 
         // Make sure we're the offerer
         if !self.is_offerer {
-            self.platform.logger().error("Received answer but we're not the offerer!");
+            self.platform
+                .logger()
+                .error("Received answer but we're not the offerer!");
             return Err(JsValue::from_str(
                 "Received answer but we're not the offerer",
             ));
@@ -560,7 +594,9 @@ impl WebRtcPeer {
         ));
 
         JsFuture::from(self.connection.set_remote_description(&answer_obj)).await?;
-        self.platform.logger().log("Remote description (answer) set successfully");
+        self.platform
+            .logger()
+            .log("Remote description (answer) set successfully");
         Ok(())
     }
 
@@ -572,9 +608,13 @@ impl WebRtcPeer {
 
         let offer_obj = RtcSessionDescriptionInit::new(RtcSdpType::Offer);
         offer_obj.set_sdp(offer_sdp);
-        self.platform.logger().log("Setting remote description (offer)...");
+        self.platform
+            .logger()
+            .log("Setting remote description (offer)...");
         JsFuture::from(self.connection.set_remote_description(&offer_obj)).await?;
-        self.platform.logger().log("Remote description set successfully");
+        self.platform
+            .logger()
+            .log("Remote description set successfully");
 
         self.platform.logger().log("Creating answer...");
         let answer = JsFuture::from(self.connection.create_answer()).await?;
@@ -582,16 +622,24 @@ impl WebRtcPeer {
             .dyn_into::<JsString>()
             .map(String::from)
             .unwrap_or_default();
-        self.platform.logger().log(&format!("Answer created: {}", answer_sdp));
+        self.platform
+            .logger()
+            .log(&format!("Answer created: {}", answer_sdp));
 
         let answer_obj = RtcSessionDescriptionInit::new(RtcSdpType::Answer);
         answer_obj.set_sdp(&answer_sdp);
-        self.platform.logger().log("Setting local description (answer)...");
+        self.platform
+            .logger()
+            .log("Setting local description (answer)...");
         JsFuture::from(self.connection.set_local_description(&answer_obj)).await?;
-        self.platform.logger().log("Local description set successfully");
+        self.platform
+            .logger()
+            .log("Local description set successfully");
 
         if let Some(remote_id) = &self.remote_peer_id {
-            self.platform.logger().log(&format!("Sending answer to remote peer {}", remote_id));
+            self.platform
+                .logger()
+                .log(&format!("Sending answer to remote peer {}", remote_id));
             if let Some(client) =
                 with_signaling_manager(|mgr| mgr.get_client(&self.metadata.peer_id))
             {
@@ -599,7 +647,9 @@ impl WebRtcPeer {
                 let websocket = client_ref.get_websocket();
 
                 if websocket.ready_state() != web_sys::WebSocket::OPEN {
-                    self.platform.logger().warn("WebSocket not ready, cannot send answer");
+                    self.platform
+                        .logger()
+                        .warn("WebSocket not ready, cannot send answer");
                     return Err(JsValue::from_str("WebSocket not ready, cannot send answer"));
                 }
 
@@ -610,11 +660,15 @@ impl WebRtcPeer {
                 };
 
                 if let Ok(msg_str) = serde_json::to_string(&answer_msg) {
-                    self.platform.logger().log(&format!("Sending answer message: {}", msg_str));
+                    self.platform
+                        .logger()
+                        .log(&format!("Sending answer message: {}", msg_str));
                     match websocket.send_with_str(&msg_str) {
                         Ok(_) => self.platform.logger().log("Answer sent successfully"),
                         Err(e) => {
-                            self.platform.logger().error(&format!("Failed to send answer: {:?}", e));
+                            self.platform
+                                .logger()
+                                .error(&format!("Failed to send answer: {:?}", e));
                             return Err(e);
                         }
                     }
@@ -633,7 +687,9 @@ impl WebRtcPeer {
         let platform = self.platform;
 
         if *self.connected.borrow() {
-            platform.logger().log("Already connected, skipping connection process");
+            platform
+                .logger()
+                .log("Already connected, skipping connection process");
             return Ok(());
         }
 
@@ -643,7 +699,9 @@ impl WebRtcPeer {
         ));
 
         if let Some(target_id) = target_peer_id {
-            platform.logger().log(&format!("Setting up as offerer for peer {}", target_id));
+            platform
+                .logger()
+                .log(&format!("Setting up as offerer for peer {}", target_id));
             self.remote_peer_id = Some(target_id.to_string());
             self.is_offerer = true;
         }
@@ -705,9 +763,9 @@ impl WebRtcPeer {
                                         let websocket = client_ref.get_websocket();
 
                                         if websocket.ready_state() != web_sys::WebSocket::OPEN {
-                                            platform.logger().warn(
-                                                "WebSocket not ready, cannot send answer",
-                                            );
+                                            platform
+                                                .logger()
+                                                .warn("WebSocket not ready, cannot send answer");
                                             return Err(JsValue::from_str(
                                                 "WebSocket not ready, cannot send answer",
                                             ));
@@ -740,7 +798,9 @@ impl WebRtcPeer {
                     };
 
                     if let Err(e) = handle_message.await {
-                        platform.logger().error(&format!("Error handling signaling message: {:?}", e));
+                        platform
+                            .logger()
+                            .error(&format!("Error handling signaling message: {:?}", e));
                     }
                 }
             }
@@ -771,14 +831,15 @@ impl WebRtcPeer {
                             peer_id: peer_id.clone(),
                         };
                         if let Ok(msg_str) = serde_json::to_string(&join_msg) {
-                            platform.logger().log(&format!("Sending join message: {}", msg_str));
+                            platform
+                                .logger()
+                                .log(&format!("Sending join message: {}", msg_str));
                             match client.borrow().get_websocket().send_with_str(&msg_str) {
                                 Ok(_) => platform.logger().log("Join message sent successfully"),
                                 Err(e) => {
-                                    platform.logger().error(&format!(
-                                        "Failed to send join message: {:?}",
-                                        e
-                                    ));
+                                    platform
+                                        .logger()
+                                        .error(&format!("Failed to send join message: {:?}", e));
                                     reject.call1(&JsValue::NULL, &e).unwrap_or_default();
                                     return;
                                 }
@@ -792,7 +853,9 @@ impl WebRtcPeer {
             let onerror = {
                 let reject = reject_clone;
                 Closure::wrap(Box::new(move |e: ErrorEvent| {
-                    platform.logger().error(&format!("WebSocket error: {:?}", e));
+                    platform
+                        .logger()
+                        .error(&format!("WebSocket error: {:?}", e));
                     reject.call1(&JsValue::NULL, &e.into()).unwrap_or_default();
                 }) as Box<dyn FnMut(ErrorEvent)>)
             };
@@ -844,7 +907,9 @@ impl WebRtcPeer {
                             ws.ready_state()
                         ));
                         if let Err(e) = ws.send_with_str(&msg_str) {
-                            platform.logger().error(&format!("Failed to send offer: {:?}", e));
+                            platform
+                                .logger()
+                                .error(&format!("Failed to send offer: {:?}", e));
                             return Err(e);
                         }
                         platform.logger().log("Offer sent successfully");
@@ -853,7 +918,9 @@ impl WebRtcPeer {
             }
         }
 
-        platform.logger().log("Connection setup complete. Waiting for peer connection to establish...");
+        platform
+            .logger()
+            .log("Connection setup complete. Waiting for peer connection to establish...");
         Ok(())
     }
 
@@ -898,7 +965,9 @@ impl WebRtcPeer {
             async move {
                 while let Some(is_connected) = state_receiver.next().await {
                     *connected.borrow_mut() = is_connected;
-                    platform.logger().log(&format!("Updated connection state: {}", is_connected));
+                    platform
+                        .logger()
+                        .log(&format!("Updated connection state: {}", is_connected));
                 }
             }
         });
@@ -929,17 +998,23 @@ impl WebRtcPeer {
                 .await
                 {
                     Ok(_) => {
-                        self.platform.logger().log("Successfully added ICE candidate");
+                        self.platform
+                            .logger()
+                            .log("Successfully added ICE candidate");
                         Ok(())
                     }
                     Err(e) => {
-                        self.platform.logger().error(&format!("Failed to add ICE candidate: {:?}", e));
+                        self.platform
+                            .logger()
+                            .error(&format!("Failed to add ICE candidate: {:?}", e));
                         Err(e)
                     }
                 }
             }
             Err(e) => {
-                self.platform.logger().error(&format!("Failed to create ICE candidate: {:?}", e));
+                self.platform
+                    .logger()
+                    .error(&format!("Failed to create ICE candidate: {:?}", e));
                 Err(e)
             }
         }

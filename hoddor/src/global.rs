@@ -10,8 +10,9 @@ pub fn get_global_scope() -> Result<JsValue, VaultError> {
     }
 
     // Fallback to window
-    let window = web_sys::window()
-        .ok_or(VaultError::io_error("Neither DedicatedWorkerGlobalScope nor Window found"))?;
+    let window = web_sys::window().ok_or(VaultError::io_error(
+        "Neither DedicatedWorkerGlobalScope nor Window found",
+    ))?;
     Ok(JsValue::from(window))
 }
 

@@ -1,6 +1,6 @@
 use super::error::VaultError;
-use crate::platform::Platform;
 use super::types::{Expiration, NamespaceData, Vault, VaultMetadata};
+use crate::platform::Platform;
 use std::collections::HashMap;
 
 const METADATA_FILENAME: &str = "metadata.json";
@@ -10,10 +10,7 @@ pub fn get_namespace_filename(namespace: &str) -> String {
     format!("{}{}", namespace, NAMESPACE_EXTENSION)
 }
 
-pub async fn read_vault(
-    platform: &Platform,
-    vault_name: &str,
-) -> Result<Vault, VaultError> {
+pub async fn read_vault(platform: &Platform, vault_name: &str) -> Result<Vault, VaultError> {
     let storage = platform.storage();
 
     let metadata_path = format!("{}/{}", vault_name, METADATA_FILENAME);
@@ -32,10 +29,14 @@ pub async fn read_vault(
             let namespace_text = storage.read_file(&namespace_path).await?;
 
             let namespace_data: NamespaceData =
-                serde_json::from_str(&namespace_text)
-                    .map_err(|_| VaultError::serialization_error("Failed to deserialize namespace data"))?;
+                serde_json::from_str(&namespace_text).map_err(|_| {
+                    VaultError::serialization_error("Failed to deserialize namespace data")
+                })?;
 
-            let namespace = entry_name.strip_suffix(NAMESPACE_EXTENSION).unwrap().to_string();
+            let namespace = entry_name
+                .strip_suffix(NAMESPACE_EXTENSION)
+                .unwrap()
+                .to_string();
             vault.namespaces.insert(namespace, namespace_data);
         }
     }
@@ -56,10 +57,14 @@ pub async fn save_vault(
 
             match result {
                 Ok(is_granted) => {
-                    platform.logger().log(&format!("persistence request granted: {}", is_granted));
+                    platform
+                        .logger()
+                        .log(&format!("persistence request granted: {}", is_granted));
                 }
                 Err(e) => {
-                    platform.logger().error(&format!("Persistence request failed: {}", e));
+                    platform
+                        .logger()
+                        .error(&format!("Persistence request failed: {}", e));
                 }
             }
         }
@@ -72,9 +77,8 @@ pub async fn save_vault(
     let mut metadata_vault = vault.clone();
     metadata_vault.namespaces.clear();
 
-    let metadata_json =
-        serde_json::to_string(&metadata_vault)
-            .map_err(|_| VaultError::serialization_error("Failed to serialize vault metadata"))?;
+    let metadata_json = serde_json::to_string(&metadata_vault)
+        .map_err(|_| VaultError::serialization_error("Failed to serialize vault metadata"))?;
 
     let metadata_path = format!("{}/{}", vault_name, METADATA_FILENAME);
     storage.write_file(&metadata_path, &metadata_json).await?;
@@ -87,10 +91,13 @@ pub async fn save_vault(
         storage.write_file(&namespace_path, &namespace_json).await?;
     }
 
-    let vault_bytes = serde_json::to_vec(&vault)
-        .map_err(|_| VaultError::serialization_error("Failed to serialize vault for notification"))?;
+    let vault_bytes = serde_json::to_vec(&vault).map_err(|_| {
+        VaultError::serialization_error("Failed to serialize vault for notification")
+    })?;
 
-    let _ = platform.notifier().notify_vault_update(vault_name, &vault_bytes);
+    let _ = platform
+        .notifier()
+        .notify_vault_update(vault_name, &vault_bytes);
 
     Ok(())
 }
@@ -122,9 +129,9 @@ pub async fn create_vault_from_sync(
     identity_salts: Option<super::types::IdentitySalts>,
     username_pk: Option<HashMap<String, String>>,
 ) -> Result<Vault, VaultError> {
-    let metadata = metadata.ok_or_else(||
+    let metadata = metadata.ok_or_else(|| {
         VaultError::io_error("Missing vault metadata in sync message for new vault")
-    )?;
+    })?;
 
     Ok(Vault {
         metadata,
@@ -171,13 +178,10 @@ pub async fn upsert_namespace(
     }
 
     // Encrypt data for the recipient
-    let encrypted_data = crate::domain::crypto::encrypt_for_recipients(
-        platform,
-        &data,
-        &[identity_public_key],
-    )
-    .await
-    .map_err(|e| VaultError::io_error(e.to_string()))?;
+    let encrypted_data =
+        crate::domain::crypto::encrypt_for_recipients(platform, &data, &[identity_public_key])
+            .await
+            .map_err(|e| VaultError::io_error(e.to_string()))?;
 
     // Calculate expiration
     let expiration = expires_in_seconds.map(|secs| Expiration {
@@ -191,7 +195,9 @@ pub async fn upsert_namespace(
     };
 
     // Insert into vault
-    vault.namespaces.insert(namespace.to_string(), namespace_data);
+    vault
+        .namespaces
+        .insert(namespace.to_string(), namespace_data);
 
     // Save vault
     save_vault(platform, vault_name, vault).await?;
@@ -331,20 +337,13 @@ pub async fn import_vault_from_bytes(
 }
 
 /// Clean expired namespaces from a vault
-pub async fn cleanup_vault(
-    platform: &Platform,
-    vault_name: &str,
-) -> Result<bool, VaultError> {
+pub async fn cleanup_vault(platform: &Platform, vault_name: &str) -> Result<bool, VaultError> {
     let mut vault = read_vault(platform, vault_name).await?;
 
     let now = get_current_timestamp();
-    let data_removed = super::expiration::cleanup_expired_namespaces(
-        platform,
-        &mut vault,
-        vault_name,
-        now,
-    )
-    .await?;
+    let data_removed =
+        super::expiration::cleanup_expired_namespaces(platform, &mut vault, vault_name, now)
+            .await?;
 
     if data_removed {
         save_vault(platform, vault_name, vault).await?;

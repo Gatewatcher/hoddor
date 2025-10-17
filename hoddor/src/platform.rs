@@ -2,14 +2,13 @@
 ///
 /// Stores concrete adapter instances directly.
 /// Platform selection happens at compile-time via #[cfg].
-
 use crate::adapters::{
-    AgeEncryption, AgeIdentity, Argon2Kdf, Clock, ConsoleLogger, Locks, Notifier, Persistence,
-    Prf, Storage,
+    AgeEncryption, AgeIdentity, Argon2Kdf, Clock, ConsoleLogger, Locks, Notifier, Persistence, Prf,
+    Storage,
 };
 use crate::ports::{
-    ClockPort, EncryptionPort, IdentityPort, KeyDerivationPort, LockPort, LoggerPort,
-    NotifierPort, PersistencePort, PrfPort, StoragePort,
+    ClockPort, EncryptionPort, IdentityPort, KeyDerivationPort, LockPort, LoggerPort, NotifierPort,
+    PersistencePort, PrfPort, StoragePort,
 };
 
 #[derive(Clone, Copy)]

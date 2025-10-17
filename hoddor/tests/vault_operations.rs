@@ -4,15 +4,15 @@ extern crate wasm_bindgen_test;
 use futures_util::future;
 use gloo_timers::future::TimeoutFuture;
 use hoddor::{
-    platform::Platform,
     facades::wasm::{
         configure_cleanup,
         vault::{
-            create_vault, export_vault, force_cleanup_vault, import_vault,
-            list_namespaces, list_vaults, read_from_vault, remove_from_vault, remove_vault,
-            upsert_vault, vault_identity_from_passphrase,
+            create_vault, export_vault, force_cleanup_vault, import_vault, list_namespaces,
+            list_vaults, read_from_vault, remove_from_vault, remove_vault, upsert_vault,
+            vault_identity_from_passphrase,
         },
     },
+    platform::Platform,
 };
 use serde_wasm_bindgen::from_value;
 use wasm_bindgen::JsValue;
@@ -136,9 +136,16 @@ async fn test_list_vaults() {
             .await
             .expect("Failed to create identity");
 
-        upsert_vault(vault_name, &identity, ns, JsValue::from_str(data), None, false)
-            .await
-            .expect("Failed to upsert data");
+        upsert_vault(
+            vault_name,
+            &identity,
+            ns,
+            JsValue::from_str(data),
+            None,
+            false,
+        )
+        .await
+        .expect("Failed to upsert data");
     }
 
     let listed = list_vaults().await.expect("Failed to list vaults");
@@ -283,7 +290,15 @@ async fn test_concurrent_vault_operations() {
         let future = async move {
             create_vault(JsValue::from_str(&vault_name)).await?;
             let identity = vault_identity_from_passphrase(&password, &vault_name).await?;
-            upsert_vault(&vault_name, &identity, &namespace, JsValue::from_str(&data_val), None, false).await
+            upsert_vault(
+                &vault_name,
+                &identity,
+                &namespace,
+                JsValue::from_str(&data_val),
+                None,
+                false,
+            )
+            .await
         };
         create_futures.push(future);
     }
@@ -394,9 +409,16 @@ async fn test_concurrent_vault_creation() {
             .await
             .expect("Failed to create identity");
 
-        upsert_vault(&vault_names[i], &identity, &namespaces[i], JsValue::from_str(&data[i]), None, false)
-            .await
-            .expect("Failed to upsert initial data");
+        upsert_vault(
+            &vault_names[i],
+            &identity,
+            &namespaces[i],
+            JsValue::from_str(&data[i]),
+            None,
+            false,
+        )
+        .await
+        .expect("Failed to upsert initial data");
     }
 
     let mut create_futures = Vec::new();
@@ -409,7 +431,15 @@ async fn test_concurrent_vault_creation() {
 
         let future = async move {
             let identity = vault_identity_from_passphrase(&password, &vault_name).await?;
-            upsert_vault(&vault_name, &identity, &new_namespace, JsValue::from_str(&data_val), None, false).await
+            upsert_vault(
+                &vault_name,
+                &identity,
+                &new_namespace,
+                JsValue::from_str(&data_val),
+                None,
+                false,
+            )
+            .await
         };
         create_futures.push(future);
     }
@@ -537,9 +567,16 @@ async fn test_data_expiration() {
         .await
         .expect("Failed to create identity");
 
-    upsert_vault(vault_name, &identity, namespace, data.clone(), expires_in_seconds, false)
-        .await
-        .expect("Failed to upsert data with expiration");
+    upsert_vault(
+        vault_name,
+        &identity,
+        namespace,
+        data.clone(),
+        expires_in_seconds,
+        false,
+    )
+    .await
+    .expect("Failed to upsert data with expiration");
 
     let initial_read = read_from_vault(vault_name, &identity, JsValue::from_str(namespace))
         .await
@@ -575,9 +612,16 @@ async fn test_force_cleanup() {
         .await
         .expect("Failed to create identity");
 
-    upsert_vault(vault_name, &identity, namespace, data.clone(), Some(1), false)
-        .await
-        .expect("Failed to upsert first namespace with expiration");
+    upsert_vault(
+        vault_name,
+        &identity,
+        namespace,
+        data.clone(),
+        Some(1),
+        false,
+    )
+    .await
+    .expect("Failed to upsert first namespace with expiration");
 
     upsert_vault(
         vault_name,
@@ -717,9 +761,16 @@ async fn test_disable_cleanup() {
         .await
         .expect("Failed to create identity");
 
-    upsert_vault(vault_name, &identity, namespace, data.clone(), Some(2), false)
-        .await
-        .expect("Failed to upsert data with short expiration while cleanup is on");
+    upsert_vault(
+        vault_name,
+        &identity,
+        namespace,
+        data.clone(),
+        Some(2),
+        false,
+    )
+    .await
+    .expect("Failed to upsert data with short expiration while cleanup is on");
 
     configure_cleanup(0);
 
@@ -729,7 +780,9 @@ async fn test_disable_cleanup() {
 
     match read_data {
         Ok(d) => {
-            Platform::new().logger().log("Data remains because we disabled cleanup.");
+            Platform::new()
+                .logger()
+                .log("Data remains because we disabled cleanup.");
             assert_eq!(
                 d.as_string().unwrap(),
                 "short_lived_data",
@@ -737,7 +790,9 @@ async fn test_disable_cleanup() {
             );
         }
         Err(e) => {
-            Platform::new().logger().log("Data is expired at read time, so the read returned error");
+            Platform::new()
+                .logger()
+                .log("Data is expired at read time, so the read returned error");
             Platform::new().logger().log(&format!("Error: {:?}", e));
         }
     }
@@ -761,14 +816,23 @@ async fn test_concurrent_upserts_different_namespaces() {
         .await
         .expect("Failed to create identity");
 
-    upsert_vault(vault_name, &identity, "ns0", JsValue::from_str("data0"), None, false)
-        .await
-        .expect("Failed to upsert initial namespace");
+    upsert_vault(
+        vault_name,
+        &identity,
+        "ns0",
+        JsValue::from_str("data0"),
+        None,
+        false,
+    )
+    .await
+    .expect("Failed to upsert initial namespace");
 
     for i in 1..6 {
         let ns = format!("namespace{}", i);
         let dt = format!("data{}", i);
-        Platform::new().logger().log(&format!("Preparing upsert for namespace '{}'", ns));
+        Platform::new()
+            .logger()
+            .log(&format!("Preparing upsert for namespace '{}'", ns));
         match upsert_vault(
             vault_name,
             &identity,
@@ -776,11 +840,15 @@ async fn test_concurrent_upserts_different_namespaces() {
             JsValue::from_str(&dt),
             None,
             false,
-        ).await
+        )
+        .await
         {
-            Ok(_) => {},
+            Ok(_) => {}
             Err(e) => {
-                Platform::new().logger().log(&format!("Upsert for namespace '{}' failed with error: {:?}", ns, e));
+                Platform::new().logger().log(&format!(
+                    "Upsert for namespace '{}' failed with error: {:?}",
+                    ns, e
+                ));
             }
         }
     }
@@ -789,7 +857,9 @@ async fn test_concurrent_upserts_different_namespaces() {
         .await
         .expect("Failed to list namespaces");
     let ns_array = js_sys::Array::from(&namespaces);
-    Platform::new().logger().log(&format!("Found {} namespaces:", ns_array.length()));
+    Platform::new()
+        .logger()
+        .log(&format!("Found {} namespaces:", ns_array.length()));
     for i in 0..ns_array.length() {
         if let Some(ns) = ns_array.get(i).as_string() {
             Platform::new().logger().log(&format!("  - {}", ns));
@@ -818,7 +888,9 @@ async fn test_concurrent_upserts_different_namespaces() {
                 );
             }
             Err(e) => {
-                Platform::new().logger().log(&format!("Read failed for namespace '{}': {:?}", ns, e));
+                Platform::new()
+                    .logger()
+                    .log(&format!("Read failed for namespace '{}': {:?}", ns, e));
             }
         }
     }
@@ -843,9 +915,16 @@ async fn test_upsert_with_replace() {
         .await
         .expect("Failed to create identity");
 
-    upsert_vault("default", &identity, namespace, initial_data.clone(), None, false)
-        .await
-        .expect("Failed to upsert initial data");
+    upsert_vault(
+        "default",
+        &identity,
+        namespace,
+        initial_data.clone(),
+        None,
+        false,
+    )
+    .await
+    .expect("Failed to upsert initial data");
 
     upsert_vault(
         "default",
@@ -922,16 +1001,9 @@ async fn test_multiple_expired_namespaces() {
         .expect("Failed to create identity");
 
     for ns in &namespaces {
-        upsert_vault(
-            "default",
-            &identity,
-            *ns,
-            data.clone(),
-            Some(1),
-            false,
-        )
-        .await
-        .expect("Failed to add namespace");
+        upsert_vault("default", &identity, *ns, data.clone(), Some(1), false)
+            .await
+            .expect("Failed to add namespace");
     }
 
     TimeoutFuture::new(1500).await;
@@ -1040,9 +1112,16 @@ async fn test_concurrent_data_integrity() {
         .await
         .expect("Failed to create identity");
 
-    upsert_vault("default", &identity, base_namespace, JsValue::from_str(base_data), None, false)
-        .await
-        .expect("Failed to create initial namespace");
+    upsert_vault(
+        "default",
+        &identity,
+        base_namespace,
+        JsValue::from_str(base_data),
+        None,
+        false,
+    )
+    .await
+    .expect("Failed to create initial namespace");
 
     let operations_count = 50;
 
@@ -1121,9 +1200,16 @@ async fn test_concurrent_read_write_integrity() {
         .await
         .expect("Failed to create identity");
 
-    upsert_vault("default", &identity, namespace, initial_data.clone(), None, false)
-        .await
-        .expect("Failed to upsert initial data");
+    upsert_vault(
+        "default",
+        &identity,
+        namespace,
+        initial_data.clone(),
+        None,
+        false,
+    )
+    .await
+    .expect("Failed to upsert initial data");
 
     let mut write_futures = Vec::new();
     let operations_count = 20;
@@ -1226,9 +1312,16 @@ async fn test_concurrent_same_namespace_upserts() {
         .await
         .expect("Failed to create identity");
 
-    upsert_vault(vault_name, &identity, namespace, JsValue::from_str("initial_data"), None, false)
-        .await
-        .expect("Failed to create initial namespace");
+    upsert_vault(
+        vault_name,
+        &identity,
+        namespace,
+        JsValue::from_str("initial_data"),
+        None,
+        false,
+    )
+    .await
+    .expect("Failed to create initial namespace");
 
     let mut futures = Vec::new();
     let iterations = 10;
@@ -1256,7 +1349,8 @@ async fn test_concurrent_same_namespace_upserts() {
         );
     }
 
-    let final_read_result = read_from_vault(vault_name, &identity, JsValue::from_str(namespace)).await;
+    let final_read_result =
+        read_from_vault(vault_name, &identity, JsValue::from_str(namespace)).await;
     let final_data = final_read_result
         .expect("Failed to read final data from concurrent upserts")
         .as_string()

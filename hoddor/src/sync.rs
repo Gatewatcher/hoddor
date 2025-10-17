@@ -59,10 +59,14 @@ impl SyncManager {
         let peer_id = if let Some(remote_id) = peer.borrow().remote_peer_id() {
             remote_id
         } else {
-            self.platform.logger().error("No remote peer ID found, skipping peer addition");
+            self.platform
+                .logger()
+                .error("No remote peer ID found, skipping peer addition");
             return;
         };
-        self.platform.logger().log(&format!("Adding peer {} to sync manager", peer_id));
+        self.platform
+            .logger()
+            .log(&format!("Adding peer {} to sync manager", peer_id));
         self.peers.insert(peer_id.clone(), peer);
         self.platform.logger().log(&format!(
             "Current peers in sync manager: {:?}",
@@ -122,7 +126,7 @@ impl SyncManager {
         operation: VaultOperation,
         vault_metadata: Option<VaultMetadata>,
         identity_salts: Option<IdentitySalts>,
-        username_pk: Option<HashMap<String, String>>
+        username_pk: Option<HashMap<String, String>>,
     ) -> SyncMessage {
         SyncMessage {
             operation,
@@ -130,7 +134,7 @@ impl SyncManager {
             vault_name,
             vault_metadata,
             identity_salts,
-            username_pk
+            username_pk,
         }
     }
 

@@ -103,7 +103,9 @@ impl SignalingClient {
         let onmessage_callback = Closure::wrap(Box::new(move |e: MessageEvent| {
             if let Ok(text) = e.data().dyn_into::<js_sys::JsString>() {
                 let text_str = String::from(text);
-                platform.logger().log(&format!("Received message: {}", text_str));
+                platform
+                    .logger()
+                    .log(&format!("Received message: {}", text_str));
 
                 match serde_json::from_str::<SignalingMessage>(&text_str) {
                     Ok(msg) => {
@@ -118,7 +120,9 @@ impl SignalingClient {
                         };
 
                         if is_for_us {
-                            platform.logger().log(&format!("Processing message for {}: {:?}", peer_id, msg));
+                            platform
+                                .logger()
+                                .log(&format!("Processing message for {}: {:?}", peer_id, msg));
                             match sender.unbounded_send(msg) {
                                 Ok(_) => (),
                                 Err(e) => {
@@ -128,10 +132,9 @@ impl SignalingClient {
                                             peer_id
                                         ));
                                     } else {
-                                        platform.logger().error(&format!(
-                                            "Failed to forward message: {:?}",
-                                            e
-                                        ));
+                                        platform
+                                            .logger()
+                                            .error(&format!("Failed to forward message: {:?}", e));
                                     }
                                 }
                             }
@@ -139,7 +142,9 @@ impl SignalingClient {
                             platform.logger().log("Message not for us, ignoring");
                         }
                     }
-                    Err(e) => platform.logger().error(&format!("Failed to parse message: {:?}", e)),
+                    Err(e) => platform
+                        .logger()
+                        .error(&format!("Failed to parse message: {:?}", e)),
                 }
             }
         }) as Box<dyn FnMut(MessageEvent)>);
@@ -179,17 +184,23 @@ impl SignalingClient {
 
         // Set up error handler with more detailed logging
         let onerror_callback = Closure::wrap(Box::new(move |e: ErrorEvent| {
-            platform.logger().error(&format!("WebSocket error: {:?}", e));
+            platform
+                .logger()
+                .error(&format!("WebSocket error: {:?}", e));
             // Try to log more error details if available
             if let Ok(err_details) = js_sys::Reflect::get(&e, &"error".into()) {
-                platform.logger().error(&format!("Error details: {:?}", err_details));
+                platform
+                    .logger()
+                    .error(&format!("Error details: {:?}", err_details));
             }
         }) as Box<dyn FnMut(ErrorEvent)>)
         .into_js_value();
 
         ws.set_onerror(Some(onerror_callback.unchecked_ref()));
 
-        platform.logger().log(&format!("WebSocket setup complete for peer {}", peer_id));
+        platform
+            .logger()
+            .log(&format!("WebSocket setup complete for peer {}", peer_id));
 
         let empty_callback =
             Closure::wrap(Box::new(move |_: MessageEvent| {}) as Box<dyn FnMut(MessageEvent)>)
@@ -239,7 +250,9 @@ impl SignalingManager {
             ));
             client.send_offer(to_peer_id, sdp)?;
         } else {
-            self.platform.logger().error("No local client found to send offer");
+            self.platform
+                .logger()
+                .error("No local client found to send offer");
         }
         Ok(())
     }
@@ -254,7 +267,9 @@ impl SignalingManager {
             ));
             client.send_answer(to_peer_id, sdp)?;
         } else {
-            self.platform.logger().error("No local client found to send answer");
+            self.platform
+                .logger()
+                .error("No local client found to send answer");
         }
         Ok(())
     }
@@ -269,7 +284,9 @@ impl SignalingManager {
             ));
             client.send_ice_candidate(to_peer_id, candidate)?;
         } else {
-            self.platform.logger().error("No local client found to send ICE candidate");
+            self.platform
+                .logger()
+                .error("No local client found to send ICE candidate");
         }
         Ok(())
     }
@@ -303,7 +320,9 @@ impl SignalingManager {
                             msg_str
                         ));
                         if let Err(e) = client_ref.get_websocket().send_with_str(&msg_str) {
-                            self.platform.logger().error(&format!("Failed to send join message: {:?}", e));
+                            self.platform
+                                .logger()
+                                .error(&format!("Failed to send join message: {:?}", e));
                         }
                     }
                 }
@@ -320,7 +339,9 @@ impl SignalingManager {
         }
 
         self.clients.borrow_mut().push(client);
-        self.platform.logger().log(&format!("Added new signaling client for peer {}", peer_id));
+        self.platform
+            .logger()
+            .log(&format!("Added new signaling client for peer {}", peer_id));
 
         Ok(receiver)
     }

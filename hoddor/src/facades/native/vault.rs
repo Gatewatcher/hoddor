@@ -86,13 +86,8 @@ impl VaultManager {
         validation::validate_namespace(namespace)?;
 
         // Call domain logic
-        operations::read_namespace(
-            &self.platform,
-            vault_name,
-            identity_private_key,
-            namespace,
-        )
-        .await
+        operations::read_namespace(&self.platform, vault_name, identity_private_key, namespace)
+            .await
     }
 
     /// Remove a namespace from a vault

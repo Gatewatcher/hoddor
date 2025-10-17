@@ -1,8 +1,7 @@
+use crate::domain::vault::operations::create_vault_from_sync;
 /// Legacy helper functions for vault operations
 /// These functions provide simple wrappers around domain operations for backward compatibility
-
 use crate::domain::vault::{error::VaultError, NamespaceData, Vault};
-use crate::domain::vault::operations::create_vault_from_sync;
 use crate::platform::Platform;
 use crate::sync::{OperationType, SyncMessage};
 use wasm_bindgen::prelude::*;
@@ -23,20 +22,23 @@ pub async fn save_vault(vault_name: &str, vault: Vault) -> Result<(), VaultError
 pub async fn update_vault_from_sync(vault_name: &str, vault_data: &[u8]) -> Result<(), VaultError> {
     let platform = Platform::new();
 
-    let sync_msg: SyncMessage = serde_json::from_slice(vault_data)
-        .map_err(|e| VaultError::serialization_error(format!("Failed to deserialize sync message: {:?}", e)))?;
+    let sync_msg: SyncMessage = serde_json::from_slice(vault_data).map_err(|e| {
+        VaultError::serialization_error(format!("Failed to deserialize sync message: {:?}", e))
+    })?;
 
     let mut current_vault = match read_vault_with_name(vault_name).await {
         Ok(vault) => vault,
-        Err(VaultError::IoError(msg))
-            if msg == "Failed to get directory handle" => {
-            platform.logger().log(&format!("Creating new vault {} for sync", vault_name));
+        Err(VaultError::IoError(msg)) if msg == "Failed to get directory handle" => {
+            platform
+                .logger()
+                .log(&format!("Creating new vault {} for sync", vault_name));
 
             let vault = create_vault_from_sync(
                 sync_msg.vault_metadata,
                 sync_msg.identity_salts.clone(),
                 sync_msg.username_pk,
-            ).await?;
+            )
+            .await?;
 
             save_vault(vault_name, vault.clone()).await?;
 
@@ -61,13 +63,17 @@ pub async fn update_vault_from_sync(vault_name: &str, vault_data: &[u8]) -> Resu
                 current_vault
                     .namespaces
                     .insert(namespace.clone(), namespace_data.clone());
-                platform.logger().log(&format!("Updated namespace {} in vault", namespace));
+                platform
+                    .logger()
+                    .log(&format!("Updated namespace {} in vault", namespace));
             }
         }
         OperationType::Delete => {
             let namespace = sync_msg.operation.namespace.clone();
             current_vault.namespaces.remove(&namespace);
-            platform.logger().log(&format!("Removed namespace {} from vault", namespace));
+            platform
+                .logger()
+                .log(&format!("Removed namespace {} from vault", namespace));
         }
     }
 

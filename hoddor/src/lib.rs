@@ -1,11 +1,11 @@
 extern crate console_error_panic_hook;
 
 // Hexagonal architecture modules
-pub mod domain;
-pub mod ports;
 pub mod adapters;
-pub mod platform;
+pub mod domain;
 pub mod facades;
+pub mod platform;
+pub mod ports;
 
 // Existing modules
 pub mod notifications;

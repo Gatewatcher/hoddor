@@ -1,5 +1,5 @@
-use crate::ports::clock::ClockPort;
 use crate::global::get_global_scope;
+use crate::ports::clock::ClockPort;
 use wasm_bindgen::JsCast;
 use web_sys::{Performance, WorkerGlobalScope};
 
@@ -58,7 +58,11 @@ mod tests {
     fn test_clock_now_returns_positive() {
         let clock = Clock::new();
         let timestamp = clock.now();
-        assert!(timestamp > 0.0, "Timestamp should be positive: {}", timestamp);
+        assert!(
+            timestamp > 0.0,
+            "Timestamp should be positive: {}",
+            timestamp
+        );
     }
 
     #[wasm_bindgen_test]
@@ -80,6 +84,9 @@ mod tests {
     #[wasm_bindgen_test]
     fn test_performance_api_available() {
         let clock = Clock::new();
-        assert!(clock.get_performance().is_some(), "Performance API should be available in browser/worker");
+        assert!(
+            clock.get_performance().is_some(),
+            "Performance API should be available in browser/worker"
+        );
     }
 }

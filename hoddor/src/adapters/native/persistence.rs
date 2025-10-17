@@ -1,6 +1,6 @@
-use async_trait::async_trait;
 use crate::domain::vault::error::VaultError;
 use crate::ports::PersistencePort;
+use async_trait::async_trait;
 
 /// Native persistence stub.
 ///

@@ -1,10 +1,10 @@
+use super::converters;
+use super::crypto::IdentityHandle;
+use crate::domain::vault::{operations, validation};
+use crate::platform::Platform;
 /// WASM facade for vault operations
 /// This module provides JavaScript-compatible functions that delegate to domain logic
 use wasm_bindgen::prelude::*;
-use super::crypto::IdentityHandle;
-use crate::platform::Platform;
-use crate::domain::vault::{operations, validation};
-use super::converters;
 
 /// Derive identity from passphrase for a vault (WASM facade)
 #[wasm_bindgen]
@@ -15,21 +15,19 @@ pub async fn vault_identity_from_passphrase(
     let platform = Platform::new();
 
     // Validate inputs
-    validation::validate_passphrase(passphrase)
-        .map_err(converters::to_js_error)?;
+    validation::validate_passphrase(passphrase).map_err(converters::to_js_error)?;
     validation::validate_vault_name(vault_name)?;
 
     // Read vault
     let mut vault = operations::read_vault(&platform, vault_name)
         .await
-        .map_err(|e| converters::to_js_error(format!("Vault '{}' does not exist: {}", vault_name, e)))?;
+        .map_err(|e| {
+            converters::to_js_error(format!("Vault '{}' does not exist: {}", vault_name, e))
+        })?;
 
     // Derive identity using domain authentication
     let identity_keys = crate::domain::authentication::derive_vault_identity(
-        &platform,
-        passphrase,
-        vault_name,
-        &mut vault,
+        &platform, passphrase, vault_name, &mut vault,
     )
     .await
     .map_err(converters::to_js_error)?;
@@ -54,8 +52,7 @@ pub async fn upsert_vault(
     let platform = Platform::new();
 
     // Validate namespace
-    validation::validate_namespace(namespace)
-        .map_err(converters::to_js_error)?;
+    validation::validate_namespace(namespace).map_err(converters::to_js_error)?;
 
     // Convert WASM → Rust
     let data_bytes = converters::js_value_to_bytes(data)?;
@@ -87,8 +84,7 @@ pub async fn read_from_vault(
     let namespace_str = converters::js_value_to_string(namespace)?;
 
     // Validate namespace
-    validation::validate_namespace(&namespace_str)
-        .map_err(converters::to_js_error)?;
+    validation::validate_namespace(&namespace_str).map_err(converters::to_js_error)?;
 
     // Call domain logic
     let data_bytes = operations::read_namespace(
@@ -115,16 +111,10 @@ pub async fn remove_from_vault(
 
     // Convert and validate namespace
     let namespace_str = converters::js_value_to_string(namespace)?;
-    validation::validate_namespace(&namespace_str)
-        .map_err(converters::to_js_error)?;
+    validation::validate_namespace(&namespace_str).map_err(converters::to_js_error)?;
 
     // Verify identity has access
-    operations::verify_vault_identity(
-        &platform,
-        vault_name,
-        &identity.private_key(),
-    )
-    .await?;
+    operations::verify_vault_identity(&platform, vault_name, &identity.private_key()).await?;
 
     // Remove namespace
     operations::remove_namespace(&platform, vault_name, &namespace_str)
@@ -155,12 +145,14 @@ pub async fn create_vault(vault_name: JsValue) -> Result<(), JsValue> {
         .ok_or_else(|| JsValue::from_str("vault_name must be a string"))?;
 
     // Validate vault name
-    validation::validate_vault_name(&name)
-        .map_err(converters::to_js_error)?;
+    validation::validate_vault_name(&name).map_err(converters::to_js_error)?;
 
     // Check if vault already exists
     if operations::read_vault(&platform, &name).await.is_ok() {
-        return Err(JsValue::from_str(&format!("Vault '{}' already exists", name)));
+        return Err(JsValue::from_str(&format!(
+            "Vault '{}' already exists",
+            name
+        )));
     }
 
     // Create vault

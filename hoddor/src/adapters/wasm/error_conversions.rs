@@ -6,7 +6,7 @@ impl From<JsValue> for VaultError {
     fn from(err: JsValue) -> Self {
         VaultError::io_error(
             err.as_string()
-                .unwrap_or_else(|| "Unknown JavaScript error".to_string())
+                .unwrap_or_else(|| "Unknown JavaScript error".to_string()),
         )
     }
 }

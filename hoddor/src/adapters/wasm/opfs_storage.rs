@@ -1,7 +1,7 @@
-use async_trait::async_trait;
 use crate::domain::vault::error::VaultError;
 use crate::global::get_storage_manager;
 use crate::ports::StoragePort;
+use async_trait::async_trait;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{FileSystemDirectoryHandle, FileSystemFileHandle, FileSystemGetFileOptions};
@@ -73,7 +73,9 @@ impl StoragePort for OPFSStorage {
             .await
             .map_err(|_| VaultError::io_error("Failed to read file content"))?
             .as_string()
-            .ok_or(VaultError::io_error("Failed to convert file content to string"))?;
+            .ok_or(VaultError::io_error(
+                "Failed to convert file content to string",
+            ))?;
 
         Ok(text)
     }
@@ -85,10 +87,11 @@ impl StoragePort for OPFSStorage {
         let options = FileSystemGetFileOptions::new();
         options.set_create(true);
 
-        let file_handle = JsFuture::from(dir_handle.get_file_handle_with_options(filename, &options))
-            .await
-            .map_err(|_| VaultError::io_error("Failed to get or create file handle"))?
-            .unchecked_into::<FileSystemFileHandle>();
+        let file_handle =
+            JsFuture::from(dir_handle.get_file_handle_with_options(filename, &options))
+                .await
+                .map_err(|_| VaultError::io_error("Failed to get or create file handle"))?
+                .unchecked_into::<FileSystemFileHandle>();
 
         let writer = JsFuture::from(file_handle.create_writable())
             .await
@@ -184,7 +187,9 @@ impl StoragePort for OPFSStorage {
             .dyn_ref::<js_sys::Function>()
             .ok_or_else(|| VaultError::io_error("entries is not a function"))?;
 
-        let iterator = entries_fn.call0(&dir_handle).map_err(|_| VaultError::io_error("Failed to call entries"))?;
+        let iterator = entries_fn
+            .call0(&dir_handle)
+            .map_err(|_| VaultError::io_error("Failed to call entries"))?;
 
         loop {
             let next_val = js_sys::Reflect::get(&iterator, &JsValue::from_str("next"))
@@ -237,9 +242,10 @@ impl OPFSStorage {
 
             for entry_name in entries {
                 // Try to get it as a directory first
-                if let Ok(subdir_handle) = JsFuture::from(dir_handle.get_directory_handle(&entry_name))
-                    .await
-                    .map(|h| h.unchecked_into::<FileSystemDirectoryHandle>())
+                if let Ok(subdir_handle) =
+                    JsFuture::from(dir_handle.get_directory_handle(&entry_name))
+                        .await
+                        .map(|h| h.unchecked_into::<FileSystemDirectoryHandle>())
                 {
                     // It's a directory - recursively clean it up first
                     self.cleanup_directory(&subdir_handle).await?;
@@ -256,7 +262,10 @@ impl OPFSStorage {
     }
 
     /// Helper to list entries from a directory handle.
-    async fn list_entries_from_handle(&self, dir_handle: &FileSystemDirectoryHandle) -> Result<Vec<String>, VaultError> {
+    async fn list_entries_from_handle(
+        &self,
+        dir_handle: &FileSystemDirectoryHandle,
+    ) -> Result<Vec<String>, VaultError> {
         let mut entries = Vec::new();
 
         let entries_val = js_sys::Reflect::get(dir_handle, &JsValue::from_str("entries"))
@@ -266,7 +275,9 @@ impl OPFSStorage {
             .dyn_ref::<js_sys::Function>()
             .ok_or_else(|| VaultError::io_error("entries is not a function"))?;
 
-        let iterator = entries_fn.call0(dir_handle).map_err(|_| VaultError::io_error("Failed to call entries"))?;
+        let iterator = entries_fn
+            .call0(dir_handle)
+            .map_err(|_| VaultError::io_error("Failed to call entries"))?;
 
         loop {
             let next_val = js_sys::Reflect::get(&iterator, &JsValue::from_str("next"))
@@ -345,9 +356,18 @@ mod tests {
         let test_dir = "test_list_opfs";
 
         storage.create_directory(test_dir).await.unwrap();
-        storage.write_file("test_list_opfs/file1.txt", "content1").await.unwrap();
-        storage.write_file("test_list_opfs/file2.txt", "content2").await.unwrap();
-        storage.write_file("test_list_opfs/file3.txt", "content3").await.unwrap();
+        storage
+            .write_file("test_list_opfs/file1.txt", "content1")
+            .await
+            .unwrap();
+        storage
+            .write_file("test_list_opfs/file2.txt", "content2")
+            .await
+            .unwrap();
+        storage
+            .write_file("test_list_opfs/file3.txt", "content3")
+            .await
+            .unwrap();
 
         let entries = storage.list_entries(test_dir).await.unwrap();
         assert_eq!(entries.len(), 3);
@@ -364,10 +384,22 @@ mod tests {
         let test_dir = "test_delete_opfs";
 
         storage.create_directory(test_dir).await.unwrap();
-        storage.write_file("test_delete_opfs/file1.txt", "content1").await.unwrap();
-        storage.write_file("test_delete_opfs/file2.txt", "content2").await.unwrap();
-        storage.create_directory("test_delete_opfs/subdir").await.unwrap();
-        storage.write_file("test_delete_opfs/subdir/file3.txt", "content3").await.unwrap();
+        storage
+            .write_file("test_delete_opfs/file1.txt", "content1")
+            .await
+            .unwrap();
+        storage
+            .write_file("test_delete_opfs/file2.txt", "content2")
+            .await
+            .unwrap();
+        storage
+            .create_directory("test_delete_opfs/subdir")
+            .await
+            .unwrap();
+        storage
+            .write_file("test_delete_opfs/subdir/file3.txt", "content3")
+            .await
+            .unwrap();
 
         storage.delete_directory(test_dir).await.unwrap();
         assert!(!storage.directory_exists(test_dir).await.unwrap());

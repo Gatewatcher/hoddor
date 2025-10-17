@@ -1,10 +1,10 @@
+use super::converters;
+use crate::domain::crypto;
+use crate::platform::Platform;
 use age::{
     secrecy::ExposeSecret,
     x25519::{Identity, Recipient},
 };
-use crate::domain::crypto;
-use crate::platform::Platform;
-use super::converters;
 use std::fmt;
 use wasm_bindgen::prelude::*;
 
@@ -13,8 +13,7 @@ use wasm_bindgen::prelude::*;
 pub fn generate_identity() -> Result<IdentityHandle, JsValue> {
     let platform = Platform::new();
 
-    let identity_str = crypto::generate_identity(&platform)
-        .map_err(converters::to_js_error)?;
+    let identity_str = crypto::generate_identity(&platform).map_err(converters::to_js_error)?;
 
     let identity: Identity = identity_str
         .parse()

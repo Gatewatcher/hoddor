@@ -1,7 +1,7 @@
-use async_trait::async_trait;
 use crate::domain::vault::error::VaultError;
 use crate::global::get_global_scope;
 use crate::ports::{LockGuard, LockPort};
+use async_trait::async_trait;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{Lock, LockManager, LockOptions, WorkerGlobalScope};

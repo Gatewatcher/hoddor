@@ -1,11 +1,11 @@
+use crate::domain::crypto;
+use crate::platform::Platform;
 /// Native facade for cryptographic operations
 /// Provides pure Rust API that delegates to domain logic
 use age::{
     secrecy::ExposeSecret,
     x25519::{Identity, Recipient},
 };
-use crate::domain::crypto;
-use crate::platform::Platform;
 use std::fmt;
 
 #[derive(Debug, Clone)]

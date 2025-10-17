@@ -3,8 +3,8 @@ use super::types::IdentityKeys;
 use crate::domain::vault::types::Vault;
 use crate::domain::vault::validation::validate_passphrase;
 use crate::platform::Platform;
-use rand::RngCore;
 use argon2::password_hash::rand_core::OsRng;
+use rand::RngCore;
 
 /// Derives an identity from a passphrase for a specific vault
 ///
@@ -22,7 +22,9 @@ pub async fn derive_vault_identity(
 
     // Try to find an existing identity
     for (stored_pubkey, salt) in vault.identity_salts.iter() {
-        platform.logger().log(&format!("Checking stored public key: {}", stored_pubkey));
+        platform
+            .logger()
+            .log(&format!("Checking stored public key: {}", stored_pubkey));
 
         // Validate salt length
         if salt.len() != 32 {
@@ -39,12 +41,16 @@ pub async fn derive_vault_identity(
         // Try to derive identity with this salt
         match derive_identity_from_passphrase(platform, passphrase, salt).await {
             Ok(identity) => {
-                platform.logger().log(&format!("Generated public key: {}", identity.public_key));
+                platform
+                    .logger()
+                    .log(&format!("Generated public key: {}", identity.public_key));
                 if identity.public_key == *stored_pubkey {
                     platform.logger().log("Found matching identity");
                     return Ok(identity);
                 } else {
-                    platform.logger().warn("Public key does not match stored salt");
+                    platform
+                        .logger()
+                        .warn("Public key does not match stored salt");
                 }
             }
             Err(err) => {
@@ -57,14 +63,18 @@ pub async fn derive_vault_identity(
     }
 
     // No identity found, create a new one
-    platform.logger().log("No matching identity found; generating new salt");
+    platform
+        .logger()
+        .log("No matching identity found; generating new salt");
     let mut new_salt = [0u8; 32];
     OsRng.fill_bytes(&mut new_salt);
 
     let identity = derive_identity_from_passphrase(platform, passphrase, &new_salt)
         .await
         .map_err(|e| {
-            platform.logger().error(&format!("Failed to create new identity: {:?}", e));
+            platform
+                .logger()
+                .error(&format!("Failed to create new identity: {:?}", e));
             e
         })?;
 
@@ -96,7 +106,9 @@ async fn derive_identity_from_passphrase(
     let identity_str = crate::domain::crypto::identity_from_passphrase(platform, passphrase, salt)
         .await
         .map_err(|e| {
-            platform.logger().log(&format!("Failed to derive identity: {}", e));
+            platform
+                .logger()
+                .log(&format!("Failed to derive identity: {}", e));
             AuthenticationError::DerivationFailed(e.to_string())
         })?;
 

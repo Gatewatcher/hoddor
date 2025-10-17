@@ -2,8 +2,10 @@
 
 extern crate wasm_bindgen_test;
 use hoddor::{
+    facades::wasm::vault::{
+        create_vault, read_from_vault, remove_vault, upsert_vault, vault_identity_from_passphrase,
+    },
     platform::Platform,
-    facades::wasm::vault::{create_vault, read_from_vault, remove_vault, upsert_vault, vault_identity_from_passphrase},
 };
 use wasm_bindgen::JsValue;
 use wasm_bindgen_test::*;
@@ -85,7 +87,9 @@ async fn performance_test_bulk_upserts() {
         vault_creation_time, num_upserts, upsert_time, num_upserts, read_time
     ));
 
-    platform.logger().log("Performance test for bulk upserts completed.");
+    platform
+        .logger()
+        .log("Performance test for bulk upserts completed.");
 }
 
 #[wasm_bindgen_test]
@@ -111,16 +115,9 @@ async fn performance_test_large_data() {
         .await
         .expect("Failed to create identity");
 
-    upsert_vault(
-        vault_name,
-        &identity,
-        namespace,
-        data.clone(),
-        None,
-        false,
-    )
-    .await
-    .expect("Failed to create vault with large data");
+    upsert_vault(vault_name, &identity, namespace, data.clone(), None, false)
+        .await
+        .expect("Failed to create vault with large data");
     let t1 = platform.clock().now();
     let vault_creation_time = t1 - t0;
 
@@ -148,5 +145,7 @@ async fn performance_test_large_data() {
         data_size_mb, vault_creation_time, data_size_mb, read_time
     ));
 
-    platform.logger().log("Performance test for large data completed.");
+    platform
+        .logger()
+        .log("Performance test for large data completed.");
 }

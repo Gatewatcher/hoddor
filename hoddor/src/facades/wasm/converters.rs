@@ -1,7 +1,7 @@
-/// WASM conversion utilities between JsValue and Rust types
-use wasm_bindgen::prelude::*;
 use js_sys::Uint8Array;
 use serde_wasm_bindgen::{from_value, to_value};
+/// WASM conversion utilities between JsValue and Rust types
+use wasm_bindgen::prelude::*;
 
 /// Convert JsValue to Vec<u8>
 /// Handles both Uint8Array and JSON values
@@ -47,18 +47,21 @@ pub fn to_js_value<T: serde::Serialize>(value: &T) -> Result<JsValue, JsValue> {
 
 /// Convert JsValue to String
 pub fn js_value_to_string(value: JsValue) -> Result<String, JsValue> {
-    value.as_string()
+    value
+        .as_string()
         .or_else(|| from_value::<String>(value.clone()).ok())
         .ok_or_else(|| JsValue::from_str("Invalid string value"))
 }
 
 /// Convert IdentityKeys to IdentityHandle
 pub fn identity_keys_to_handle(
-    keys: crate::domain::authentication::types::IdentityKeys
+    keys: crate::domain::authentication::types::IdentityKeys,
 ) -> Result<super::crypto::IdentityHandle, JsValue> {
     use age::x25519::Identity;
 
-    let identity: Identity = keys.private_key.parse()
+    let identity: Identity = keys
+        .private_key
+        .parse()
         .map_err(|e| JsValue::from_str(&format!("Failed to parse identity: {}", e)))?;
 
     Ok(super::crypto::IdentityHandle::from(identity))

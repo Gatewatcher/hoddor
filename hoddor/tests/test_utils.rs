@@ -1,8 +1,8 @@
 #![cfg(target_arch = "wasm32")]
 extern crate wasm_bindgen_test;
 
-use hoddor::platform::Platform;
 use hoddor::facades::wasm::vault::list_vaults;
+use hoddor::platform::Platform;
 
 use serde_wasm_bindgen::from_value;
 use wasm_bindgen::JsValue;

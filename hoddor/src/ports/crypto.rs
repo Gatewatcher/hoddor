@@ -5,7 +5,6 @@
 /// - KeyDerivationPort: Argon2 key derivation
 /// - IdentityPort: Age identity management
 /// - PrfPort: WebAuthn PRF (WASM only, stub in native)
-
 use async_trait::async_trait;
 use std::error::Error;
 

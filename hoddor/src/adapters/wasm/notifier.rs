@@ -1,6 +1,6 @@
-use crate::ports::NotifierPort;
 use crate::global::get_global_scope;
 use crate::notifications;
+use crate::ports::NotifierPort;
 use wasm_bindgen::JsCast;
 
 /// WASM notifier adapter using postMessage API.
@@ -28,10 +28,17 @@ impl NotifierPort for Notifier {
         let js_value = serde_wasm_bindgen::to_value(&msg)
             .map_err(|e| format!("Failed to serialize: {:?}", e))?;
 
-        if let Ok(worker_scope) = global_scope.clone().dyn_into::<web_sys::DedicatedWorkerGlobalScope>() {
-            worker_scope.post_message(&js_value).map_err(|e| format!("{:?}", e))?;
+        if let Ok(worker_scope) = global_scope
+            .clone()
+            .dyn_into::<web_sys::DedicatedWorkerGlobalScope>()
+        {
+            worker_scope
+                .post_message(&js_value)
+                .map_err(|e| format!("{:?}", e))?;
         } else if let Ok(window) = global_scope.dyn_into::<web_sys::Window>() {
-            window.post_message(&js_value, "*").map_err(|e| format!("{:?}", e))?;
+            window
+                .post_message(&js_value, "*")
+                .map_err(|e| format!("{:?}", e))?;
         } else {
             return Err("Unknown global scope".to_string());
         }

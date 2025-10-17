@@ -8,8 +8,8 @@ use web_sys::{
     PublicKeyCredentialType, PublicKeyCredentialUserEntity, UserVerificationRequirement,
 };
 
-use crate::{platform::Platform, global::window};
 use super::prf_inputs;
+use crate::{global::window, platform::Platform};
 use sha2::{Digest, Sha256};
 
 /// Secure algorithms recommendation:
@@ -50,9 +50,7 @@ fn webauthn_create_internal(
         challenge,
         &SECURE_ALGORITHM
             .iter()
-            .map(|alg| {
-                PublicKeyCredentialParameters::new(*alg, PublicKeyCredentialType::PublicKey)
-            })
+            .map(|alg| PublicKeyCredentialParameters::new(*alg, PublicKeyCredentialType::PublicKey))
             .collect::<Array>(),
         &pk_rp_entity,
         &pk_user,
@@ -86,10 +84,8 @@ pub fn webauthn_get(
     pk_options.set_challenge(challenge);
 
     let allow_creds = Array::new();
-    let descriptor = PublicKeyCredentialDescriptor::new(
-        &credential_id,
-        PublicKeyCredentialType::PublicKey,
-    );
+    let descriptor =
+        PublicKeyCredentialDescriptor::new(&credential_id, PublicKeyCredentialType::PublicKey);
     allow_creds.push(&descriptor);
     pk_options.set_allow_credentials(&allow_creds);
 

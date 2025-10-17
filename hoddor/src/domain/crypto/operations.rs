@@ -1,5 +1,5 @@
-use crate::platform::Platform;
 use super::error::CryptoError;
+use crate::platform::Platform;
 
 /// Derive an identity from a passphrase using Argon2 + Age
 pub async fn identity_from_passphrase(
@@ -138,8 +138,7 @@ mod tests {
         let public = identity_to_public(&platform, &identity).unwrap();
 
         let data = b"secret message";
-        let encrypted =
-            block_on(encrypt_for_recipients(&platform, data, &[&public])).unwrap();
+        let encrypted = block_on(encrypt_for_recipients(&platform, data, &[&public])).unwrap();
         let decrypted = block_on(decrypt_with_identity(&platform, &encrypted, &identity)).unwrap();
 
         assert_eq!(decrypted, data);
