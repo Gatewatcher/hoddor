@@ -125,7 +125,7 @@ mod tests {
     fn test_platform_logger_access() {
         let platform = Platform::new();
         let logger = platform.logger();
-        logger.log("test"); 
+        logger.log("test");
     }
 
     #[test]
@@ -133,7 +133,7 @@ mod tests {
         let platform = Platform::new();
         let clock = platform.clock();
         assert!(clock.is_available(), "Clock should be accessible");
-        let _timestamp = clock.now(); 
+        let _timestamp = clock.now();
     }
 
     #[test]

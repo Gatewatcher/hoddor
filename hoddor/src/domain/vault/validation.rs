@@ -112,8 +112,8 @@ mod tests {
         assert!(validate_vault_name("vault name").is_err());
         assert!(validate_vault_name("vault/name").is_err());
         assert!(validate_vault_name("vault.name").is_err());
-        assert!(validate_vault_name("vault@name").is_err()); 
-        assert!(validate_vault_name("vault#name").is_err()); 
+        assert!(validate_vault_name("vault@name").is_err());
+        assert!(validate_vault_name("vault#name").is_err());
     }
 
     #[test]

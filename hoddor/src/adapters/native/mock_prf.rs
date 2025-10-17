@@ -2,7 +2,7 @@ use crate::ports::PrfPort;
 use std::error::Error;
 
 /// Mock PRF adapter - PRF not available in native builds
-/// 
+///
 /// In the future, this could be replaced with a MFA framework.
 #[derive(Clone, Copy, Debug)]
 pub struct MockPrf;
