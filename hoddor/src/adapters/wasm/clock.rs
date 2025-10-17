@@ -70,7 +70,6 @@ mod tests {
         let clock = Clock::new();
         let t1 = clock.now();
 
-        // Small delay
         let mut sum = 0;
         for i in 0..1000 {
             sum += i;

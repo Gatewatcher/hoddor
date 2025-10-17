@@ -52,7 +52,6 @@ async fn create_credential_internal(
         .dyn_into::<PublicKeyCredential>()
         .map_err(|_| JsValue::from_str("Failed to get credential"))?;
 
-    // Extract PRF values from the authenticator response
     let extensions = credential.get_client_extension_results();
 
     let prf_results = js_sys::Reflect::get(&extensions, &"prf".into())

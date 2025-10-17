@@ -2,11 +2,8 @@ use super::converters;
 use super::crypto::IdentityHandle;
 use crate::domain::vault::{operations, validation};
 use crate::platform::Platform;
-/// WASM facade for vault operations
-/// This module provides JavaScript-compatible functions that delegate to domain logic
 use wasm_bindgen::prelude::*;
 
-/// Derive identity from passphrase for a vault (WASM facade)
 #[wasm_bindgen]
 pub async fn vault_identity_from_passphrase(
     passphrase: &str,
@@ -14,32 +11,26 @@ pub async fn vault_identity_from_passphrase(
 ) -> Result<IdentityHandle, JsValue> {
     let platform = Platform::new();
 
-    // Validate inputs
     validation::validate_passphrase(passphrase).map_err(converters::to_js_error)?;
     validation::validate_vault_name(vault_name)?;
 
-    // Read vault
     let mut vault = operations::read_vault(&platform, vault_name)
         .await
         .map_err(|e| {
             converters::to_js_error(format!("Vault '{}' does not exist: {}", vault_name, e))
         })?;
 
-    // Derive identity using domain authentication
     let identity_keys = crate::domain::authentication::derive_vault_identity(
         &platform, passphrase, vault_name, &mut vault,
     )
     .await
     .map_err(converters::to_js_error)?;
 
-    // Save vault with new salt if created
     operations::save_vault(&platform, vault_name, vault).await?;
 
-    // Convert to IdentityHandle
     converters::identity_keys_to_handle(identity_keys)
 }
 
-/// Insert or update data in a vault namespace (WASM facade)
 #[wasm_bindgen]
 pub async fn upsert_vault(
     vault_name: &str,
@@ -51,13 +42,10 @@ pub async fn upsert_vault(
 ) -> Result<(), JsValue> {
     let platform = Platform::new();
 
-    // Validate namespace
     validation::validate_namespace(namespace).map_err(converters::to_js_error)?;
 
-    // Convert WASM → Rust
     let data_bytes = converters::js_value_to_bytes(data)?;
 
-    // Call domain logic (pure function)
     operations::upsert_namespace(
         &platform,
         vault_name,
@@ -71,7 +59,6 @@ pub async fn upsert_vault(
     .map_err(|e| e.into())
 }
 
-/// Read and decrypt data from a vault namespace (WASM facade)
 #[wasm_bindgen]
 pub async fn read_from_vault(
     vault_name: &str,
@@ -80,13 +67,10 @@ pub async fn read_from_vault(
 ) -> Result<JsValue, JsValue> {
     let platform = Platform::new();
 
-    // Convert namespace
     let namespace_str = converters::js_value_to_string(namespace)?;
 
-    // Validate namespace
     validation::validate_namespace(&namespace_str).map_err(converters::to_js_error)?;
 
-    // Call domain logic
     let data_bytes = operations::read_namespace(
         &platform,
         vault_name,
@@ -96,11 +80,9 @@ pub async fn read_from_vault(
     .await
     .map_err(converters::to_js_error)?;
 
-    // Convert Rust → WASM
     converters::bytes_to_js_value(&data_bytes)
 }
 
-/// Remove a namespace from a vault (WASM facade)
 #[wasm_bindgen]
 pub async fn remove_from_vault(
     vault_name: &str,
@@ -109,20 +91,16 @@ pub async fn remove_from_vault(
 ) -> Result<(), JsValue> {
     let platform = Platform::new();
 
-    // Convert and validate namespace
     let namespace_str = converters::js_value_to_string(namespace)?;
     validation::validate_namespace(&namespace_str).map_err(converters::to_js_error)?;
 
-    // Verify identity has access
     operations::verify_vault_identity(&platform, vault_name, &identity.private_key()).await?;
 
-    // Remove namespace
     operations::remove_namespace(&platform, vault_name, &namespace_str)
         .await
         .map_err(|e| e.into())
 }
 
-/// List all namespaces in a vault (WASM facade)
 #[wasm_bindgen]
 pub async fn list_namespaces(vault_name: &str) -> Result<JsValue, JsValue> {
     let platform = Platform::new();
@@ -134,20 +112,16 @@ pub async fn list_namespaces(vault_name: &str) -> Result<JsValue, JsValue> {
     converters::to_js_value(&namespaces)
 }
 
-/// Create a new vault (WASM facade)
 #[wasm_bindgen]
 pub async fn create_vault(vault_name: JsValue) -> Result<(), JsValue> {
     let platform = Platform::new();
 
-    // Convert vault name
     let name = vault_name
         .as_string()
         .ok_or_else(|| JsValue::from_str("vault_name must be a string"))?;
 
-    // Validate vault name
     validation::validate_vault_name(&name).map_err(converters::to_js_error)?;
 
-    // Check if vault already exists
     if operations::read_vault(&platform, &name).await.is_ok() {
         return Err(JsValue::from_str(&format!(
             "Vault '{}' already exists",
@@ -155,16 +129,13 @@ pub async fn create_vault(vault_name: JsValue) -> Result<(), JsValue> {
         )));
     }
 
-    // Create vault
     let vault = operations::create_vault().await?;
 
-    // Save vault
     operations::save_vault(&platform, &name, vault)
         .await
         .map_err(|e| e.into())
 }
 
-/// Remove a vault (WASM facade)
 #[wasm_bindgen]
 pub async fn remove_vault(vault_name: &str) -> Result<(), JsValue> {
     let platform = Platform::new();
@@ -174,7 +145,6 @@ pub async fn remove_vault(vault_name: &str) -> Result<(), JsValue> {
         .map_err(|e| e.into())
 }
 
-/// List all vaults (WASM facade)
 #[wasm_bindgen]
 pub async fn list_vaults() -> Result<JsValue, JsValue> {
     let platform = Platform::new();
@@ -186,7 +156,6 @@ pub async fn list_vaults() -> Result<JsValue, JsValue> {
     converters::to_js_value(&vaults)
 }
 
-/// Export a vault as bytes (WASM facade)
 #[wasm_bindgen]
 pub async fn export_vault(vault_name: &str) -> Result<JsValue, JsValue> {
     let platform = Platform::new();
@@ -195,32 +164,26 @@ pub async fn export_vault(vault_name: &str) -> Result<JsValue, JsValue> {
         .await
         .map_err(converters::to_js_error)?;
 
-    // Convert to Uint8Array
     let array = js_sys::Uint8Array::new_with_length(vault_bytes.len() as u32);
     array.copy_from(&vault_bytes);
     Ok(array.into())
 }
 
-/// Import a vault from bytes (WASM facade)
 #[wasm_bindgen]
 pub async fn import_vault(vault_name: &str, data: JsValue) -> Result<(), JsValue> {
     let platform = Platform::new();
 
-    // Convert data to bytes
     let vault_bytes = converters::js_value_to_bytes(data)?;
 
-    // Import vault
     operations::import_vault_from_bytes(&platform, vault_name, &vault_bytes)
         .await
         .map_err(|e| e.into())
 }
 
-/// Force cleanup of expired data in a vault (WASM facade)
 #[wasm_bindgen]
 pub async fn force_cleanup_vault(vault_name: &str) -> Result<(), JsValue> {
     let platform = Platform::new();
 
-    // Run cleanup until no more expired data
     loop {
         let data_removed = operations::cleanup_vault(&platform, vault_name)
             .await

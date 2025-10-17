@@ -66,20 +66,18 @@ mod tests {
     #[wasm_bindgen_test]
     fn test_persistence_creation() {
         let persistence = Persistence::new();
-        let _ = persistence.has_requested(); // Smoke test
+        let _ = persistence.has_requested();
     }
 
     #[wasm_bindgen_test]
     async fn test_persistence_check() {
         let persistence = Persistence::new();
-        // Just verify we can call check without panic
         let _ = persistence.check().await;
     }
 
     #[wasm_bindgen_test]
     async fn test_persistence_request() {
         let persistence = Persistence::new();
-        // Just verify we can call request without panic
         let _ = persistence.request().await;
     }
 }

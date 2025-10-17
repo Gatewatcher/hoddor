@@ -29,7 +29,6 @@ impl fmt::Display for VaultError {
 
 impl std::error::Error for VaultError {}
 
-// Helper methods for ergonomic error construction
 impl VaultError {
     pub fn io_error(message: impl Into<String>) -> Self {
         VaultError::IoError(message.into())

@@ -3,7 +3,6 @@ use hkdf::Hkdf;
 use sha2::{Digest, Sha256};
 use std::error::Error;
 
-/// WebAuthn PRF adapter - only available in WASM
 #[derive(Clone, Copy, Debug)]
 pub struct WebAuthnPrf;
 

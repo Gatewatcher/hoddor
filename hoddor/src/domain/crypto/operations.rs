@@ -1,7 +1,6 @@
 use super::error::CryptoError;
 use crate::platform::Platform;
 
-/// Derive an identity from a passphrase using Argon2 + Age
 pub async fn identity_from_passphrase(
     platform: &Platform,
     passphrase: &str,
@@ -19,7 +18,6 @@ pub async fn identity_from_passphrase(
         .map_err(|e| CryptoError::InvalidIdentity(e.to_string()))
 }
 
-/// Generate a new random identity
 pub fn generate_identity(platform: &Platform) -> Result<String, CryptoError> {
     platform
         .identity()
@@ -27,7 +25,6 @@ pub fn generate_identity(platform: &Platform) -> Result<String, CryptoError> {
         .map_err(|e| CryptoError::InvalidIdentity(e.to_string()))
 }
 
-/// Parse a recipient public key
 pub fn parse_recipient(platform: &Platform, recipient: &str) -> Result<String, CryptoError> {
     platform
         .identity()
@@ -35,7 +32,6 @@ pub fn parse_recipient(platform: &Platform, recipient: &str) -> Result<String, C
         .map_err(|e| CryptoError::InvalidRecipient(e.to_string()))
 }
 
-/// Get public key from an identity
 pub fn identity_to_public(platform: &Platform, identity: &str) -> Result<String, CryptoError> {
     platform
         .identity()
@@ -43,7 +39,6 @@ pub fn identity_to_public(platform: &Platform, identity: &str) -> Result<String,
         .map_err(|e| CryptoError::InvalidIdentity(e.to_string()))
 }
 
-/// Encrypt data for multiple recipients
 pub async fn encrypt_for_recipients(
     platform: &Platform,
     data: &[u8],
@@ -56,7 +51,6 @@ pub async fn encrypt_for_recipients(
         .map_err(|e| CryptoError::EncryptionError(e.to_string()))
 }
 
-/// Decrypt data with an identity
 pub async fn decrypt_with_identity(
     platform: &Platform,
     encrypted_data: &[u8],
@@ -69,7 +63,6 @@ pub async fn decrypt_with_identity(
         .map_err(|e| CryptoError::DecryptionError(e.to_string()))
 }
 
-/// Derive an identity from WebAuthn PRF outputs
 pub fn identity_from_prf(
     platform: &Platform,
     first: &[u8],
@@ -86,7 +79,6 @@ pub fn identity_from_prf(
         .derive_from_prf(first, second)
         .map_err(|e| CryptoError::InvalidPrfOutput(e.to_string()))?;
 
-    // Validate seed
     if seed.iter().all(|&x| x == 0) {
         return Err(CryptoError::InvalidPrfOutput(
             "Invalid PRF seed (all zeros)".to_string(),

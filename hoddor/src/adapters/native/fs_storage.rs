@@ -4,7 +4,6 @@ use async_trait::async_trait;
 use std::fs;
 use std::path::PathBuf;
 
-/// Native filesystem storage adapter using std::fs.
 #[derive(Clone, Copy)]
 pub struct FsStorage {
     root_path: &'static str,
@@ -17,7 +16,6 @@ impl FsStorage {
         }
     }
 
-    /// Get the full path by joining root with the relative path.
     fn get_full_path(&self, path: &str) -> PathBuf {
         if path.is_empty() || path == "." {
             PathBuf::from(self.root_path)
@@ -37,7 +35,6 @@ impl StoragePort for FsStorage {
     async fn write_file(&self, path: &str, content: &str) -> Result<(), VaultError> {
         let full_path = self.get_full_path(path);
 
-        // Create parent directories if needed
         if let Some(parent) = full_path.parent() {
             fs::create_dir_all(parent)
                 .map_err(|_| VaultError::io_error("Failed to create parent directories"))?;

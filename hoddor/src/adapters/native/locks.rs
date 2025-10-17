@@ -6,7 +6,6 @@ pub struct NativeLockGuard;
 
 impl LockGuard for NativeLockGuard {}
 
-/// Native locks (stub - always succeeds).
 #[derive(Clone, Copy)]
 pub struct Locks;
 

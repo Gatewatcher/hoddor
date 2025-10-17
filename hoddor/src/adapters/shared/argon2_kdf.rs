@@ -3,7 +3,6 @@ use argon2::Argon2;
 use async_trait::async_trait;
 use std::error::Error;
 
-/// Argon2 key derivation adapter - works on both WASM and native
 #[derive(Clone, Copy, Debug)]
 pub struct Argon2Kdf;
 

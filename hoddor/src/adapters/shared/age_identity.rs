@@ -6,7 +6,6 @@ use std::error::Error;
 use x25519_dalek::StaticSecret;
 use zeroize::Zeroize;
 
-/// Age identity adapter - works on both WASM and native
 #[derive(Clone, Copy, Debug)]
 pub struct AgeIdentity;
 
@@ -34,7 +33,6 @@ impl IdentityPort for AgeIdentity {
         let secret = StaticSecret::from(seed_copy);
         let mut sk_bytes = secret.to_bytes();
 
-        // Validate key bytes
         if sk_bytes.iter().all(|&x| x == 0) {
             sk_bytes.zeroize();
             seed_copy.zeroize();

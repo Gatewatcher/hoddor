@@ -9,7 +9,6 @@ use crate::ports::LoggerPort;
 pub struct ConsoleLogger;
 
 impl ConsoleLogger {
-    /// Create a new ConsoleLogger instance.
     pub fn new() -> Self {
         Self
     }
@@ -50,13 +49,12 @@ mod tests {
     #[test]
     fn test_logger_creation() {
         let logger = ConsoleLogger::new();
-        logger.log("test"); // Smoke test - verify no panic
+        logger.log("test");
     }
 
     #[test]
     fn test_logger_all_methods() {
         let logger = ConsoleLogger::new();
-        // Smoke tests - verify all methods can be called without panic
         logger.log("test log");
         logger.warn("test warn");
         logger.error("test error");

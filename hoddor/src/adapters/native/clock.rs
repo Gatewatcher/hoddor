@@ -41,15 +41,12 @@ mod tests {
         let clock = Clock::new();
         let timestamp = clock.now();
 
-        // Should be a reasonable Unix timestamp in milliseconds
-        // After 2020-01-01 (1577836800000 ms)
         assert!(
             timestamp > 1_577_836_800_000.0,
             "Timestamp should be after 2020: {}",
             timestamp
         );
 
-        // Before 2100-01-01 (4102444800000 ms)
         assert!(
             timestamp < 4_102_444_800_000.0,
             "Timestamp should be before 2100: {}",
@@ -62,7 +59,6 @@ mod tests {
         let clock = Clock::new();
         let t1 = clock.now();
 
-        // Small delay
         let mut sum = 0;
         for i in 0..1000 {
             sum += i;
@@ -76,7 +72,6 @@ mod tests {
     #[test]
     fn test_clock_always_available() {
         let clock = Clock::new();
-        // Native clock should always report as available
         assert!(clock.is_available());
     }
 

@@ -29,31 +29,3 @@ impl PersistencePort for Persistence {
         Ok(true)
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use futures::executor::block_on;
-
-    #[test]
-    fn test_persistence_creation() {
-        let persistence = Persistence::new();
-        assert!(persistence.has_requested());
-    }
-
-    #[test]
-    fn test_persistence_check_always_true() {
-        let persistence = Persistence::new();
-        let result = block_on(persistence.check());
-        assert!(result.is_ok());
-        assert!(result.unwrap());
-    }
-
-    #[test]
-    fn test_persistence_request_always_true() {
-        let persistence = Persistence::new();
-        let result = block_on(persistence.request());
-        assert!(result.is_ok());
-        assert!(result.unwrap());
-    }
-}

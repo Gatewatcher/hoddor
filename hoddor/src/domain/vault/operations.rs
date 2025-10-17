@@ -160,7 +160,6 @@ pub async fn delete_namespace_file(
     storage.delete_file(&namespace_path).await
 }
 
-/// Insert or update a namespace in a vault with encrypted data
 pub async fn upsert_namespace(
     platform: &Platform,
     vault_name: &str,
@@ -172,40 +171,33 @@ pub async fn upsert_namespace(
 ) -> Result<(), VaultError> {
     let mut vault = read_vault(platform, vault_name).await?;
 
-    // Check if namespace exists
     if vault.namespaces.contains_key(namespace) && !replace_if_exists {
         return Err(VaultError::NamespaceAlreadyExists);
     }
 
-    // Encrypt data for the recipient
     let encrypted_data =
         crate::domain::crypto::encrypt_for_recipients(platform, &data, &[identity_public_key])
             .await
             .map_err(|e| VaultError::io_error(e.to_string()))?;
 
-    // Calculate expiration
     let expiration = expires_in_seconds.map(|secs| Expiration {
         expires_at: get_current_timestamp() + secs,
     });
 
-    // Create namespace data
     let namespace_data = NamespaceData {
         data: encrypted_data,
         expiration,
     };
 
-    // Insert into vault
     vault
         .namespaces
         .insert(namespace.to_string(), namespace_data);
 
-    // Save vault
     save_vault(platform, vault_name, vault).await?;
 
     Ok(())
 }
 
-/// Read and decrypt data from a namespace
 pub async fn read_namespace(
     platform: &Platform,
     vault_name: &str,
@@ -214,24 +206,20 @@ pub async fn read_namespace(
 ) -> Result<Vec<u8>, VaultError> {
     let mut vault = read_vault(platform, vault_name).await?;
 
-    // Get namespace data
     let namespace_data = vault
         .namespaces
         .get(namespace)
         .ok_or(VaultError::NamespaceNotFound)?;
 
-    // Check expiration
     let now = get_current_timestamp();
     if let Some(exp_time) = &namespace_data.expiration {
         if now >= exp_time.expires_at {
-            // Remove expired namespace
             vault.namespaces.remove(namespace);
             save_vault(platform, vault_name, vault).await?;
             return Err(VaultError::DataExpired);
         }
     }
 
-    // Decrypt data
     let decrypted_data = crate::domain::crypto::decrypt_with_identity(
         platform,
         &namespace_data.data,
@@ -243,7 +231,6 @@ pub async fn read_namespace(
     Ok(decrypted_data)
 }
 
-/// Remove a namespace from a vault
 pub async fn remove_namespace(
     platform: &Platform,
     vault_name: &str,
@@ -251,21 +238,17 @@ pub async fn remove_namespace(
 ) -> Result<(), VaultError> {
     let mut vault = read_vault(platform, vault_name).await?;
 
-    // Remove namespace
     if vault.namespaces.remove(namespace).is_none() {
         return Err(VaultError::NamespaceNotFound);
     }
 
-    // Delete namespace file
     delete_namespace_file(platform, vault_name, namespace).await?;
 
-    // Save vault
     save_vault(platform, vault_name, vault).await?;
 
     Ok(())
 }
 
-/// List all namespaces in a vault
 pub async fn list_namespaces_in_vault(
     platform: &Platform,
     vault_name: &str,
@@ -282,14 +265,12 @@ pub async fn list_namespaces_in_vault(
     Ok(namespaces)
 }
 
-/// Export vault as bytes
 pub async fn export_vault_bytes(
     platform: &Platform,
     vault_name: &str,
 ) -> Result<Vec<u8>, VaultError> {
     let vault = read_vault(platform, vault_name).await?;
 
-    // Serialize vault using serialization module
     let vault_bytes = super::serialization::serialize_vault(&vault)?;
 
     platform.logger().log(&format!(
@@ -300,7 +281,6 @@ pub async fn export_vault_bytes(
     Ok(vault_bytes)
 }
 
-/// Import vault from bytes
 pub async fn import_vault_from_bytes(
     platform: &Platform,
     vault_name: &str,
@@ -311,10 +291,8 @@ pub async fn import_vault_from_bytes(
         vault_bytes.len()
     ));
 
-    // Deserialize vault
     let imported_vault = super::serialization::deserialize_vault(vault_bytes)?;
 
-    // Check if vault already exists
     match read_vault(platform, vault_name).await {
         Ok(_) => {
             return Err(VaultError::VaultAlreadyExists);
@@ -330,13 +308,11 @@ pub async fn import_vault_from_bytes(
         }
     }
 
-    // Save imported vault
     save_vault(platform, vault_name, imported_vault).await?;
 
     Ok(())
 }
 
-/// Clean expired namespaces from a vault
 pub async fn cleanup_vault(platform: &Platform, vault_name: &str) -> Result<bool, VaultError> {
     let mut vault = read_vault(platform, vault_name).await?;
 
@@ -352,7 +328,6 @@ pub async fn cleanup_vault(platform: &Platform, vault_name: &str) -> Result<bool
     Ok(data_removed)
 }
 
-/// Verify that an identity can decrypt a vault
 pub async fn verify_vault_identity(
     platform: &Platform,
     vault_name: &str,
@@ -360,7 +335,6 @@ pub async fn verify_vault_identity(
 ) -> Result<(), VaultError> {
     let vault = read_vault(platform, vault_name).await?;
 
-    // Try to decrypt the first namespace to verify identity
     if let Some((_, namespace_data)) = vault.namespaces.iter().next() {
         crate::domain::crypto::decrypt_with_identity(
             platform,
@@ -374,8 +348,6 @@ pub async fn verify_vault_identity(
     Ok(())
 }
 
-/// Get current Unix timestamp in seconds
-/// Platform-agnostic helper (works in both WASM and native)
 #[cfg(target_arch = "wasm32")]
 fn get_current_timestamp() -> i64 {
     (js_sys::Date::now() / 1000.0) as i64
@@ -407,8 +379,6 @@ mod tests {
 
     #[test]
     fn test_create_vault_returns_empty_vault() {
-        // Note: create_vault is async but we can test the structure it should create
-        // by manually constructing it like the function does
         let vault = Vault {
             metadata: VaultMetadata { peer_id: None },
             identity_salts: IdentitySalts::new(),
@@ -431,7 +401,6 @@ mod tests {
         let mut username_pk = HashMap::new();
         username_pk.insert("user1".to_string(), "pk1".to_string());
 
-        // Test the structure that create_vault_from_sync would create
         let vault = Vault {
             metadata: metadata.clone(),
             identity_salts: IdentitySalts::new(),
@@ -449,8 +418,6 @@ mod tests {
 
     #[test]
     fn test_create_vault_from_sync_validates_metadata() {
-        // Test that None metadata should fail - testing error path logic
-        // In the actual function, metadata.ok_or_else() will return error if None
         let metadata: Option<VaultMetadata> = None;
         assert!(metadata.is_none());
     }
@@ -459,7 +426,6 @@ mod tests {
     fn test_create_vault_from_sync_with_defaults() {
         let metadata = VaultMetadata { peer_id: None };
 
-        // Test the structure with default values
         let vault = Vault {
             metadata,
             identity_salts: IdentitySalts::new(),
@@ -480,7 +446,6 @@ mod tests {
             peer_id: Some("sync-peer-123".to_string()),
         };
 
-        // Test the structure with peer_id
         let vault = Vault {
             metadata: metadata.clone(),
             identity_salts: IdentitySalts::new(),
@@ -495,7 +460,6 @@ mod tests {
 
     #[test]
     fn test_delete_namespace_file_constructs_correct_path() {
-        // Test that delete_namespace_file would construct the correct path
         let vault_name = "test_vault";
         let namespace = "test_namespace";
         let expected_filename = format!("{}.ns", namespace);

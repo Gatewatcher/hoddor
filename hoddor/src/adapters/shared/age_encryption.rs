@@ -8,7 +8,6 @@ use futures::io::{AllowStdIo, AsyncReadExt, AsyncWriteExt};
 use std::error::Error;
 use std::io::Cursor;
 
-/// Age encryption adapter - works on both WASM and native
 #[derive(Clone, Copy, Debug)]
 pub struct AgeEncryption;
 

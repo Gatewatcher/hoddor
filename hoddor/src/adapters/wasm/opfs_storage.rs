@@ -6,7 +6,6 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{FileSystemDirectoryHandle, FileSystemFileHandle, FileSystemGetFileOptions};
 
-/// OPFS storage adapter using File System Access API.
 #[derive(Clone, Copy)]
 pub struct OPFSStorage;
 
@@ -15,7 +14,6 @@ impl OPFSStorage {
         Self
     }
 
-    /// Get the root directory handle.
     async fn get_root(&self) -> Result<FileSystemDirectoryHandle, VaultError> {
         let storage = get_storage_manager()?;
         let dir_promise = storage.get_directory();
@@ -26,7 +24,6 @@ impl OPFSStorage {
         Ok(dir_handle)
     }
 
-    /// Navigate to a directory from a path (e.g. "vault1" or "vault1/subdir").
     async fn navigate_to_dir(&self, path: &str) -> Result<FileSystemDirectoryHandle, VaultError> {
         let mut current = self.get_root().await?;
 
@@ -44,7 +41,6 @@ impl OPFSStorage {
         Ok(current)
     }
 
-    /// Split a path into (parent_dir, filename).
     fn split_path(path: &str) -> (&str, &str) {
         if let Some(pos) = path.rfind('/') {
             (&path[..pos], &path[pos + 1..])
@@ -152,16 +148,13 @@ impl StoragePort for OPFSStorage {
         let (parent_path, dir_name) = Self::split_path(path);
         let parent_handle = self.navigate_to_dir(parent_path).await?;
 
-        // Get the directory handle to clean it up first
         if let Ok(dir_handle) = JsFuture::from(parent_handle.get_directory_handle(dir_name))
             .await
             .map(|h| h.unchecked_into::<FileSystemDirectoryHandle>())
         {
-            // Clean up all contents
             self.cleanup_directory(&dir_handle).await?;
         }
 
-        // Remove the directory itself
         JsFuture::from(parent_handle.remove_entry(dir_name))
             .await
             .map_err(|_| VaultError::io_error("Failed to remove directory"))?;
@@ -232,7 +225,6 @@ impl StoragePort for OPFSStorage {
 }
 
 impl OPFSStorage {
-    /// Helper to recursively clean up all files and subdirectories in a directory.
     fn cleanup_directory<'a>(
         &'a self,
         dir_handle: &'a FileSystemDirectoryHandle,
@@ -241,17 +233,14 @@ impl OPFSStorage {
             let entries = self.list_entries_from_handle(dir_handle).await?;
 
             for entry_name in entries {
-                // Try to get it as a directory first
                 if let Ok(subdir_handle) =
                     JsFuture::from(dir_handle.get_directory_handle(&entry_name))
                         .await
                         .map(|h| h.unchecked_into::<FileSystemDirectoryHandle>())
                 {
-                    // It's a directory - recursively clean it up first
                     self.cleanup_directory(&subdir_handle).await?;
                 }
 
-                // Now remove the entry (either a file or an empty directory)
                 JsFuture::from(dir_handle.remove_entry(&entry_name))
                     .await
                     .map_err(|_| VaultError::io_error("Failed to remove entry"))?;
@@ -261,7 +250,6 @@ impl OPFSStorage {
         })
     }
 
-    /// Helper to list entries from a directory handle.
     async fn list_entries_from_handle(
         &self,
         dir_handle: &FileSystemDirectoryHandle,

@@ -1,7 +1,6 @@
 use crate::domain::crypto;
 use crate::platform::Platform;
-/// Native facade for cryptographic operations
-/// Provides pure Rust API that delegates to domain logic
+
 use age::{
     secrecy::ExposeSecret,
     x25519::{Identity, Recipient},
@@ -64,12 +63,10 @@ impl fmt::Display for RecipientHandle {
 }
 
 impl RecipientHandle {
-    /// Get the recipient as a string
     pub fn to_string(&self) -> String {
         self.recipient.to_string()
     }
 
-    /// Parse a recipient from a string
     pub fn from_string(s: &str) -> Result<Self, CryptoError> {
         let recipient: Recipient = s
             .parse()
@@ -90,7 +87,6 @@ impl AsRef<Recipient> for RecipientHandle {
     }
 }
 
-/// Handle for an Age identity (private key)
 #[derive(Clone)]
 pub struct IdentityHandle {
     identity: Identity,
@@ -119,22 +115,18 @@ impl AsRef<dyn age::Identity + 'static> for IdentityHandle {
 }
 
 impl IdentityHandle {
-    /// Get the public key as a string
     pub fn public_key(&self) -> String {
         self.identity.to_public().to_string()
     }
 
-    /// Get the recipient handle (public key wrapper)
     pub fn to_public(&self) -> RecipientHandle {
         RecipientHandle::from(self.identity.to_public())
     }
 
-    /// Get the private key as a string
     pub fn private_key(&self) -> String {
         self.identity.to_string().expose_secret().to_string()
     }
 
-    /// Create identity handle from private key string
     pub fn from_private_key(private_key: &str) -> Result<Self, CryptoError> {
         let identity = private_key
             .parse::<Identity>()
@@ -143,7 +135,6 @@ impl IdentityHandle {
         Ok(IdentityHandle::from(identity))
     }
 
-    /// Get both keys as a tuple (public_key, private_key)
     pub fn keys(&self) -> (String, String) {
         (self.public_key(), self.private_key())
     }

@@ -19,7 +19,6 @@ pub struct Platform {
     notifier: Notifier,
     persistence: Persistence,
     storage: Storage,
-    // Crypto ports
     encryption: AgeEncryption,
     identity: AgeIdentity,
     kdf: Argon2Kdf,
@@ -27,7 +26,6 @@ pub struct Platform {
 }
 
 impl Platform {
-    /// Creates a new Platform with default adapters for the current target.
     pub fn new() -> Self {
         Self {
             clock: Clock::new(),
@@ -127,7 +125,7 @@ mod tests {
     fn test_platform_logger_access() {
         let platform = Platform::new();
         let logger = platform.logger();
-        logger.log("test"); // Verify we can call without panic
+        logger.log("test"); 
     }
 
     #[test]
@@ -135,14 +133,14 @@ mod tests {
         let platform = Platform::new();
         let clock = platform.clock();
         assert!(clock.is_available(), "Clock should be accessible");
-        let _timestamp = clock.now(); // Verify we can call now() without panic
+        let _timestamp = clock.now(); 
     }
 
     #[test]
     fn test_platform_persistence_access() {
         let platform = Platform::new();
         let persistence = platform.persistence();
-        let _has_requested = persistence.has_requested(); // Verify we can call without panic
+        let _has_requested = persistence.has_requested();
     }
 
     #[test]

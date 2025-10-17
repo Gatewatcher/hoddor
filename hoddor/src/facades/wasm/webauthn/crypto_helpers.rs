@@ -7,12 +7,10 @@ use rand::{thread_rng, Rng};
 use wasm_bindgen::prelude::*;
 use web_sys::AuthenticationExtensionsPrfValues;
 
-/// Generate random 32 bytes for WebAuthn operations
 pub fn gen_random() -> [u8; 32] {
     thread_rng().gen::<[u8; 32]>()
 }
 
-/// Create PRF inputs from a nonce for WebAuthn
 pub fn prf_inputs(nonce: &Uint8Array) -> AuthenticationExtensionsPrfValues {
     let prefix = "hoddor/prf".as_bytes().to_vec();
 
@@ -30,7 +28,6 @@ pub fn prf_inputs(nonce: &Uint8Array) -> AuthenticationExtensionsPrfValues {
     prf_inputs
 }
 
-/// Extract PRF outputs from WebAuthn response
 fn prf_outputs_from_js(
     prf: &AuthenticationExtensionsPrfValues,
 ) -> Result<(Vec<u8>, Vec<u8>), JsValue> {
@@ -49,7 +46,6 @@ fn prf_outputs_from_js(
     Ok((first, second))
 }
 
-/// Derive an identity from WebAuthn PRF outputs
 pub fn identity_from_prf(
     prf_output: &web_sys::AuthenticationExtensionsPrfValues,
 ) -> Result<IdentityHandle, JsValue> {
@@ -76,7 +72,6 @@ fn identity_from_prf_internal(
 
     let handle = IdentityHandle::from(identity);
 
-    // Validate handle
     if handle.public_key().is_empty() || handle.private_key().is_empty() {
         return Err(JsValue::from_str("Generated invalid identity handle"));
     }

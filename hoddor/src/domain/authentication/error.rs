@@ -2,17 +2,11 @@ use std::fmt;
 
 #[derive(Debug, Clone)]
 pub enum AuthenticationError {
-    /// Error during identity derivation from passphrase
     DerivationFailed(String),
-    /// Invalid identity format
     InvalidIdentityFormat(String),
-    /// Invalid passphrase
     InvalidPassphrase(String),
-    /// Invalid salt
     InvalidSalt(String),
-    /// Random generation error
     RandomGenerationFailed(String),
-    /// No identity found
     IdentityNotFound,
 }
 

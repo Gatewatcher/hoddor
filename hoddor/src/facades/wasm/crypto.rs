@@ -8,7 +8,6 @@ use age::{
 use std::fmt;
 use wasm_bindgen::prelude::*;
 
-/// Generate a new Age identity (key pair)
 #[wasm_bindgen]
 pub fn generate_identity() -> Result<IdentityHandle, JsValue> {
     let platform = Platform::new();

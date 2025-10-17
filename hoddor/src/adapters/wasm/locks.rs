@@ -44,7 +44,7 @@ impl LockPort for Locks {
         let lock_manager = self.get_lock_manager().await?;
         let lock_name = format!("vault_{}_lock", name);
         let mut retries = 10;
-        let mut delay = 50; // Start with 50ms delay
+        let mut delay = 50;
 
         while retries > 0 {
             let options = LockOptions::new();
@@ -53,7 +53,7 @@ impl LockPort for Locks {
                 &JsValue::from_str("mode"),
                 &JsValue::from_str("exclusive"),
             )?;
-            options.set_if_available(true); // Try to acquire if available
+            options.set_if_available(true);
 
             let callback = Closure::wrap(Box::new(|| {}) as Box<dyn Fn()>);
             let promise = lock_manager.request_with_options_and_callback(
@@ -74,7 +74,6 @@ impl LockPort for Locks {
                 Err(_) => {
                     retries -= 1;
                     if retries > 0 {
-                        // Exponential backoff with jitter
                         delay = ((delay as f64 * 1.5) as u32).min(1000);
                         let jitter = (js_sys::Math::random() * 50.0) as u32;
                         gloo_timers::future::TimeoutFuture::new(delay + jitter).await;

@@ -1,24 +1,19 @@
 use crate::domain::vault::operations::create_vault_from_sync;
-/// Legacy helper functions for vault operations
-/// These functions provide simple wrappers around domain operations for backward compatibility
 use crate::domain::vault::{error::VaultError, NamespaceData, Vault};
 use crate::platform::Platform;
 use crate::sync::{OperationType, SyncMessage};
 use wasm_bindgen::prelude::*;
 
-/// Read a vault by name
 pub async fn read_vault_with_name(vault_name: &str) -> Result<Vault, VaultError> {
     let platform = Platform::new();
     crate::domain::vault::operations::read_vault(&platform, vault_name).await
 }
 
-/// Save a vault with the given name
 pub async fn save_vault(vault_name: &str, vault: Vault) -> Result<(), VaultError> {
     let platform = Platform::new();
     crate::domain::vault::operations::save_vault(&platform, vault_name, vault).await
 }
 
-/// Update vault from sync message
 pub async fn update_vault_from_sync(vault_name: &str, vault_data: &[u8]) -> Result<(), VaultError> {
     let platform = Platform::new();
 
@@ -47,7 +42,6 @@ pub async fn update_vault_from_sync(vault_name: &str, vault_data: &[u8]) -> Resu
         Err(e) => return Err(e),
     };
 
-    // Update identity salts if provided in sync message
     if let Some(salts) = sync_msg.identity_salts {
         current_vault.identity_salts = salts;
     }

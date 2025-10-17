@@ -1,5 +1,4 @@
-/// WASM adapters - implementations using browser APIs.
-mod error_conversions; // JsValue → VaultError conversion for WASM
+mod error_conversions;
 
 pub mod clock;
 pub mod console_logger;

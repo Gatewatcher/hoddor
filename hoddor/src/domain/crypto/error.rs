@@ -25,7 +25,6 @@ impl fmt::Display for CryptoError {
 
 impl std::error::Error for CryptoError {}
 
-// Helper methods for ergonomic error construction
 impl CryptoError {
     pub fn key_derivation_error(message: impl Into<String>) -> Self {
         CryptoError::KeyDerivationError(message.into())

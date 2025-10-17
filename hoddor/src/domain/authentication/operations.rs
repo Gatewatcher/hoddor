@@ -16,17 +16,14 @@ pub async fn derive_vault_identity(
     _vault_name: &str,
     vault: &mut Vault,
 ) -> Result<IdentityKeys, AuthenticationError> {
-    // Validate passphrase
     validate_passphrase(passphrase)
         .map_err(|e| AuthenticationError::InvalidPassphrase(e.to_string()))?;
 
-    // Try to find an existing identity
     for (stored_pubkey, salt) in vault.identity_salts.iter() {
         platform
             .logger()
             .log(&format!("Checking stored public key: {}", stored_pubkey));
 
-        // Validate salt length
         if salt.len() != 32 {
             platform.logger().error(&format!(
                 "Invalid salt length ({}) for public key: {}",
@@ -38,7 +35,6 @@ pub async fn derive_vault_identity(
 
         platform.logger().log(&format!("Using salt: {:?}", salt));
 
-        // Try to derive identity with this salt
         match derive_identity_from_passphrase(platform, passphrase, salt).await {
             Ok(identity) => {
                 platform
@@ -62,7 +58,6 @@ pub async fn derive_vault_identity(
         }
     }
 
-    // No identity found, create a new one
     platform
         .logger()
         .log("No matching identity found; generating new salt");
@@ -78,7 +73,6 @@ pub async fn derive_vault_identity(
             e
         })?;
 
-    // Store the new salt with the generated public key
     vault
         .identity_salts
         .set_salt(identity.public_key.clone(), new_salt);
@@ -94,7 +88,6 @@ async fn derive_identity_from_passphrase(
     passphrase: &str,
     salt: &[u8],
 ) -> Result<IdentityKeys, AuthenticationError> {
-    // Validate salt
     if salt.len() != 32 {
         return Err(AuthenticationError::InvalidSalt(format!(
             "Salt must be 32 bytes, got {}",
@@ -102,7 +95,6 @@ async fn derive_identity_from_passphrase(
         )));
     }
 
-    // Use crypto port for derivation
     let identity_str = crate::domain::crypto::identity_from_passphrase(platform, passphrase, salt)
         .await
         .map_err(|e| {
@@ -112,12 +104,10 @@ async fn derive_identity_from_passphrase(
             AuthenticationError::DerivationFailed(e.to_string())
         })?;
 
-    // Parse Age identity
     let identity: age::x25519::Identity = identity_str
         .parse()
         .map_err(|e| AuthenticationError::InvalidIdentityFormat(format!("{}", e)))?;
 
-    // Extract public and private keys
     let public_key = identity.to_public().to_string();
     let private_key = {
         use age::secrecy::ExposeSecret;
@@ -132,12 +122,10 @@ pub fn generate_random_identity(platform: &Platform) -> Result<IdentityKeys, Aut
     let identity_str = crate::domain::crypto::generate_identity(platform)
         .map_err(|e| AuthenticationError::RandomGenerationFailed(e.to_string()))?;
 
-    // Parse Age identity
     let identity: age::x25519::Identity = identity_str
         .parse()
         .map_err(|e| AuthenticationError::InvalidIdentityFormat(format!("{}", e)))?;
 
-    // Extract keys
     let public_key = identity.to_public().to_string();
     let private_key = {
         use age::secrecy::ExposeSecret;

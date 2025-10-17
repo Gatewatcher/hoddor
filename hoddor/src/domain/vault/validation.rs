@@ -37,7 +37,6 @@ pub fn validate_vault_name(name: &str) -> Result<(), VaultError> {
 mod tests {
     use super::*;
 
-    // Tests for validate_namespace
     #[test]
     fn test_validate_namespace_valid() {
         assert!(validate_namespace("test").is_ok());
@@ -71,7 +70,6 @@ mod tests {
         assert!(validate_namespace("test*file").is_err());
     }
 
-    // Tests for validate_passphrase
     #[test]
     fn test_validate_passphrase_valid() {
         assert!(validate_passphrase("password123").is_ok());
@@ -90,7 +88,6 @@ mod tests {
         assert!(validate_passphrase("\t\t").is_err());
     }
 
-    // Tests for validate_vault_name
     #[test]
     fn test_validate_vault_name_valid() {
         assert!(validate_vault_name("vault1").is_ok());
@@ -112,16 +109,16 @@ mod tests {
 
     #[test]
     fn test_validate_vault_name_invalid_characters() {
-        assert!(validate_vault_name("vault name").is_err()); // space
-        assert!(validate_vault_name("vault/name").is_err()); // slash
-        assert!(validate_vault_name("vault.name").is_err()); // dot
-        assert!(validate_vault_name("vault@name").is_err()); // @
-        assert!(validate_vault_name("vault#name").is_err()); // #
+        assert!(validate_vault_name("vault name").is_err());
+        assert!(validate_vault_name("vault/name").is_err());
+        assert!(validate_vault_name("vault.name").is_err());
+        assert!(validate_vault_name("vault@name").is_err()); 
+        assert!(validate_vault_name("vault#name").is_err()); 
     }
 
     #[test]
     fn test_validate_vault_name_special_allowed() {
-        assert!(validate_vault_name("vault_name").is_ok()); // underscore
-        assert!(validate_vault_name("vault-name").is_ok()); // hyphen
+        assert!(validate_vault_name("vault_name").is_ok());
+        assert!(validate_vault_name("vault-name").is_ok());
     }
 }

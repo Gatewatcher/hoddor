@@ -3,7 +3,6 @@ use crate::notifications;
 use crate::ports::NotifierPort;
 use wasm_bindgen::JsCast;
 
-/// WASM notifier adapter using postMessage API.
 #[derive(Clone, Copy)]
 pub struct Notifier;
 

@@ -1,7 +1,6 @@
 use crate::ports::LoggerPort;
 use wasm_bindgen::prelude::*;
 
-// FFI bindings to JavaScript console API
 #[wasm_bindgen]
 extern "C" {
     #[wasm_bindgen(js_namespace = console)]
@@ -20,15 +19,10 @@ extern "C" {
     fn warn(s: &str);
 }
 
-/// WASM logger implementation using the browser Console API.
-///
-/// Forwards all logging calls to the JavaScript console object.
-/// This is a zero-cost abstraction over the console FFI.
 #[derive(Debug, Clone, Copy)]
 pub struct ConsoleLogger;
 
 impl ConsoleLogger {
-    /// Create a new ConsoleLogger instance.
     pub fn new() -> Self {
         Self
     }
@@ -72,13 +66,12 @@ mod tests {
     #[wasm_bindgen_test]
     fn test_logger_creation() {
         let logger = ConsoleLogger::new();
-        logger.log("test"); // Smoke test - verify no panic
+        logger.log("test");
     }
 
     #[wasm_bindgen_test]
     fn test_logger_all_methods() {
         let logger = ConsoleLogger::new();
-        // Smoke tests - verify all methods can be called without panic
         logger.log("test log");
         logger.warn("test warn");
         logger.error("test error");
