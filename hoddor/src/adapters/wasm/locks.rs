@@ -85,3 +85,95 @@ impl LockPort for Locks {
         Err(VaultError::io_error("Failed to acquire lock"))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use wasm_bindgen_test::*;
+
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    #[wasm_bindgen_test]
+    async fn test_locks_creation() {
+        let _locks = Locks::new();
+    }
+
+    #[wasm_bindgen_test]
+    async fn test_acquire_single_lock() {
+        let locks = Locks::new();
+        let guard = locks.acquire("test_lock").await;
+        assert!(guard.is_ok(), "Should acquire lock successfully");
+    }
+
+    #[wasm_bindgen_test]
+    async fn test_lock_guard_drop() {
+        let locks = Locks::new();
+
+        {
+            let _guard = locks.acquire("test_drop").await.unwrap();
+        }
+
+        let guard2 = locks.acquire("test_drop").await;
+        assert!(
+            guard2.is_ok(),
+            "Should be able to acquire lock after previous guard dropped"
+        );
+    }
+
+    #[wasm_bindgen_test]
+    async fn test_multiple_different_locks() {
+        let locks = Locks::new();
+
+        let guard1 = locks.acquire("lock_1").await;
+        assert!(guard1.is_ok(), "Should acquire first lock");
+
+        let guard2 = locks.acquire("lock_2").await;
+        assert!(
+            guard2.is_ok(),
+            "Should acquire second lock with different name"
+        );
+
+        let guard3 = locks.acquire("lock_3").await;
+        assert!(
+            guard3.is_ok(),
+            "Should acquire third lock with different name"
+        );
+    }
+
+    #[wasm_bindgen_test]
+    async fn test_sequential_same_lock() {
+        let locks = Locks::new();
+
+        let guard1 = locks.acquire("sequential").await;
+        assert!(guard1.is_ok(), "First acquisition should succeed");
+        drop(guard1);
+
+        let guard2 = locks.acquire("sequential").await;
+        assert!(
+            guard2.is_ok(),
+            "Second acquisition should succeed after first release"
+        );
+        drop(guard2);
+
+        let guard3 = locks.acquire("sequential").await;
+        assert!(guard3.is_ok(), "Third acquisition should succeed");
+    }
+
+    #[wasm_bindgen_test]
+    async fn test_lock_name_formatting() {
+        let locks = Locks::new();
+
+        let guard_a = locks.acquire("vault_a").await;
+        assert!(guard_a.is_ok(), "Should acquire lock for vault_a");
+
+        let guard_b = locks.acquire("vault_b").await;
+        assert!(guard_b.is_ok(), "Should acquire lock for vault_b");
+    }
+
+    #[wasm_bindgen_test]
+    async fn test_get_lock_manager() {
+        let locks = Locks::new();
+        let lock_manager = locks.get_lock_manager().await;
+        assert!(lock_manager.is_ok(), "Should be able to get lock manager");
+    }
+}
