@@ -63,10 +63,6 @@ impl fmt::Display for RecipientHandle {
 }
 
 impl RecipientHandle {
-    pub fn to_string(&self) -> String {
-        self.recipient.to_string()
-    }
-
     pub fn from_string(s: &str) -> Result<Self, CryptoError> {
         let recipient: Recipient = s
             .parse()
