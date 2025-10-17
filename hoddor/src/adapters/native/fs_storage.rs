@@ -9,6 +9,12 @@ pub struct FsStorage {
     root_path: &'static str,
 }
 
+impl Default for FsStorage {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FsStorage {
     pub fn new() -> Self {
         Self {
@@ -71,11 +77,9 @@ impl StoragePort for FsStorage {
             .map_err(|_| VaultError::io_error("Failed to read directory"))?;
 
         let mut names = Vec::new();
-        for entry in entries {
-            if let Ok(entry) = entry {
-                if let Some(name) = entry.file_name().to_str() {
-                    names.push(name.to_string());
-                }
+        for entry in entries.flatten() {
+            if let Some(name) = entry.file_name().to_str() {
+                names.push(name.to_string());
             }
         }
 

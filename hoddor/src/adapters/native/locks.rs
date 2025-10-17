@@ -9,6 +9,12 @@ impl LockGuard for NativeLockGuard {}
 #[derive(Clone, Copy)]
 pub struct Locks;
 
+impl Default for Locks {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Locks {
     pub fn new() -> Self {
         Self

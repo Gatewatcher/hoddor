@@ -7,13 +7,13 @@ const METADATA_FILENAME: &str = "metadata.json";
 const NAMESPACE_EXTENSION: &str = ".ns";
 
 pub fn get_namespace_filename(namespace: &str) -> String {
-    format!("{}{}", namespace, NAMESPACE_EXTENSION)
+    format!("{namespace}{NAMESPACE_EXTENSION}")
 }
 
 pub async fn read_vault(platform: &Platform, vault_name: &str) -> Result<Vault, VaultError> {
     let storage = platform.storage();
 
-    let metadata_path = format!("{}/{}", vault_name, METADATA_FILENAME);
+    let metadata_path = format!("{vault_name}/{METADATA_FILENAME}");
     let metadata_text = storage.read_file(&metadata_path).await?;
 
     let mut vault: Vault = serde_json::from_str(&metadata_text)
@@ -25,7 +25,7 @@ pub async fn read_vault(platform: &Platform, vault_name: &str) -> Result<Vault, 
 
     for entry_name in entries {
         if entry_name.ends_with(NAMESPACE_EXTENSION) {
-            let namespace_path = format!("{}/{}", vault_name, entry_name);
+            let namespace_path = format!("{vault_name}/{entry_name}");
             let namespace_text = storage.read_file(&namespace_path).await?;
 
             let namespace_data: NamespaceData =
@@ -59,12 +59,12 @@ pub async fn save_vault(
                 Ok(is_granted) => {
                     platform
                         .logger()
-                        .log(&format!("persistence request granted: {}", is_granted));
+                        .log(&format!("persistence request granted: {is_granted}"));
                 }
                 Err(e) => {
                     platform
                         .logger()
-                        .error(&format!("Persistence request failed: {}", e));
+                        .error(&format!("Persistence request failed: {e}"));
                 }
             }
         }
@@ -80,7 +80,7 @@ pub async fn save_vault(
     let metadata_json = serde_json::to_string(&metadata_vault)
         .map_err(|_| VaultError::serialization_error("Failed to serialize vault metadata"))?;
 
-    let metadata_path = format!("{}/{}", vault_name, METADATA_FILENAME);
+    let metadata_path = format!("{vault_name}/{METADATA_FILENAME}");
     storage.write_file(&metadata_path, &metadata_json).await?;
 
     for (namespace, data) in &vault.namespaces {
@@ -135,8 +135,8 @@ pub async fn create_vault_from_sync(
 
     Ok(Vault {
         metadata,
-        identity_salts: identity_salts.unwrap_or_else(super::types::IdentitySalts::new),
-        username_pk: username_pk.unwrap_or_else(HashMap::new),
+        identity_salts: identity_salts.unwrap_or_default(),
+        username_pk: username_pk.unwrap_or_default(),
         namespaces: HashMap::new(),
         sync_enabled: true,
     })
@@ -154,7 +154,7 @@ pub async fn delete_namespace_file(
     namespace: &str,
 ) -> Result<(), VaultError> {
     let namespace_filename = get_namespace_filename(namespace);
-    let namespace_path = format!("{}/{}", vault_name, namespace_filename);
+    let namespace_path = format!("{vault_name}/{namespace_filename}");
 
     let storage = platform.storage();
     storage.delete_file(&namespace_path).await
@@ -299,8 +299,7 @@ pub async fn import_vault_from_bytes(
         }
         Err(VaultError::IoError(..)) => {
             platform.logger().log(&format!(
-                "No existing vault named '{}'; proceeding with import.",
-                vault_name
+                "No existing vault named '{vault_name}'; proceeding with import."
             ));
         }
         Err(e) => {

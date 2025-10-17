@@ -44,7 +44,7 @@ impl IdentityPort for AgeIdentity {
             .map_err(|e| {
                 sk_bytes.zeroize();
                 seed_copy.zeroize();
-                format!("Failed to encode identity: {}", e)
+                format!("Failed to encode identity: {e}")
             })?
             .to_uppercase();
 
@@ -53,7 +53,7 @@ impl IdentityPort for AgeIdentity {
 
         let identity: Identity = encoded
             .parse()
-            .map_err(|e| format!("Failed to parse identity: {}", e))?;
+            .map_err(|e| format!("Failed to parse identity: {e}"))?;
 
         Ok(identity.to_string().expose_secret().to_string())
     }
@@ -61,14 +61,14 @@ impl IdentityPort for AgeIdentity {
     fn parse_recipient(&self, recipient_str: &str) -> Result<String, Box<dyn Error>> {
         let recipient: Recipient = recipient_str
             .parse()
-            .map_err(|e| format!("Invalid recipient: {}", e))?;
+            .map_err(|e| format!("Invalid recipient: {e}"))?;
         Ok(recipient.to_string())
     }
 
     fn to_public(&self, identity_str: &str) -> Result<String, Box<dyn Error>> {
         let identity: Identity = identity_str
             .parse()
-            .map_err(|e| format!("Invalid identity: {}", e))?;
+            .map_err(|e| format!("Invalid identity: {e}"))?;
         Ok(identity.to_public().to_string())
     }
 }

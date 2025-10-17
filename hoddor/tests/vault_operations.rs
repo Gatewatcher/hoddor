@@ -4,12 +4,10 @@ extern crate wasm_bindgen_test;
 use futures_util::future;
 use gloo_timers::future::TimeoutFuture;
 use hoddor::{
-    facades::wasm::{
-        vault::{
-            create_vault, export_vault, force_cleanup_vault, import_vault, list_namespaces,
-            list_vaults, read_from_vault, remove_from_vault, remove_vault, upsert_vault,
-            vault_identity_from_passphrase,
-        },
+    facades::wasm::vault::{
+        create_vault, export_vault, force_cleanup_vault, import_vault, list_namespaces,
+        list_vaults, read_from_vault, remove_from_vault, remove_vault, upsert_vault,
+        vault_identity_from_passphrase,
     },
     platform::Platform,
 };

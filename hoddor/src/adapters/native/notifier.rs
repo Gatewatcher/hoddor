@@ -7,6 +7,12 @@ use crate::ports::NotifierPort;
 #[derive(Clone, Copy)]
 pub struct Notifier;
 
+impl Default for Notifier {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Notifier {
     pub fn new() -> Self {
         Self

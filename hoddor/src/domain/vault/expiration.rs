@@ -4,9 +4,7 @@ use super::types::{Expiration, Vault};
 use crate::platform::Platform;
 
 pub fn is_expired(expiration: &Option<Expiration>, now: i64) -> bool {
-    expiration
-        .as_ref()
-        .map_or(false, |exp| now >= exp.expires_at)
+    expiration.as_ref().is_some_and(|exp| now >= exp.expires_at)
 }
 
 pub fn create_expiration(expires_in_seconds: Option<i64>, now: i64) -> Option<Expiration> {
@@ -41,13 +39,13 @@ pub async fn cleanup_expired_namespaces(
 
     for namespace in expired_namespaces {
         let namespace_filename = get_namespace_filename(&namespace);
-        let namespace_path = format!("{}/{}", vault_name, namespace_filename);
+        let namespace_path = format!("{vault_name}/{namespace_filename}");
         let _ = storage.delete_file(&namespace_path).await;
         vault.namespaces.remove(&namespace);
         data_removed = true;
         platform
             .logger()
-            .log(&format!("Removed expired namespace: {}", namespace));
+            .log(&format!("Removed expired namespace: {namespace}"));
     }
 
     Ok(data_removed)

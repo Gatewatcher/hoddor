@@ -33,7 +33,7 @@ impl KeyDerivationPort for Argon2Kdf {
         let mut seed = [0u8; 32];
         argon2
             .hash_password_into(passphrase.as_bytes(), salt, &mut seed)
-            .map_err(|e| format!("Argon2 derivation failed: {:?}", e))?;
+            .map_err(|e| format!("Argon2 derivation failed: {e:?}"))?;
         Ok(seed)
     }
 }
@@ -95,7 +95,10 @@ mod tests {
         let salt = b"test_salt_16byte";
 
         let result = block_on(adapter.derive_from_passphrase("   ", salt));
-        assert!(result.is_err(), "Whitespace-only passphrase should be rejected");
+        assert!(
+            result.is_err(),
+            "Whitespace-only passphrase should be rejected"
+        );
         assert!(result.unwrap_err().to_string().contains("cannot be empty"));
     }
 

@@ -4,6 +4,12 @@ use std::time::{SystemTime, UNIX_EPOCH};
 #[derive(Clone, Copy)]
 pub struct Clock;
 
+impl Default for Clock {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Clock {
     pub fn new() -> Self {
         Self

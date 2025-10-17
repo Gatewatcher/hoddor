@@ -16,8 +16,8 @@ pub enum CryptoError {
 impl fmt::Display for CryptoError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            CryptoError::GenerationFailed(msg) => write!(f, "Identity generation failed: {}", msg),
-            CryptoError::ParseFailed(msg) => write!(f, "Parse failed: {}", msg),
+            CryptoError::GenerationFailed(msg) => write!(f, "Identity generation failed: {msg}"),
+            CryptoError::ParseFailed(msg) => write!(f, "Parse failed: {msg}"),
         }
     }
 }
@@ -34,7 +34,7 @@ pub fn generate_identity() -> Result<(String, String), CryptoError> {
 
     let identity: Identity = identity_str
         .parse()
-        .map_err(|e| CryptoError::ParseFailed(format!("Failed to parse identity: {}", e)))?;
+        .map_err(|e| CryptoError::ParseFailed(format!("Failed to parse identity: {e}")))?;
 
     let public_key = identity.to_public().to_string();
     let private_key = identity.to_string().expose_secret().to_string();
@@ -66,7 +66,7 @@ impl RecipientHandle {
     pub fn from_string(s: &str) -> Result<Self, CryptoError> {
         let recipient: Recipient = s
             .parse()
-            .map_err(|e| CryptoError::ParseFailed(format!("Failed to parse recipient: {}", e)))?;
+            .map_err(|e| CryptoError::ParseFailed(format!("Failed to parse recipient: {e}")))?;
         Ok(Self { recipient })
     }
 }
@@ -126,7 +126,7 @@ impl IdentityHandle {
     pub fn from_private_key(private_key: &str) -> Result<Self, CryptoError> {
         let identity = private_key
             .parse::<Identity>()
-            .map_err(|e| CryptoError::ParseFailed(format!("Failed to parse identity: {}", e)))?;
+            .map_err(|e| CryptoError::ParseFailed(format!("Failed to parse identity: {e}")))?;
 
         Ok(IdentityHandle::from(identity))
     }

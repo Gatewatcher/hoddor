@@ -27,26 +27,28 @@ async fn update_vault_from_sync(vault_name: &str, vault_data: &[u8]) -> Result<(
         VaultError::serialization_error(format!("Failed to deserialize sync message: {:?}", e))
     })?;
 
-    let mut current_vault = match crate::domain::vault::operations::read_vault(&platform, vault_name).await {
-        Ok(vault) => vault,
-        Err(VaultError::IoError(msg)) if msg == "Failed to get directory handle" => {
-            platform
-                .logger()
-                .log(&format!("Creating new vault {} for sync", vault_name));
+    let mut current_vault =
+        match crate::domain::vault::operations::read_vault(&platform, vault_name).await {
+            Ok(vault) => vault,
+            Err(VaultError::IoError(msg)) if msg == "Failed to get directory handle" => {
+                platform
+                    .logger()
+                    .log(&format!("Creating new vault {} for sync", vault_name));
 
-            let vault = create_vault_from_sync(
-                sync_msg.vault_metadata,
-                sync_msg.identity_salts.clone(),
-                sync_msg.username_pk,
-            )
-            .await?;
+                let vault = create_vault_from_sync(
+                    sync_msg.vault_metadata,
+                    sync_msg.identity_salts.clone(),
+                    sync_msg.username_pk,
+                )
+                .await?;
 
-            crate::domain::vault::operations::save_vault(&platform, vault_name, vault.clone()).await?;
+                crate::domain::vault::operations::save_vault(&platform, vault_name, vault.clone())
+                    .await?;
 
-            vault
-        }
-        Err(e) => return Err(e),
-    };
+                vault
+            }
+            Err(e) => return Err(e),
+        };
 
     if let Some(salts) = sync_msg.identity_salts {
         current_vault.identity_salts = salts;

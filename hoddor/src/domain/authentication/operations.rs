@@ -18,7 +18,7 @@ pub async fn derive_vault_identity(
     for (stored_pubkey, salt) in vault.identity_salts.iter() {
         platform
             .logger()
-            .log(&format!("Checking stored public key: {}", stored_pubkey));
+            .log(&format!("Checking stored public key: {stored_pubkey}"));
 
         if salt.len() != 32 {
             platform.logger().error(&format!(
@@ -29,7 +29,7 @@ pub async fn derive_vault_identity(
             continue;
         }
 
-        platform.logger().log(&format!("Using salt: {:?}", salt));
+        platform.logger().log(&format!("Using salt: {salt:?}"));
 
         match derive_identity_from_passphrase(platform, passphrase, salt).await {
             Ok(identity) => {
@@ -47,8 +47,7 @@ pub async fn derive_vault_identity(
             }
             Err(err) => {
                 platform.logger().warn(&format!(
-                    "Failed to generate identity with stored salt for public key {}: {:?}",
-                    stored_pubkey, err
+                    "Failed to generate identity with stored salt for public key {stored_pubkey}: {err:?}"
                 ));
             }
         }
@@ -65,7 +64,7 @@ pub async fn derive_vault_identity(
         .map_err(|e| {
             platform
                 .logger()
-                .error(&format!("Failed to create new identity: {:?}", e));
+                .error(&format!("Failed to create new identity: {e:?}"));
             e
         })?;
 
@@ -93,13 +92,13 @@ async fn derive_identity_from_passphrase(
         .map_err(|e| {
             platform
                 .logger()
-                .log(&format!("Failed to derive identity: {}", e));
+                .log(&format!("Failed to derive identity: {e}"));
             AuthenticationError::DerivationFailed(e.to_string())
         })?;
 
     let identity: age::x25519::Identity = identity_str
         .parse()
-        .map_err(|e| AuthenticationError::InvalidIdentityFormat(format!("{}", e)))?;
+        .map_err(|e| AuthenticationError::InvalidIdentityFormat(format!("{e}")))?;
 
     let public_key = identity.to_public().to_string();
     let private_key = {
@@ -116,7 +115,7 @@ pub fn generate_random_identity(platform: &Platform) -> Result<IdentityKeys, Aut
 
     let identity: age::x25519::Identity = identity_str
         .parse()
-        .map_err(|e| AuthenticationError::InvalidIdentityFormat(format!("{}", e)))?;
+        .map_err(|e| AuthenticationError::InvalidIdentityFormat(format!("{e}")))?;
 
     let public_key = identity.to_public().to_string();
     let private_key = {

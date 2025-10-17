@@ -22,23 +22,23 @@ impl Default for ConsoleLogger {
 
 impl LoggerPort for ConsoleLogger {
     fn log(&self, message: &str) {
-        println!("[LOG] {}", message);
+        println!("[LOG] {message}");
     }
 
     fn error(&self, message: &str) {
-        eprintln!("[ERROR] {}", message);
+        eprintln!("[ERROR] {message}");
     }
 
     fn warn(&self, message: &str) {
-        eprintln!("[WARN] {}", message);
+        eprintln!("[WARN] {message}");
     }
 
     fn time(&self, label: &str) {
-        println!("[TIME:START] {}", label);
+        println!("[TIME:START] {label}");
     }
 
     fn time_end(&self, label: &str) {
-        println!("[TIME:END] {}", label);
+        println!("[TIME:END] {label}");
     }
 }
 
