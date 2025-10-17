@@ -63,9 +63,7 @@ mod tests {
         assert!(result.is_ok());
 
         let bytes = result.unwrap();
-        // Check magic number
         assert_eq!(&bytes[0..6], b"VAULT1");
-        // Check that we have at least header + some content
         assert!(bytes.len() > 10);
     }
 
@@ -112,11 +110,10 @@ mod tests {
 
     #[test]
     fn test_deserialize_vault_length_mismatch() {
-        // Create valid header but with wrong length
         let mut bytes = Vec::new();
         bytes.extend_from_slice(b"VAULT1");
-        bytes.extend_from_slice(&100u32.to_be_bytes()); // Say we have 100 bytes
-        bytes.extend_from_slice(b"{}"); // But only provide 2 bytes of content
+        bytes.extend_from_slice(&100u32.to_be_bytes());
+        bytes.extend_from_slice(b"{}");
 
         let result = deserialize_vault(&bytes);
         assert!(result.is_err());

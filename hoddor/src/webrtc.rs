@@ -1,7 +1,8 @@
-use crate::facades::wasm::legacy::update_vault_from_sync;
+use crate::domain::vault::operations::create_vault_from_sync;
+use crate::domain::vault::{error::VaultError, NamespaceData};
 use crate::platform::Platform;
 use crate::signaling::{with_signaling_manager, SignalingMessage};
-use crate::sync::SyncMessage;
+use crate::sync::{OperationType, SyncMessage};
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures::StreamExt;
 use futures_channel::mpsc;
@@ -17,6 +18,70 @@ use web_sys::{
     ErrorEvent, MessageEvent, RtcConfiguration, RtcDataChannel, RtcIceCandidate,
     RtcIceCandidateInit, RtcPeerConnection, RtcSdpType, RtcSessionDescriptionInit,
 };
+
+// Private helper function for updating vault from sync messages
+async fn update_vault_from_sync(vault_name: &str, vault_data: &[u8]) -> Result<(), VaultError> {
+    let platform = Platform::new();
+
+    let sync_msg: SyncMessage = serde_json::from_slice(vault_data).map_err(|e| {
+        VaultError::serialization_error(format!("Failed to deserialize sync message: {:?}", e))
+    })?;
+
+    let mut current_vault = match crate::domain::vault::operations::read_vault(&platform, vault_name).await {
+        Ok(vault) => vault,
+        Err(VaultError::IoError(msg)) if msg == "Failed to get directory handle" => {
+            platform
+                .logger()
+                .log(&format!("Creating new vault {} for sync", vault_name));
+
+            let vault = create_vault_from_sync(
+                sync_msg.vault_metadata,
+                sync_msg.identity_salts.clone(),
+                sync_msg.username_pk,
+            )
+            .await?;
+
+            crate::domain::vault::operations::save_vault(&platform, vault_name, vault.clone()).await?;
+
+            vault
+        }
+        Err(e) => return Err(e),
+    };
+
+    if let Some(salts) = sync_msg.identity_salts {
+        current_vault.identity_salts = salts;
+    }
+
+    match sync_msg.operation.operation_type {
+        OperationType::Insert | OperationType::Update => {
+            if let (Some(data), _) = (sync_msg.operation.data, sync_msg.operation.nonce) {
+                let namespace = sync_msg.operation.namespace.clone();
+                let namespace_data = NamespaceData {
+                    data,
+                    expiration: None,
+                };
+                current_vault
+                    .namespaces
+                    .insert(namespace.clone(), namespace_data.clone());
+                platform
+                    .logger()
+                    .log(&format!("Updated namespace {} in vault", namespace));
+            }
+        }
+        OperationType::Delete => {
+            let namespace = sync_msg.operation.namespace.clone();
+            current_vault.namespaces.remove(&namespace);
+            platform
+                .logger()
+                .log(&format!("Removed namespace {} from vault", namespace));
+        }
+    }
+
+    crate::domain::vault::operations::save_vault(&platform, vault_name, current_vault).await?;
+
+    Ok(())
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct WebRtcMetadata {
     pub peer_id: String,

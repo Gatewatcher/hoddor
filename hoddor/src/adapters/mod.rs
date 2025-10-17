@@ -2,7 +2,7 @@
 pub mod wasm;
 #[cfg(target_arch = "wasm32")]
 pub use wasm::{
-    Clock, ConsoleLogger, Locks, Notifier, OPFSStorage as Storage, Persistence, WebAuthnPrf as Prf,
+    Clock, ConsoleLogger, Locks, Notifier, OpfsStorage as Storage, Persistence, WebAuthnPrf as Prf,
 };
 
 #[cfg(not(target_arch = "wasm32"))]

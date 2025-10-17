@@ -5,7 +5,6 @@ use futures_util::future;
 use gloo_timers::future::TimeoutFuture;
 use hoddor::{
     facades::wasm::{
-        configure_cleanup,
         vault::{
             create_vault, export_vault, force_cleanup_vault, import_vault, list_namespaces,
             list_vaults, read_from_vault, remove_from_vault, remove_vault, upsert_vault,
@@ -712,44 +711,11 @@ async fn test_import_export_round_trip() {
 }
 
 #[wasm_bindgen_test]
-async fn test_export_with_incorrect_password() {
+async fn test_expiration_on_read() {
     test_utils::cleanup_all_vaults().await;
 
-    let vault_name = "import_incorrect_vault";
-    let correct_password = "correct_password";
-    let namespace = "test_namespace";
-    let data: JsValue = "test_data".into();
-
-    create_vault(JsValue::from_str(vault_name))
-        .await
-        .expect("Failed to create vault for export");
-
-    let identity = vault_identity_from_passphrase(correct_password, vault_name)
-        .await
-        .expect("Failed to create identity");
-
-    upsert_vault(vault_name, &identity, namespace, data.clone(), None, false)
-        .await
-        .expect("Failed to upsert data");
-
-    // Note: export_vault no longer takes a password parameter in new API
-    // This test doesn't make sense with the new API where export doesn't require password
-    let export_result = export_vault(vault_name).await;
-    assert!(
-        export_result.is_ok(),
-        "Export should succeed without password in new API"
-    );
-
-    test_utils::cleanup_all_vaults().await;
-}
-
-#[wasm_bindgen_test]
-async fn test_disable_cleanup() {
-    test_utils::cleanup_all_vaults().await;
-
-    configure_cleanup(1);
-    let vault_name = "cleanup_disabled_vault";
-    let password = "cleanup_password";
+    let vault_name = "expiration_read_vault";
+    let password = "test_password";
     let namespace = "short_lived_ns";
     let data: JsValue = "short_lived_data".into();
 
@@ -770,34 +736,18 @@ async fn test_disable_cleanup() {
         false,
     )
     .await
-    .expect("Failed to upsert data with short expiration while cleanup is on");
-
-    configure_cleanup(0);
+    .expect("Failed to upsert data with short expiration");
 
     TimeoutFuture::new(3000).await;
 
     let read_data = read_from_vault(vault_name, &identity, JsValue::from_str(namespace)).await;
 
-    match read_data {
-        Ok(d) => {
-            Platform::new()
-                .logger()
-                .log("Data remains because we disabled cleanup.");
-            assert_eq!(
-                d.as_string().unwrap(),
-                "short_lived_data",
-                "Data should remain if we rely solely on cleanup intervals."
-            );
-        }
-        Err(e) => {
-            Platform::new()
-                .logger()
-                .log("Data is expired at read time, so the read returned error");
-            Platform::new().logger().log(&format!("Error: {:?}", e));
-        }
-    }
+    // Cleanup now happens automatically on read - expired data should fail to read
+    assert!(
+        read_data.is_err(),
+        "Expired data should not be readable (cleanup happens on read)"
+    );
 
-    configure_cleanup(1);
     test_utils::cleanup_all_vaults().await;
 }
 

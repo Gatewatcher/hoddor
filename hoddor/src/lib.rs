@@ -1,16 +1,13 @@
 extern crate console_error_panic_hook;
 
-// Hexagonal architecture modules
 pub mod adapters;
 pub mod domain;
 pub mod facades;
 pub mod platform;
 pub mod ports;
 
-// Existing modules
 pub mod notifications;
 
-// WASM-only modules
 #[cfg(target_arch = "wasm32")]
 pub mod global;
 #[cfg(target_arch = "wasm32")]
@@ -22,19 +19,12 @@ pub mod sync;
 #[cfg(target_arch = "wasm32")]
 pub mod webrtc;
 
-// Re-export crypto and webauthn from facades
 #[cfg(target_arch = "wasm32")]
 pub use facades::wasm::{crypto, webauthn};
 
-// Re-exports for testing
 pub use domain::vault::{IdentitySalts, NamespaceData, Vault, VaultMetadata};
 pub use platform::Platform;
 
-// WASM-only re-exports (legacy compatibility)
-#[cfg(target_arch = "wasm32")]
-pub use facades::wasm::{read_vault_with_name, save_vault};
-
-// WASM initialization
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 

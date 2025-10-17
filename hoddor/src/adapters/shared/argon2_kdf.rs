@@ -25,6 +25,10 @@ impl KeyDerivationPort for Argon2Kdf {
         passphrase: &str,
         salt: &[u8],
     ) -> Result<[u8; 32], Box<dyn Error>> {
+        if passphrase.is_empty() || passphrase.trim().is_empty() {
+            return Err("Passphrase cannot be empty or whitespace-only".into());
+        }
+
         let argon2 = Argon2::default();
         let mut seed = [0u8; 32];
         argon2
@@ -81,7 +85,18 @@ mod tests {
         let salt = b"test_salt_16byte";
 
         let result = block_on(adapter.derive_from_passphrase("", salt));
-        assert!(result.is_ok());
+        assert!(result.is_err(), "Empty passphrase should be rejected");
+        assert!(result.unwrap_err().to_string().contains("cannot be empty"));
+    }
+
+    #[test]
+    fn test_whitespace_only_passphrase() {
+        let adapter = Argon2Kdf::new();
+        let salt = b"test_salt_16byte";
+
+        let result = block_on(adapter.derive_from_passphrase("   ", salt));
+        assert!(result.is_err(), "Whitespace-only passphrase should be rejected");
+        assert!(result.unwrap_err().to_string().contains("cannot be empty"));
     }
 
     #[test]

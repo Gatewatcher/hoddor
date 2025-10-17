@@ -115,7 +115,6 @@ mod tests {
         let data = b"multi-recipient message";
         let encrypted = block_on(adapter.encrypt(data, &[&recipient1, &recipient2])).unwrap();
 
-        // Both identities should be able to decrypt
         let identity1_str = identity1.to_string().expose_secret().to_string();
         let decrypted1 = block_on(adapter.decrypt(&encrypted, &identity1_str)).unwrap();
         assert_eq!(decrypted1, data);

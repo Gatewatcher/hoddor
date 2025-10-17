@@ -6,10 +6,6 @@ use crate::platform::Platform;
 use argon2::password_hash::rand_core::OsRng;
 use rand::RngCore;
 
-/// Derives an identity from a passphrase for a specific vault
-///
-/// This function first searches for an existing identity in the vault.
-/// If no identity matches the passphrase, it creates a new one.
 pub async fn derive_vault_identity(
     platform: &Platform,
     passphrase: &str,
@@ -80,9 +76,6 @@ pub async fn derive_vault_identity(
     Ok(identity)
 }
 
-/// Derives an identity from a passphrase and salt
-///
-/// Internal function that performs cryptographic derivation.
 async fn derive_identity_from_passphrase(
     platform: &Platform,
     passphrase: &str,
@@ -117,7 +110,6 @@ async fn derive_identity_from_passphrase(
     Ok(IdentityKeys::new(public_key, private_key))
 }
 
-/// Generates a new random identity
 pub fn generate_random_identity(platform: &Platform) -> Result<IdentityKeys, AuthenticationError> {
     let identity_str = crate::domain::crypto::generate_identity(platform)
         .map_err(|e| AuthenticationError::RandomGenerationFailed(e.to_string()))?;

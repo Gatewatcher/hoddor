@@ -1,4 +1,3 @@
-/// Port for accessing time and performance measurement
 pub trait ClockPort: Send + Sync {
     fn now(&self) -> f64;
 

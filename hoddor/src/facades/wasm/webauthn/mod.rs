@@ -6,7 +6,6 @@ use wasm_bindgen_futures::JsFuture;
 use web_sys::{AuthenticationExtensionsPrfValues, PublicKeyCredential};
 use webauthn::{webauthn_create, webauthn_get};
 
-use super::legacy::{read_vault_with_name, save_vault};
 use crate::platform::Platform;
 use rand::rngs::OsRng;
 use rand::RngCore;
@@ -43,7 +42,7 @@ async fn create_credential_internal(
     let new_salt = get_identity_from_vault()?;
     let salt_array = Uint8Array::from(new_salt.as_slice());
 
-    let mut vault = read_vault_with_name(vault_name)
+    let mut vault = crate::domain::vault::operations::read_vault(&Platform::new(), vault_name)
         .await
         .map_err(converters::to_js_error)?;
 
@@ -93,7 +92,7 @@ async fn create_credential_internal(
         .username_pk
         .insert(String::from(username), public_key.clone());
 
-    save_vault(vault_name, vault)
+    crate::domain::vault::operations::save_vault(&Platform::new(), vault_name, vault)
         .await
         .map_err(|e| converters::to_js_error(format!("Failed to save vault: {:?}", e)))?;
 
@@ -117,7 +116,7 @@ async fn get_credential_internal(
 
     let challenge = Uint8Array::from(gen_random().as_slice());
 
-    let vault = read_vault_with_name(vault_name)
+    let vault = crate::domain::vault::operations::read_vault(&Platform::new(), vault_name)
         .await
         .map_err(converters::to_js_error)?;
 
@@ -237,7 +236,7 @@ async fn get_credential_internal(
 
 #[wasm_bindgen]
 pub async fn list_webauthn_public_keys(vault_name: &str) -> Result<JsValue, JsValue> {
-    let vault = read_vault_with_name(vault_name)
+    let vault = crate::domain::vault::operations::read_vault(&Platform::new(), vault_name)
         .await
         .map_err(converters::to_js_error)?;
 

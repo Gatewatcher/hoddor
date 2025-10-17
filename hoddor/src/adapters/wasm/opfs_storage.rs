@@ -7,9 +7,9 @@ use wasm_bindgen_futures::JsFuture;
 use web_sys::{FileSystemDirectoryHandle, FileSystemFileHandle, FileSystemGetFileOptions};
 
 #[derive(Clone, Copy)]
-pub struct OPFSStorage;
+pub struct OpfsStorage;
 
-impl OPFSStorage {
+impl OpfsStorage {
     pub fn new() -> Self {
         Self
     }
@@ -51,7 +51,7 @@ impl OPFSStorage {
 }
 
 #[async_trait(?Send)]
-impl StoragePort for OPFSStorage {
+impl StoragePort for OpfsStorage {
     async fn read_file(&self, path: &str) -> Result<String, VaultError> {
         let (dir_path, filename) = Self::split_path(path);
         let dir_handle = self.navigate_to_dir(dir_path).await?;
@@ -224,7 +224,7 @@ impl StoragePort for OPFSStorage {
     }
 }
 
-impl OPFSStorage {
+impl OpfsStorage {
     fn cleanup_directory<'a>(
         &'a self,
         dir_handle: &'a FileSystemDirectoryHandle,
@@ -316,12 +316,12 @@ mod tests {
 
     #[wasm_bindgen_test]
     async fn test_opfs_storage_creation() {
-        let _storage = OPFSStorage::new();
+        let _storage = OpfsStorage::new();
     }
 
     #[wasm_bindgen_test]
     async fn test_file_lifecycle() {
-        let storage = OPFSStorage::new();
+        let storage = OpfsStorage::new();
         let test_dir = "test_lifecycle_opfs";
         let test_file = "test_lifecycle_opfs/test.txt";
         let content = "test content";
@@ -340,7 +340,7 @@ mod tests {
 
     #[wasm_bindgen_test]
     async fn test_list_entries() {
-        let storage = OPFSStorage::new();
+        let storage = OpfsStorage::new();
         let test_dir = "test_list_opfs";
 
         storage.create_directory(test_dir).await.unwrap();
@@ -368,7 +368,7 @@ mod tests {
 
     #[wasm_bindgen_test]
     async fn test_delete_directory_with_contents() {
-        let storage = OPFSStorage::new();
+        let storage = OpfsStorage::new();
         let test_dir = "test_delete_opfs";
 
         storage.create_directory(test_dir).await.unwrap();
@@ -395,7 +395,7 @@ mod tests {
 
     #[wasm_bindgen_test]
     async fn test_directory_exists() {
-        let storage = OPFSStorage::new();
+        let storage = OpfsStorage::new();
         let test_dir = "test_exists_opfs";
 
         assert!(!storage.directory_exists(test_dir).await.unwrap());

@@ -1,7 +1,4 @@
 /// Platform - Dependency injection container for all ports.
-///
-/// Stores concrete adapter instances directly.
-/// Platform selection happens at compile-time via #[cfg].
 use crate::adapters::{
     AgeEncryption, AgeIdentity, Argon2Kdf, Clock, ConsoleLogger, Locks, Notifier, Persistence, Prf,
     Storage,

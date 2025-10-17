@@ -1,10 +1,3 @@
-/// Crypto ports - Defines the interfaces for cryptographic operations.
-///
-/// These traits abstract cryptographic functionality from specific implementations:
-/// - EncryptionPort: Age encryption/decryption
-/// - KeyDerivationPort: Argon2 key derivation
-/// - IdentityPort: Age identity management
-/// - PrfPort: WebAuthn PRF (WASM only, stub in native)
 use async_trait::async_trait;
 use std::error::Error;
 
@@ -34,8 +27,6 @@ pub trait IdentityPort: Send + Sync {
     fn to_public(&self, identity: &str) -> Result<String, Box<dyn Error>>;
 }
 
-/// Port for PRF (Pseudo-Random Function) operations
-/// Only available in WASM (WebAuthn), stub in native
 pub trait PrfPort: Send + Sync {
     fn derive_from_prf(&self, first: &[u8], second: &[u8]) -> Result<[u8; 32], Box<dyn Error>>;
 

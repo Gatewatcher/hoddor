@@ -1,5 +1,3 @@
-/// Represents an identity key pair (public + private)
-/// Agnostic structure usable in both WASM and Native
 #[derive(Clone, Debug)]
 pub struct IdentityKeys {
     pub public_key: String,

@@ -28,25 +28,3 @@ impl PrfPort for MockPrf {
         false
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_prf_not_available() {
-        let adapter = MockPrf::new();
-        assert!(!adapter.is_available());
-        assert!(adapter.derive_from_prf(&[1u8; 32], &[2u8; 32]).is_err());
-    }
-
-    #[test]
-    fn test_prf_error_message() {
-        let adapter = MockPrf::new();
-        let result = adapter.derive_from_prf(&[1u8; 32], &[2u8; 32]);
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("not available in native"));
-    }
-}

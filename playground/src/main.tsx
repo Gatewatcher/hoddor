@@ -1,6 +1,5 @@
 import ReactDOM from 'react-dom/client';
 
-// import init, { set_debug_mode } from "../../hoddor/pkg/hoddor";
 import init, { set_debug_mode } from '../../hoddor/pkg/hoddor';
 import { App } from './App';
 

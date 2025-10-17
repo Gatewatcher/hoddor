@@ -93,7 +93,6 @@ mod tests {
     fn test_is_available_consistency() {
         let clock = Clock::new();
 
-        // is_available should return same result consistently
         let available1 = clock.is_available();
         let available2 = clock.is_available();
 
@@ -121,12 +120,7 @@ mod tests {
         let clock = Clock::new();
         let timestamp = clock.now();
 
-        // Performance.now() returns DOMHighResTimeStamp with microsecond precision
-        // Should have fractional milliseconds
         assert!(timestamp > 0.0, "Timestamp should be positive");
-
-        // The timestamp format is milliseconds.microseconds
-        // Just verify it's a reasonable value (not 0 or negative)
         assert!(
             timestamp < 1e15,
             "Timestamp should be reasonable (not an absurd value)"
@@ -136,9 +130,8 @@ mod tests {
     #[wasm_bindgen_test]
     fn test_clock_is_copy() {
         let clock1 = Clock::new();
-        let clock2 = clock1; // Copy
+        let clock2 = clock1;
 
-        // Both should work independently
         assert!(clock1.is_available());
         assert!(clock2.is_available());
 

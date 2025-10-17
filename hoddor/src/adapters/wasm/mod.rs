@@ -12,6 +12,6 @@ pub use clock::Clock;
 pub use console_logger::ConsoleLogger;
 pub use locks::Locks;
 pub use notifier::Notifier;
-pub use opfs_storage::OPFSStorage;
+pub use opfs_storage::OpfsStorage;
 pub use persistence::Persistence;
 pub use webauthn_prf::WebAuthnPrf;
