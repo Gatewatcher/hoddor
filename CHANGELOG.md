@@ -1,3 +1,10 @@
+# [1.3.0](https://github.com/Gatewatcher/hoddor/compare/v1.2.0...v1.3.0) (2025-10-20)
+
+
+### Features
+
+* **architecture:** migrate to hexagonal architecture ([#71](https://github.com/Gatewatcher/hoddor/issues/71)) ([9652512](https://github.com/Gatewatcher/hoddor/commit/96525127c69746be9e72e17c7d47d1d67430814c))
+
 # [1.2.0](https://github.com/Gatewatcher/hoddor/compare/v1.1.0...v1.2.0) (2025-08-27)
 
 
