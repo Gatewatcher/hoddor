@@ -204,10 +204,13 @@ pub async fn force_cleanup_vault(vault_name: &str) -> Result<(), JsValue> {
 #[wasm_bindgen]
 pub fn configure_cleanup(interval_seconds: i64) {
     if interval_seconds > 0 {
-        web_sys::console::log_1(&format!(
-            "Configuring cleanup with interval of {} seconds",
-            interval_seconds
-        ).into());
+        web_sys::console::log_1(
+            &format!(
+                "Configuring cleanup with interval of {} seconds",
+                interval_seconds
+            )
+            .into(),
+        );
         CLEANUP_INTERVAL.store(interval_seconds, Ordering::SeqCst);
         LAST_CLEANUP.store(js_sys::Date::now() as i64 / 1000, Ordering::SeqCst);
     } else {

@@ -38,10 +38,9 @@ impl MessageListener {
 
         let closure = Closure::wrap(Box::new(move |event: web_sys::MessageEvent| {
             let data = event.data();
-            Platform::new().logger().log(&format!(
-                "MessageListener captured: {:?}",
-                data
-            ));
+            Platform::new()
+                .logger()
+                .log(&format!("MessageListener captured: {:?}", data));
             messages_clone.borrow_mut().push(data);
         }) as Box<dyn FnMut(web_sys::MessageEvent)>);
 
@@ -78,10 +77,8 @@ impl MessageListener {
 impl Drop for MessageListener {
     fn drop(&mut self) {
         let window = web_sys::window().expect("no window");
-        let _ = window.remove_event_listener_with_callback(
-            "message",
-            self.closure.as_ref().unchecked_ref(),
-        );
+        let _ = window
+            .remove_event_listener_with_callback("message", self.closure.as_ref().unchecked_ref());
     }
 }
 
@@ -172,7 +169,9 @@ async fn test_notification_contains_vault_data() {
             .expect("Failed to check namespaces");
         assert!(has_namespaces, "Vault data should contain namespaces");
 
-        Platform::new().logger().log("✅ Notification data structure test passed!");
+        Platform::new()
+            .logger()
+            .log("✅ Notification data structure test passed!");
     } else {
         panic!("No notification received within timeout");
     }
@@ -220,7 +219,9 @@ async fn test_notification_on_remove() {
             "Expected vaultUpdate event on remove"
         );
 
-        Platform::new().logger().log("✅ Remove notification test passed!");
+        Platform::new()
+            .logger()
+            .log("✅ Remove notification test passed!");
     } else {
         panic!("No notification received after remove operation");
     }
@@ -250,16 +251,9 @@ async fn test_multiple_notifications() {
         let namespace = format!("namespace_{}", i);
         let data: JsValue = format!("data_{}", i).into();
 
-        upsert_vault(
-            vault_name,
-            &identity,
-            &namespace,
-            data.clone(),
-            None,
-            false,
-        )
-        .await
-        .expect("Failed to upsert data");
+        upsert_vault(vault_name, &identity, &namespace, data.clone(), None, false)
+            .await
+            .expect("Failed to upsert data");
     }
 
     gloo_timers::future::TimeoutFuture::new(500).await;
@@ -290,7 +284,9 @@ async fn test_multiple_notifications() {
         );
     }
 
-    Platform::new().logger().log("✅ Multiple notifications test passed!");
+    Platform::new()
+        .logger()
+        .log("✅ Multiple notifications test passed!");
 
     test_utils::cleanup_all_vaults().await;
 }
