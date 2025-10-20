@@ -52,6 +52,12 @@ hkdf = "0.12.4"
 x25519-dalek = { version = "2.0.1", features = ["static_secrets"] }
 async-trait = "0.1.89"
 
+# --- Graph Database (CozoDB) ---
+# Note: cozo dependency is target-specific (see bottom of file)
+uuid = { version = "1.11", features = ["v4", "serde", "js"] }
+# Pin rayon to 1.10 to fix compatibility with graph_builder (https://github.com/cozodb/cozo/issues/298)
+rayon = "=1.10"
+
 [dependencies.web-sys]
 version = "0.3.77"
 features = [
@@ -127,6 +133,16 @@ features = [
 [dependencies.gloo-timers]
 version = "0.3.0"
 features = ['futures']
+
+# Target-specific dependencies for CozoDB
+# For WASM: use in-memory storage only (no SQLite/RocksDB which don't compile to WASM)
+# Note: wasm feature is required for WASM builds
+# For native: can use full features with SQLite backend
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+cozo = { version = "0.7", default-features = false, features = ["wasm"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+cozo = { version = "0.7", default-features = false, features = ["compact"] }
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3.50"
