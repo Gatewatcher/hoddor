@@ -1,5 +1,4 @@
-use crate::measure::now;
-use crate::vault::{IdentitySalts, VaultMetadata};
+use crate::domain::vault::{IdentitySalts, VaultMetadata};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use wasm_bindgen::JsValue;
@@ -7,7 +6,7 @@ use wasm_bindgen::JsValue;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::console;
+use crate::platform::Platform;
 use crate::webrtc::{AccessLevel, WebRtcPeer};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -38,6 +37,7 @@ pub struct SyncMessage {
 }
 
 pub struct SyncManager {
+    platform: Platform,
     pub peer_id: String,
     pub vector_clock: HashMap<String, u64>,
     pub peers: HashMap<String, Rc<RefCell<WebRtcPeer>>>,
@@ -47,6 +47,7 @@ pub struct SyncManager {
 impl SyncManager {
     pub fn new(peer_id: String) -> Self {
         Self {
+            platform: Platform::new(),
             peer_id: peer_id.clone(),
             vector_clock: HashMap::from([(peer_id, 0)]),
             peers: HashMap::new(),
@@ -58,12 +59,16 @@ impl SyncManager {
         let peer_id = if let Some(remote_id) = peer.borrow().remote_peer_id() {
             remote_id
         } else {
-            console::error("No remote peer ID found, skipping peer addition");
+            self.platform
+                .logger()
+                .error("No remote peer ID found, skipping peer addition");
             return;
         };
-        console::log(&format!("Adding peer {} to sync manager", peer_id));
+        self.platform
+            .logger()
+            .log(&format!("Adding peer {} to sync manager", peer_id));
         self.peers.insert(peer_id.clone(), peer);
-        console::log(&format!(
+        self.platform.logger().log(&format!(
             "Current peers in sync manager: {:?}",
             self.peers.keys().collect::<Vec<_>>()
         ));
@@ -81,7 +86,7 @@ impl SyncManager {
             operation_type,
             data,
             nonce,
-            timestamp: (now() / 1000.0) as u64,
+            timestamp: (self.platform.clock().now() / 1000.0) as u64,
             author: self.peer_id.clone(),
         }
     }
@@ -121,7 +126,7 @@ impl SyncManager {
         operation: VaultOperation,
         vault_metadata: Option<VaultMetadata>,
         identity_salts: Option<IdentitySalts>,
-        username_pk: Option<HashMap<String, String>>
+        username_pk: Option<HashMap<String, String>>,
     ) -> SyncMessage {
         SyncMessage {
             operation,
@@ -129,7 +134,7 @@ impl SyncManager {
             vault_name,
             vault_metadata,
             identity_salts,
-            username_pk
+            username_pk,
         }
     }
 

@@ -1,0 +1,409 @@
+use crate::domain::vault::error::VaultError;
+use crate::global::get_storage_manager;
+use crate::ports::StoragePort;
+use async_trait::async_trait;
+use wasm_bindgen::prelude::*;
+use wasm_bindgen_futures::JsFuture;
+use web_sys::{FileSystemDirectoryHandle, FileSystemFileHandle, FileSystemGetFileOptions};
+
+#[derive(Clone, Copy)]
+pub struct OpfsStorage;
+
+impl OpfsStorage {
+    pub fn new() -> Self {
+        Self
+    }
+
+    async fn get_root(&self) -> Result<FileSystemDirectoryHandle, VaultError> {
+        let storage = get_storage_manager()?;
+        let dir_promise = storage.get_directory();
+        let dir_handle = JsFuture::from(dir_promise)
+            .await
+            .map_err(|_| VaultError::io_error("Failed to get root directory"))?
+            .unchecked_into::<FileSystemDirectoryHandle>();
+        Ok(dir_handle)
+    }
+
+    async fn navigate_to_dir(&self, path: &str) -> Result<FileSystemDirectoryHandle, VaultError> {
+        let mut current = self.get_root().await?;
+
+        if path.is_empty() || path == "." {
+            return Ok(current);
+        }
+
+        for segment in path.split('/').filter(|s| !s.is_empty()) {
+            current = JsFuture::from(current.get_directory_handle(segment))
+                .await
+                .map_err(|_| VaultError::io_error("Failed to navigate to directory"))?
+                .unchecked_into::<FileSystemDirectoryHandle>();
+        }
+
+        Ok(current)
+    }
+
+    fn split_path(path: &str) -> (&str, &str) {
+        if let Some(pos) = path.rfind('/') {
+            (&path[..pos], &path[pos + 1..])
+        } else {
+            (".", path)
+        }
+    }
+}
+
+#[async_trait(?Send)]
+impl StoragePort for OpfsStorage {
+    async fn read_file(&self, path: &str) -> Result<String, VaultError> {
+        let (dir_path, filename) = Self::split_path(path);
+        let dir_handle = self.navigate_to_dir(dir_path).await?;
+
+        let file_handle = JsFuture::from(dir_handle.get_file_handle(filename))
+            .await
+            .map_err(|_| VaultError::io_error("Failed to get file handle"))?
+            .unchecked_into::<FileSystemFileHandle>();
+
+        let file = JsFuture::from(file_handle.get_file())
+            .await
+            .map_err(|_| VaultError::io_error("Failed to get file"))?;
+
+        let text = JsFuture::from(file.unchecked_into::<web_sys::File>().text())
+            .await
+            .map_err(|_| VaultError::io_error("Failed to read file content"))?
+            .as_string()
+            .ok_or(VaultError::io_error(
+                "Failed to convert file content to string",
+            ))?;
+
+        Ok(text)
+    }
+
+    async fn write_file(&self, path: &str, content: &str) -> Result<(), VaultError> {
+        let (dir_path, filename) = Self::split_path(path);
+        let dir_handle = self.navigate_to_dir(dir_path).await?;
+
+        let options = FileSystemGetFileOptions::new();
+        options.set_create(true);
+
+        let file_handle =
+            JsFuture::from(dir_handle.get_file_handle_with_options(filename, &options))
+                .await
+                .map_err(|_| VaultError::io_error("Failed to get or create file handle"))?
+                .unchecked_into::<FileSystemFileHandle>();
+
+        let writer = JsFuture::from(file_handle.create_writable())
+            .await
+            .map_err(|_| VaultError::io_error("Failed to create writable"))?;
+
+        let promise = writer
+            .unchecked_ref::<web_sys::FileSystemWritableFileStream>()
+            .write_with_str(content)
+            .map_err(|_| VaultError::io_error("Failed to create write promise"))?;
+
+        JsFuture::from(promise)
+            .await
+            .map_err(|_| VaultError::io_error("Failed to write file"))?;
+
+        JsFuture::from(
+            writer
+                .unchecked_ref::<web_sys::FileSystemWritableFileStream>()
+                .close(),
+        )
+        .await
+        .map_err(|_| VaultError::io_error("Failed to close writer"))?;
+
+        Ok(())
+    }
+
+    async fn delete_file(&self, path: &str) -> Result<(), VaultError> {
+        let (dir_path, filename) = Self::split_path(path);
+        let dir_handle = self.navigate_to_dir(dir_path).await?;
+
+        JsFuture::from(dir_handle.remove_entry(filename))
+            .await
+            .map_err(|_| VaultError::io_error("Failed to delete file"))?;
+
+        Ok(())
+    }
+
+    async fn create_directory(&self, path: &str) -> Result<(), VaultError> {
+        let mut current = self.get_root().await?;
+
+        if path.is_empty() || path == "." {
+            return Ok(());
+        }
+
+        for segment in path.split('/').filter(|s| !s.is_empty()) {
+            let options = web_sys::FileSystemGetDirectoryOptions::new();
+            options.set_create(true);
+
+            current = JsFuture::from(current.get_directory_handle_with_options(segment, &options))
+                .await
+                .map_err(|_| VaultError::io_error("Failed to create directory"))?
+                .unchecked_into::<FileSystemDirectoryHandle>();
+        }
+
+        Ok(())
+    }
+
+    async fn delete_directory(&self, path: &str) -> Result<(), VaultError> {
+        let (parent_path, dir_name) = Self::split_path(path);
+        let parent_handle = self.navigate_to_dir(parent_path).await?;
+
+        if let Ok(dir_handle) = JsFuture::from(parent_handle.get_directory_handle(dir_name))
+            .await
+            .map(|h| h.unchecked_into::<FileSystemDirectoryHandle>())
+        {
+            self.cleanup_directory(&dir_handle).await?;
+        }
+
+        JsFuture::from(parent_handle.remove_entry(dir_name))
+            .await
+            .map_err(|_| VaultError::io_error("Failed to remove directory"))?;
+
+        Ok(())
+    }
+
+    async fn directory_exists(&self, path: &str) -> Result<bool, VaultError> {
+        match self.navigate_to_dir(path).await {
+            Ok(_) => Ok(true),
+            Err(_) => Ok(false),
+        }
+    }
+
+    async fn list_entries(&self, path: &str) -> Result<Vec<String>, VaultError> {
+        let dir_handle = self.navigate_to_dir(path).await?;
+        let mut entries = Vec::new();
+
+        let entries_val = js_sys::Reflect::get(&dir_handle, &JsValue::from_str("entries"))
+            .map_err(|_| VaultError::io_error("Failed to get entries"))?;
+
+        let entries_fn = entries_val
+            .dyn_ref::<js_sys::Function>()
+            .ok_or_else(|| VaultError::io_error("entries is not a function"))?;
+
+        let iterator = entries_fn
+            .call0(&dir_handle)
+            .map_err(|_| VaultError::io_error("Failed to call entries"))?;
+
+        loop {
+            let next_val = js_sys::Reflect::get(&iterator, &JsValue::from_str("next"))
+                .map_err(|_| VaultError::io_error("Failed to get next"))?;
+
+            let next_fn = next_val
+                .dyn_ref::<js_sys::Function>()
+                .ok_or_else(|| VaultError::io_error("next is not a function"))?;
+
+            let next_result = JsFuture::from(
+                next_fn
+                    .call0(&iterator)
+                    .map_err(|_| VaultError::io_error("Failed to call next"))?
+                    .dyn_into::<js_sys::Promise>()
+                    .map_err(|_| VaultError::io_error("Failed to convert to promise"))?,
+            )
+            .await
+            .map_err(|_| VaultError::io_error("Failed to await next"))?;
+
+            let done = js_sys::Reflect::get(&next_result, &JsValue::from_str("done"))
+                .map_err(|_| VaultError::io_error("Failed to get done status"))?
+                .as_bool()
+                .unwrap_or(true);
+
+            if done {
+                break;
+            }
+
+            if let Ok(value) = js_sys::Reflect::get(&next_result, &JsValue::from_str("value")) {
+                if let Some(array) = value.dyn_ref::<js_sys::Array>() {
+                    if let Some(name) = array.get(0).as_string() {
+                        entries.push(name);
+                    }
+                }
+            }
+        }
+
+        Ok(entries)
+    }
+}
+
+impl OpfsStorage {
+    fn cleanup_directory<'a>(
+        &'a self,
+        dir_handle: &'a FileSystemDirectoryHandle,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), VaultError>> + 'a>> {
+        Box::pin(async move {
+            let entries = self.list_entries_from_handle(dir_handle).await?;
+
+            for entry_name in entries {
+                if let Ok(subdir_handle) =
+                    JsFuture::from(dir_handle.get_directory_handle(&entry_name))
+                        .await
+                        .map(|h| h.unchecked_into::<FileSystemDirectoryHandle>())
+                {
+                    self.cleanup_directory(&subdir_handle).await?;
+                }
+
+                JsFuture::from(dir_handle.remove_entry(&entry_name))
+                    .await
+                    .map_err(|_| VaultError::io_error("Failed to remove entry"))?;
+            }
+
+            Ok(())
+        })
+    }
+
+    async fn list_entries_from_handle(
+        &self,
+        dir_handle: &FileSystemDirectoryHandle,
+    ) -> Result<Vec<String>, VaultError> {
+        let mut entries = Vec::new();
+
+        let entries_val = js_sys::Reflect::get(dir_handle, &JsValue::from_str("entries"))
+            .map_err(|_| VaultError::io_error("Failed to get entries"))?;
+
+        let entries_fn = entries_val
+            .dyn_ref::<js_sys::Function>()
+            .ok_or_else(|| VaultError::io_error("entries is not a function"))?;
+
+        let iterator = entries_fn
+            .call0(dir_handle)
+            .map_err(|_| VaultError::io_error("Failed to call entries"))?;
+
+        loop {
+            let next_val = js_sys::Reflect::get(&iterator, &JsValue::from_str("next"))
+                .map_err(|_| VaultError::io_error("Failed to get next"))?;
+
+            let next_fn = next_val
+                .dyn_ref::<js_sys::Function>()
+                .ok_or_else(|| VaultError::io_error("next is not a function"))?;
+
+            let next_result = JsFuture::from(
+                next_fn
+                    .call0(&iterator)
+                    .map_err(|_| VaultError::io_error("Failed to call next"))?
+                    .dyn_into::<js_sys::Promise>()
+                    .map_err(|_| VaultError::io_error("Failed to convert to promise"))?,
+            )
+            .await
+            .map_err(|_| VaultError::io_error("Failed to await next"))?;
+
+            let done = js_sys::Reflect::get(&next_result, &JsValue::from_str("done"))
+                .map_err(|_| VaultError::io_error("Failed to get done status"))?
+                .as_bool()
+                .unwrap_or(true);
+
+            if done {
+                break;
+            }
+
+            if let Ok(value) = js_sys::Reflect::get(&next_result, &JsValue::from_str("value")) {
+                if let Some(array) = value.dyn_ref::<js_sys::Array>() {
+                    if let Some(name) = array.get(0).as_string() {
+                        entries.push(name);
+                    }
+                }
+            }
+        }
+
+        Ok(entries)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use wasm_bindgen_test::*;
+
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    #[wasm_bindgen_test]
+    async fn test_opfs_storage_creation() {
+        let _storage = OpfsStorage::new();
+    }
+
+    #[wasm_bindgen_test]
+    async fn test_file_lifecycle() {
+        let storage = OpfsStorage::new();
+        let test_dir = "test_lifecycle_opfs";
+        let test_file = "test_lifecycle_opfs/test.txt";
+        let content = "test content";
+
+        storage.create_directory(test_dir).await.unwrap();
+        assert!(storage.directory_exists(test_dir).await.unwrap());
+
+        storage.write_file(test_file, content).await.unwrap();
+        let read_content = storage.read_file(test_file).await.unwrap();
+        assert_eq!(read_content, content);
+
+        storage.delete_file(test_file).await.unwrap();
+        storage.delete_directory(test_dir).await.unwrap();
+        assert!(!storage.directory_exists(test_dir).await.unwrap());
+    }
+
+    #[wasm_bindgen_test]
+    async fn test_list_entries() {
+        let storage = OpfsStorage::new();
+        let test_dir = "test_list_opfs";
+
+        storage.create_directory(test_dir).await.unwrap();
+        storage
+            .write_file("test_list_opfs/file1.txt", "content1")
+            .await
+            .unwrap();
+        storage
+            .write_file("test_list_opfs/file2.txt", "content2")
+            .await
+            .unwrap();
+        storage
+            .write_file("test_list_opfs/file3.txt", "content3")
+            .await
+            .unwrap();
+
+        let entries = storage.list_entries(test_dir).await.unwrap();
+        assert_eq!(entries.len(), 3);
+        assert!(entries.contains(&"file1.txt".to_string()));
+        assert!(entries.contains(&"file2.txt".to_string()));
+        assert!(entries.contains(&"file3.txt".to_string()));
+
+        storage.delete_directory(test_dir).await.unwrap();
+    }
+
+    #[wasm_bindgen_test]
+    async fn test_delete_directory_with_contents() {
+        let storage = OpfsStorage::new();
+        let test_dir = "test_delete_opfs";
+
+        storage.create_directory(test_dir).await.unwrap();
+        storage
+            .write_file("test_delete_opfs/file1.txt", "content1")
+            .await
+            .unwrap();
+        storage
+            .write_file("test_delete_opfs/file2.txt", "content2")
+            .await
+            .unwrap();
+        storage
+            .create_directory("test_delete_opfs/subdir")
+            .await
+            .unwrap();
+        storage
+            .write_file("test_delete_opfs/subdir/file3.txt", "content3")
+            .await
+            .unwrap();
+
+        storage.delete_directory(test_dir).await.unwrap();
+        assert!(!storage.directory_exists(test_dir).await.unwrap());
+    }
+
+    #[wasm_bindgen_test]
+    async fn test_directory_exists() {
+        let storage = OpfsStorage::new();
+        let test_dir = "test_exists_opfs";
+
+        assert!(!storage.directory_exists(test_dir).await.unwrap());
+
+        storage.create_directory(test_dir).await.unwrap();
+        assert!(storage.directory_exists(test_dir).await.unwrap());
+
+        storage.delete_directory(test_dir).await.unwrap();
+        assert!(!storage.directory_exists(test_dir).await.unwrap());
+    }
+}

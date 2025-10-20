@@ -1,6 +1,6 @@
 import { Reducer, UnknownAction } from '@reduxjs/toolkit';
 
-import { IdentityHandle } from '../../../dist/hoddor';
+import { IdentityHandle } from '../../../hoddor/pkg/hoddor';
 import { actions } from './app.actions';
 
 export type AppState = {

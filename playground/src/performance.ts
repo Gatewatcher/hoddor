@@ -2,7 +2,7 @@ import init, {
   create_vault,
   read_from_vault,
   upsert_vault,
-} from '../../dist/hoddor.js';
+} from '../../hoddor/pkg/hoddor.js';
 import { VaultWorker } from './vault';
 
 function multiplyLargeMatrices(size: number): number[][] {

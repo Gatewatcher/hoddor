@@ -1,22 +1,34 @@
 extern crate console_error_panic_hook;
 
-pub mod console;
-pub mod crypto;
-pub mod errors;
-pub mod file_system;
-pub mod global;
-pub mod lock;
-pub mod measure;
+pub mod adapters;
+pub mod domain;
+pub mod facades;
+pub mod platform;
+pub mod ports;
+
 pub mod notifications;
-pub mod persistence;
+
+#[cfg(target_arch = "wasm32")]
+pub mod global;
+#[cfg(target_arch = "wasm32")]
+pub mod measure;
+#[cfg(target_arch = "wasm32")]
 pub mod signaling;
+#[cfg(target_arch = "wasm32")]
 pub mod sync;
-pub mod vault;
-pub mod webauthn;
+#[cfg(target_arch = "wasm32")]
 pub mod webrtc;
 
+#[cfg(target_arch = "wasm32")]
+pub use facades::wasm::{crypto, webauthn};
+
+pub use domain::vault::{IdentitySalts, NamespaceData, Vault, VaultMetadata};
+pub use platform::Platform;
+
+#[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
+#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen(start)]
 pub fn start_app() -> Result<(), JsValue> {
     #[cfg(feature = "console_error_panic_hook")]
