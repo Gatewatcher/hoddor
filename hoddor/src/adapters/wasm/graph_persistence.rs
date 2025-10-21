@@ -277,19 +277,17 @@ impl<G: GraphPort, S: StoragePort> GraphPersistence<G, S> {
     }
 
     fn get_timestamp() -> u64 {
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis() as u64
+        // Use js_sys::Date for WASM compatibility
+        js_sys::Date::now() as u64
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::adapters::wasm::{CozoGraphAdapter, OpfsStorage};
+    use crate::adapters::wasm::{SimpleGraphAdapter, OpfsStorage};
     use crate::domain::crypto;
-    use crate::domain::graph::{EdgeProperties, NodeId};
+    use crate::domain::graph::EdgeProperties;
     use crate::platform::Platform;
     use wasm_bindgen_test::*;
 
@@ -314,8 +312,12 @@ mod tests {
     #[wasm_bindgen_test]
     async fn test_backup_and_restore() {
         // Créer le graph adapter
-        let graph = CozoGraphAdapter::new_in_memory().unwrap();
+        let graph = SimpleGraphAdapter::new();
         let storage = OpfsStorage::new();
+
+        // Créer le répertoire de backup
+        storage.create_directory("graph_backups").await.unwrap();
+
         let persistence = GraphPersistence::new(graph, storage, "graph_backups".to_string());
 
         let vault_id = "test_vault_backup";
@@ -370,7 +372,7 @@ mod tests {
         assert!(persistence.backup_exists(vault_id).await);
 
         // Restore (dans un nouveau graph)
-        let graph2 = CozoGraphAdapter::new_in_memory().unwrap();
+        let graph2 = SimpleGraphAdapter::new();
         let storage2 = OpfsStorage::new();
         let persistence2 = GraphPersistence::new(graph2, storage2, "graph_backups".to_string());
 
@@ -388,8 +390,9 @@ mod tests {
 
     #[wasm_bindgen_test]
     async fn test_backup_nonexistent_vault() {
-        let graph = CozoGraphAdapter::new_in_memory().unwrap();
+        let graph = SimpleGraphAdapter::new();
         let storage = OpfsStorage::new();
+        storage.create_directory("graph_backups").await.unwrap();
         let persistence = GraphPersistence::new(graph, storage, "graph_backups".to_string());
 
         // Backup d'un vault vide devrait fonctionner
@@ -402,8 +405,9 @@ mod tests {
 
     #[wasm_bindgen_test]
     async fn test_backup_with_multiple_edges() {
-        let graph = CozoGraphAdapter::new_in_memory().unwrap();
+        let graph = SimpleGraphAdapter::new();
         let storage = OpfsStorage::new();
+        storage.create_directory("graph_backups").await.unwrap();
         let persistence = GraphPersistence::new(graph, storage, "graph_backups".to_string());
 
         let vault_id = "test_vault_multi_edges";
@@ -490,8 +494,9 @@ mod tests {
         let recipient = crypto::identity_to_public(&platform, &identity).unwrap();
 
         // Créer le graph et le storage
-        let graph = CozoGraphAdapter::new_in_memory().unwrap();
+        let graph = SimpleGraphAdapter::new();
         let storage = OpfsStorage::new();
+        storage.create_directory("encrypted_graph_backups").await.unwrap();
 
         // Créer la config de chiffrement
         let encryption = EncryptionConfig {
@@ -601,8 +606,9 @@ mod tests {
     async fn test_encryption_toggle() {
         // Tester l'activation/désactivation du chiffrement
         let platform = Platform::new();
-        let graph = CozoGraphAdapter::new_in_memory().unwrap();
+        let graph = SimpleGraphAdapter::new();
         let storage = OpfsStorage::new();
+        storage.create_directory("toggle_graph_backups").await.unwrap();
 
         // Créer sans chiffrement
         let mut persistence = GraphPersistence::new(
@@ -696,8 +702,9 @@ mod tests {
 
         let identity2 = crypto::generate_identity(&platform).unwrap();
 
-        let graph = CozoGraphAdapter::new_in_memory().unwrap();
+        let graph = SimpleGraphAdapter::new();
         let storage = OpfsStorage::new();
+        storage.create_directory("wrong_key_test").await.unwrap();
 
         // Chiffrer avec identity1
         let encryption1 = EncryptionConfig {
@@ -734,7 +741,7 @@ mod tests {
         persistence1.backup(vault_id).await.unwrap();
 
         // Tenter de restaurer avec identity2 (mauvaise clé)
-        let graph2 = CozoGraphAdapter::new_in_memory().unwrap();
+        let graph2 = SimpleGraphAdapter::new();
         let storage2 = OpfsStorage::new();
 
         let encryption2 = EncryptionConfig {

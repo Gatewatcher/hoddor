@@ -70,7 +70,8 @@ impl CozoGraphAdapter {
         // Create nodes relation
         let nodes_schema = r#"
             :create nodes {
-                id: String,
+                id: String
+                =>
                 node_type: String,
                 vault_id: String,
                 namespace: String?,
@@ -84,9 +85,7 @@ impl CozoGraphAdapter {
                 created_at: Int,
                 updated_at: Int,
                 accessed_at: Int,
-                access_count: Int,
-                =>
-                id: String,
+                access_count: Int
             }
         "#;
 
@@ -97,7 +96,8 @@ impl CozoGraphAdapter {
         // Create edges relation
         let edges_schema = r#"
             :create edges {
-                id: String,
+                id: String
+                =>
                 from_node: String,
                 to_node: String,
                 edge_type: String,
@@ -105,9 +105,7 @@ impl CozoGraphAdapter {
                 weight: Float,
                 bidirectional: Bool,
                 encrypted_context: Bytes?,
-                created_at: Int,
-                =>
-                id: String,
+                created_at: Int
             }
         "#;
 
@@ -115,17 +113,8 @@ impl CozoGraphAdapter {
             .run_script(edges_schema, Default::default(), ScriptMutability::Mutable)
             .map_err(|e| GraphError::DatabaseError(format!("Failed to create edges schema: {}", e)))?;
 
-        // Create indexes
-        let indexes = r#"
-            ::index create nodes:vault_id
-            ::index create nodes:node_type
-            ::index create edges:from_node
-            ::index create edges:to_node
-        "#;
-
-        self.db
-            .run_script(indexes, Default::default(), ScriptMutability::Mutable)
-            .map_err(|e| GraphError::DatabaseError(format!("Failed to create indexes: {}", e)))?;
+        // Note: Primary keys are automatically indexed.
+        // Additional indexes can be created using HNSW or FTS when needed.
 
         Ok(())
     }
@@ -138,6 +127,7 @@ impl CozoGraphAdapter {
             ));
         }
 
+        // id is at index 0 (primary key comes first)
         let id = NodeId::from_string(
             row[0]
                 .as_str()
@@ -303,12 +293,8 @@ impl CozoGraphAdapter {
 
     /// Get current timestamp (milliseconds)
     fn get_timestamp() -> u64 {
-        // In WASM, we'll use js_sys::Date, but for now use a simple counter
-        // This will be replaced with proper time handling
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis() as u64
+        // Use js_sys::Date for WASM compatibility
+        js_sys::Date::now() as u64
     }
 }
 
@@ -355,31 +341,28 @@ impl GraphPort for CozoGraphAdapter {
               $version, $expires_at, $created_at, $updated_at, $accessed_at, $access_count]]
 
             :put nodes {
-                id, node_type, vault_id, namespace, labels, embedding, encrypted_content,
+                id => node_type, vault_id, namespace, labels, embedding, encrypted_content,
                 content_hmac, content_size, version, expires_at, created_at, updated_at,
                 accessed_at, access_count
             }
         "#;
 
-        let params_json = serde_json::json!({
-            "id": node.id.as_str(),
-            "node_type": node.node_type,
-            "vault_id": node.vault_id,
-            "namespace": node.namespace,
-            "labels": node.labels,
-            "embedding": node.embedding,
-            "encrypted_content": node.encrypted_content,
-            "content_hmac": node.content_hmac,
-            "content_size": node.metadata.content_size,
-            "version": node.metadata.version,
-            "expires_at": node.metadata.expires_at,
-            "created_at": node.created_at,
-            "updated_at": node.updated_at,
-            "accessed_at": node.accessed_at,
-            "access_count": node.access_count,
-        });
-
-        let params = Self::build_params(params_json);
+        let mut params = BTreeMap::new();
+        params.insert("node_type".to_string(), DataValue::from(node.node_type.as_str()));
+        params.insert("vault_id".to_string(), DataValue::from(node.vault_id.as_str()));
+        params.insert("namespace".to_string(), node.namespace.as_ref().map(|s| DataValue::from(s.as_str())).unwrap_or(DataValue::Null));
+        params.insert("labels".to_string(), DataValue::List(node.labels.iter().map(|s| DataValue::from(s.as_str())).collect()));
+        params.insert("embedding".to_string(), node.embedding.as_ref().map(|v| DataValue::List(v.iter().map(|f| DataValue::from(*f as f64)).collect())).unwrap_or(DataValue::Null));
+        params.insert("encrypted_content".to_string(), DataValue::Bytes(node.encrypted_content.clone()));
+        params.insert("content_hmac".to_string(), DataValue::from(node.content_hmac.as_str()));
+        params.insert("content_size".to_string(), DataValue::from(node.metadata.content_size as i64));
+        params.insert("version".to_string(), DataValue::from(node.metadata.version as i64));
+        params.insert("expires_at".to_string(), node.metadata.expires_at.map(|e| DataValue::from(e as i64)).unwrap_or(DataValue::Null));
+        params.insert("created_at".to_string(), DataValue::from(node.created_at as i64));
+        params.insert("updated_at".to_string(), DataValue::from(node.updated_at as i64));
+        params.insert("accessed_at".to_string(), DataValue::from(node.accessed_at as i64));
+        params.insert("access_count".to_string(), DataValue::from(node.access_count as i64));
+        params.insert("id".to_string(), DataValue::from(node.id.as_str()));
 
         self.db
             .run_script(query, params, ScriptMutability::Mutable)
@@ -439,7 +422,7 @@ impl GraphPort for CozoGraphAdapter {
 
     async fn update_node(
         &self,
-        vault_id: &str,
+        _vault_id: &str,
         node_id: &NodeId,
         encrypted_content: Vec<u8>,
         content_hmac: String,
@@ -452,7 +435,7 @@ impl GraphPort for CozoGraphAdapter {
                 [[$id, $encrypted_content, $content_hmac, $embedding, $updated_at]]
 
             :update nodes {
-                id, encrypted_content, content_hmac, embedding, updated_at
+                id => encrypted_content, content_hmac, embedding, updated_at
             }
         "#;
 
@@ -555,7 +538,7 @@ impl GraphPort for CozoGraphAdapter {
               $vault_id, $weight, $bidirectional, $encrypted_context, $created_at]]
 
             :put edges {
-                id, from_node, to_node, edge_type, vault_id, weight, bidirectional,
+                id => from_node, to_node, edge_type, vault_id, weight, bidirectional,
                 encrypted_context, created_at
             }
         "#;
@@ -741,7 +724,9 @@ impl GraphPort for CozoGraphAdapter {
 
 #[cfg(test)]
 mod tests {
-    use crate::domain::graph::EdgeType;
+    use super::CozoGraphAdapter;
+    use crate::domain::graph::{EdgeDirection, EdgeProperties, EdgeType, NodeId};
+    use crate::ports::graph::GraphPort;
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
