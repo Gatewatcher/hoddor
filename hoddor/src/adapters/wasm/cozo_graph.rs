@@ -720,6 +720,20 @@ impl GraphPort for CozoGraphAdapter {
 
         Ok(nodes)
     }
+
+    async fn vector_search(
+        &self,
+        vault_id: &str,
+        query_embedding: Vec<f32>,
+        limit: usize,
+        min_similarity: Option<f32>,
+    ) -> GraphResult<Vec<(GraphNode, f32)>> {
+        // TODO: Implement HNSW vector search using CozoDB's native support
+        // For now, return empty results
+        // In future: Use CozoDB's `~` operator for nearest neighbor search
+        let _ = (vault_id, query_embedding, limit, min_similarity);
+        Ok(Vec::new())
+    }
 }
 
 #[cfg(test)]

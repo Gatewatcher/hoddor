@@ -82,4 +82,14 @@ pub trait GraphPort {
         node_id: &NodeId,
         edge_types: Option<Vec<String>>,
     ) -> GraphResult<Vec<GraphNode>>;
+
+    /// Vector similarity search
+    /// Returns nodes ranked by cosine similarity to query embedding
+    async fn vector_search(
+        &self,
+        vault_id: &str,
+        query_embedding: Vec<f32>,
+        limit: usize,
+        min_similarity: Option<f32>,
+    ) -> GraphResult<Vec<(GraphNode, f32)>>;
 }

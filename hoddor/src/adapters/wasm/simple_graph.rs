@@ -27,6 +27,29 @@ impl SimpleGraphAdapter {
     fn get_timestamp() -> u64 {
         js_sys::Date::now() as u64
     }
+
+    /// Calculate cosine similarity between two vectors
+    fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
+        if a.len() != b.len() {
+            return 0.0;
+        }
+
+        let mut dot_product = 0.0;
+        let mut norm_a = 0.0;
+        let mut norm_b = 0.0;
+
+        for i in 0..a.len() {
+            dot_product += a[i] * b[i];
+            norm_a += a[i] * a[i];
+            norm_b += b[i] * b[i];
+        }
+
+        if norm_a == 0.0 || norm_b == 0.0 {
+            return 0.0;
+        }
+
+        dot_product / (norm_a.sqrt() * norm_b.sqrt())
+    }
 }
 
 impl Default for SimpleGraphAdapter {
@@ -253,6 +276,48 @@ impl GraphPort for SimpleGraphAdapter {
             .collect();
 
         Ok(result)
+    }
+
+    async fn vector_search(
+        &self,
+        vault_id: &str,
+        query_embedding: Vec<f32>,
+        limit: usize,
+        min_similarity: Option<f32>,
+    ) -> GraphResult<Vec<(GraphNode, f32)>> {
+        let nodes = self.nodes.lock().unwrap();
+
+        // Calculate similarity for all nodes with embeddings
+        let mut results: Vec<(GraphNode, f32)> = nodes
+            .values()
+            .filter(|node| {
+                // Filter by vault_id and check if node has embedding
+                node.vault_id == vault_id && node.embedding.is_some()
+            })
+            .map(|node| {
+                let similarity = Self::cosine_similarity(
+                    &query_embedding,
+                    node.embedding.as_ref().unwrap(),
+                );
+                (node.clone(), similarity)
+            })
+            .filter(|(_, similarity)| {
+                // Apply minimum similarity threshold if provided
+                if let Some(min_sim) = min_similarity {
+                    *similarity >= min_sim
+                } else {
+                    true
+                }
+            })
+            .collect();
+
+        // Sort by similarity descending
+        results.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+
+        // Apply limit
+        results.truncate(limit);
+
+        Ok(results)
     }
 }
 
