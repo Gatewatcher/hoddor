@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { useSelector } from "react-redux";
 import {
   Row,
   Col,
@@ -12,10 +13,13 @@ import {
   List,
   Checkbox,
   Divider,
+  message,
 } from "antd";
-import { SendOutlined, ClearOutlined, RobotOutlined, BulbOutlined } from "@ant-design/icons";
+import { SendOutlined, ClearOutlined, RobotOutlined, BulbOutlined, SaveOutlined, FolderOpenOutlined } from "@ant-design/icons";
 import { WebLLMService, RAGOrchestrator, EmbeddingService } from "../services";
 import { MemoryManager } from "./MemoryManager";
+import { graph_backup_vault, graph_restore_vault } from "../../../hoddor/pkg/hoddor";
+import { appSelectors } from "../store/app.selectors";
 
 const { TextArea } = Input;
 const { Title, Text } = Typography;
@@ -37,6 +41,10 @@ export const RAGWorkspace: React.FC = () => {
   const [selectedVault, setSelectedVault] = useState<string>("");
   const [useRAG, setUseRAG] = useState(true);
   const [servicesReady, setServicesReady] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
+
+  const identity = useSelector(appSelectors.getIdentity);
 
   const llmServiceRef = useRef<WebLLMService | null>(null);
   const embeddingServiceRef = useRef<EmbeddingService | null>(null);
@@ -172,6 +180,56 @@ export const RAGWorkspace: React.FC = () => {
     }
   };
 
+  const handleSaveGraph = async () => {
+    if (!selectedVault) {
+      message.warning("Please select a vault first");
+      return;
+    }
+
+    if (!identity || !identity.public_key || !identity.private_key) {
+      message.error("Please authenticate first (Passphrase or MFA)");
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      await graph_backup_vault(selectedVault, identity.public_key, identity.private_key);
+      message.success(`Graph saved to OPFS for vault: ${selectedVault}`);
+    } catch (error) {
+      console.error("Failed to save graph:", error);
+      message.error(`Failed to save graph: ${error}`);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleLoadGraph = async () => {
+    if (!selectedVault) {
+      message.warning("Please select a vault first");
+      return;
+    }
+
+    if (!identity || !identity.public_key || !identity.private_key) {
+      message.error("Please authenticate first (Passphrase or MFA)");
+      return;
+    }
+
+    setIsRestoring(true);
+    try {
+      const found = await graph_restore_vault(selectedVault, identity.public_key, identity.private_key);
+      if (found) {
+        message.success(`Graph loaded from OPFS for vault: ${selectedVault}`);
+      } else {
+        message.info("No saved graph found (this is the first time)");
+      }
+    } catch (error) {
+      console.error("Failed to load graph:", error);
+      message.error(`Failed to load graph: ${error}`);
+    } finally {
+      setIsRestoring(false);
+    }
+  };
+
   const isReady = ragOrchestratorRef.current?.isReady() ?? false;
   const canUseRAG = embeddingServiceRef.current?.isReady() ?? false;
 
@@ -272,6 +330,23 @@ export const RAGWorkspace: React.FC = () => {
                       (Embeddings unavailable)
                     </Text>
                   )}
+                  <Button
+                    icon={<SaveOutlined />}
+                    onClick={handleSaveGraph}
+                    loading={isSaving}
+                    disabled={!selectedVault || !identity}
+                    type="primary"
+                  >
+                    Save Graph
+                  </Button>
+                  <Button
+                    icon={<FolderOpenOutlined />}
+                    onClick={handleLoadGraph}
+                    loading={isRestoring}
+                    disabled={!selectedVault || !identity}
+                  >
+                    Load Graph
+                  </Button>
                 </Space>
                 <Divider style={{ margin: "8px 0" }} />
               </>
