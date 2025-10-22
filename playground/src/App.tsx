@@ -3,7 +3,7 @@ import { Provider } from 'react-redux';
 import { Tabs } from 'antd';
 
 import { Vaults } from './components/Vaults';
-import { LLMChat } from './components/LLMChat';
+import { RAGWorkspace } from './components/RAGWorkspace';
 import { reduxStore } from './store/app.store';
 
 export const App = () => {
@@ -28,12 +28,12 @@ export const App = () => {
             children: <Vaults />,
           },
           {
-            key: 'llm',
-            label: 'LLM Chat',
-            children: <LLMChat />,
+            key: 'rag',
+            label: 'RAG + Graph',
+            children: <RAGWorkspace />,
           },
         ]}
-        style={{ height: '100vh', padding: '16px' }}
+        style={{ height: '100vh' }}
       />
     </Provider>
   );
