@@ -1,8 +1,8 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Card, Input, Button, Space, Typography, List, Tag, message } from "antd";
-import { PlusOutlined, BulbOutlined } from "@ant-design/icons";
+import { PlusOutlined, BulbOutlined, ReloadOutlined } from "@ant-design/icons";
 import { EmbeddingService } from "../services";
-import { graph_create_memory_node } from "../../../hoddor/pkg/hoddor";
+import { graph_create_memory_node, graph_list_memory_nodes } from "../../../hoddor/pkg/hoddor";
 
 const { TextArea } = Input;
 const { Title, Text } = Typography;
@@ -18,17 +18,66 @@ interface MemoryManagerProps {
   vaultName?: string;
   embeddingService: EmbeddingService | null;
   onMemoryAdded?: () => void;
+  refreshTrigger?: number; // Change this to trigger reload from graph
 }
 
 export const MemoryManager: React.FC<MemoryManagerProps> = ({
   vaultName,
   embeddingService,
   onMemoryAdded,
+  refreshTrigger,
 }) => {
   const [memories, setMemories] = useState<Memory[]>([]);
   const [newMemory, setNewMemory] = useState("");
   const [labels, setLabels] = useState("");
   const [isAdding, setIsAdding] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Load memories from graph when vault changes or refresh is triggered
+  useEffect(() => {
+    const loadMemories = async () => {
+      if (!vaultName) {
+        setMemories([]);
+        return;
+      }
+
+      setIsLoading(true);
+      try {
+        console.log("📂 Loading memories from graph for vault:", vaultName);
+        const nodes = await graph_list_memory_nodes(vaultName, 100);
+
+        const decoder = new TextDecoder();
+        const loadedMemories: Memory[] = nodes.map((node: any) => {
+          let content = "";
+          try {
+            if (node.encrypted_content && node.encrypted_content.length > 0) {
+              content = decoder.decode(new Uint8Array(node.encrypted_content));
+            }
+          } catch (error) {
+            console.warn(`Failed to decode memory ${node.id}:`, error);
+            content = "[Unable to decode content]";
+          }
+
+          return {
+            id: node.id,
+            content,
+            labels: node.labels || [],
+            timestamp: new Date(), // We don't store timestamps in graph yet
+          };
+        });
+
+        console.log(`✅ Loaded ${loadedMemories.length} memories from graph`);
+        setMemories(loadedMemories);
+      } catch (error) {
+        console.error("Failed to load memories:", error);
+        // Don't show error message - might just be empty graph
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadMemories();
+  }, [vaultName, refreshTrigger]);
 
   const handleAddMemory = async () => {
     if (!newMemory.trim()) {

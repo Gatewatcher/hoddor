@@ -14,12 +14,17 @@ import {
   Checkbox,
   Divider,
   message,
+  Modal,
+  Form,
+  Tag,
 } from "antd";
-import { SendOutlined, ClearOutlined, RobotOutlined, BulbOutlined, SaveOutlined, FolderOpenOutlined } from "@ant-design/icons";
+import { SendOutlined, ClearOutlined, RobotOutlined, BulbOutlined, SaveOutlined, FolderOpenOutlined, LockOutlined, UnlockOutlined } from "@ant-design/icons";
 import { WebLLMService, RAGOrchestrator, EmbeddingService } from "../services";
 import { MemoryManager } from "./MemoryManager";
-import { graph_backup_vault, graph_restore_vault } from "../../../hoddor/pkg/hoddor";
+import { graph_backup_vault, graph_restore_vault, vault_identity_from_passphrase, create_credential, get_credential } from "../../../hoddor/pkg/hoddor";
 import { appSelectors } from "../store/app.selectors";
+import { useDispatch } from "react-redux";
+import { actions } from "../store/app.actions";
 
 const { TextArea } = Input;
 const { Title, Text } = Typography;
@@ -43,8 +48,16 @@ export const RAGWorkspace: React.FC = () => {
   const [servicesReady, setServicesReady] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
+  const [memoryRefreshTrigger, setMemoryRefreshTrigger] = useState(0);
+
+  // Authentication state
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authMode, setAuthMode] = useState<'passphrase' | 'mfa-register' | 'mfa-auth'>('passphrase');
+  const [passphraseForm] = Form.useForm();
+  const [mfaForm] = Form.useForm();
 
   const identity = useSelector(appSelectors.getIdentity);
+  const dispatch = useDispatch();
 
   const llmServiceRef = useRef<WebLLMService | null>(null);
   const embeddingServiceRef = useRef<EmbeddingService | null>(null);
@@ -181,53 +194,152 @@ export const RAGWorkspace: React.FC = () => {
   };
 
   const handleSaveGraph = async () => {
+    console.log("🔍 handleSaveGraph called");
+    console.log("  - selectedVault:", selectedVault);
+    console.log("  - identity:", identity);
+
     if (!selectedVault) {
+      console.log("❌ No vault selected");
       message.warning("Please select a vault first");
       return;
     }
 
-    if (!identity || !identity.public_key || !identity.private_key) {
+    if (!identity) {
+      console.log("❌ No identity");
       message.error("Please authenticate first (Passphrase or MFA)");
+      return;
+    }
+
+    console.log("  - identity.public_key:", identity.public_key);
+    console.log("  - identity.private_key:", identity.private_key ? "***" : undefined);
+
+    if (!identity.public_key || !identity.private_key) {
+      console.log("❌ Identity missing keys");
+      message.error("Identity is incomplete - please authenticate again");
       return;
     }
 
     setIsSaving(true);
+    console.log("💾 Calling graph_backup_vault...");
     try {
       await graph_backup_vault(selectedVault, identity.public_key, identity.private_key);
+      console.log("✅ graph_backup_vault succeeded");
       message.success(`Graph saved to OPFS for vault: ${selectedVault}`);
     } catch (error) {
-      console.error("Failed to save graph:", error);
+      console.error("❌ Failed to save graph:", error);
       message.error(`Failed to save graph: ${error}`);
     } finally {
       setIsSaving(false);
+      console.log("🏁 handleSaveGraph finished");
     }
   };
 
   const handleLoadGraph = async () => {
+    console.log("🔍 handleLoadGraph called");
+    console.log("  - selectedVault:", selectedVault);
+    console.log("  - identity:", identity);
+
+    if (!selectedVault) {
+      console.log("❌ No vault selected");
+      message.warning("Please select a vault first");
+      return;
+    }
+
+    if (!identity) {
+      console.log("❌ No identity");
+      message.error("Please authenticate first (Passphrase or MFA)");
+      return;
+    }
+
+    console.log("  - identity.public_key:", identity.public_key);
+    console.log("  - identity.private_key:", identity.private_key ? "***" : undefined);
+
+    if (!identity.public_key || !identity.private_key) {
+      console.log("❌ Identity missing keys");
+      message.error("Identity is incomplete - please authenticate again");
+      return;
+    }
+
+    setIsRestoring(true);
+    console.log("📂 Calling graph_restore_vault...");
+    try {
+      const found = await graph_restore_vault(selectedVault, identity.public_key, identity.private_key);
+      console.log("  - found:", found);
+      if (found) {
+        console.log("✅ graph_restore_vault succeeded - backup found and restored");
+        message.success(`Graph loaded from OPFS for vault: ${selectedVault}`);
+        // Trigger memory list refresh
+        setMemoryRefreshTrigger(prev => prev + 1);
+      } else {
+        console.log("ℹ️ No backup found (first time)");
+        message.info("No saved graph found (this is the first time)");
+      }
+    } catch (error) {
+      console.error("❌ Failed to load graph:", error);
+      message.error(`Failed to load graph: ${error}`);
+    } finally {
+      setIsRestoring(false);
+      console.log("🏁 handleLoadGraph finished");
+    }
+  };
+
+  const handlePassphraseAuth = async (values: { passphrase: string }) => {
     if (!selectedVault) {
       message.warning("Please select a vault first");
       return;
     }
 
-    if (!identity || !identity.public_key || !identity.private_key) {
-      message.error("Please authenticate first (Passphrase or MFA)");
+    try {
+      const identityHandle = await vault_identity_from_passphrase(values.passphrase, selectedVault);
+      dispatch(actions.addIdentity(identityHandle.to_json()));
+      message.success("Authenticated successfully!");
+      setIsAuthModalOpen(false);
+      passphraseForm.resetFields();
+    } catch (error) {
+      console.error("Passphrase auth failed:", error);
+      message.error(`Authentication failed: ${error}`);
+    }
+  };
+
+  const handleMFARegister = async (values: { username: string }) => {
+    if (!selectedVault) {
+      message.warning("Please select a vault first");
       return;
     }
 
-    setIsRestoring(true);
     try {
-      const found = await graph_restore_vault(selectedVault, identity.public_key, identity.private_key);
-      if (found) {
-        message.success(`Graph loaded from OPFS for vault: ${selectedVault}`);
-      } else {
-        message.info("No saved graph found (this is the first time)");
-      }
+      const identityHandle = await create_credential(selectedVault, values.username);
+      dispatch(actions.addIdentity(identityHandle.to_json()));
+      message.success("MFA registered successfully!");
+      setIsAuthModalOpen(false);
+      mfaForm.resetFields();
     } catch (error) {
-      console.error("Failed to load graph:", error);
-      message.error(`Failed to load graph: ${error}`);
-    } finally {
-      setIsRestoring(false);
+      console.error("MFA register failed:", error);
+      message.error(`MFA registration failed: ${error}`);
     }
+  };
+
+  const handleMFAAuth = async (values: { username: string }) => {
+    if (!selectedVault) {
+      message.warning("Please select a vault first");
+      return;
+    }
+
+    try {
+      const identityHandle = await get_credential(selectedVault, values.username);
+      dispatch(actions.addIdentity(identityHandle.to_json()));
+      message.success("Authenticated successfully!");
+      setIsAuthModalOpen(false);
+      mfaForm.resetFields();
+    } catch (error) {
+      console.error("MFA auth failed:", error);
+      message.error(`MFA authentication failed: ${error}`);
+    }
+  };
+
+  const openAuthModal = (mode: 'passphrase' | 'mfa-register' | 'mfa-auth') => {
+    setAuthMode(mode);
+    setIsAuthModalOpen(true);
   };
 
   const isReady = ragOrchestratorRef.current?.isReady() ?? false;
@@ -242,6 +354,7 @@ export const RAGWorkspace: React.FC = () => {
             <MemoryManager
               vaultName={selectedVault}
               embeddingService={embeddingServiceRef.current}
+              refreshTrigger={memoryRefreshTrigger}
               onMemoryAdded={() => {
                 console.log("Memory added!");
               }}
@@ -314,7 +427,7 @@ export const RAGWorkspace: React.FC = () => {
 
             {isReady && (
               <>
-                <Space style={{ marginBottom: 16 }}>
+                <Space style={{ marginBottom: 16 }} wrap>
                   <Text>Vault:</Text>
                   <Input
                     value={selectedVault}
@@ -330,6 +443,39 @@ export const RAGWorkspace: React.FC = () => {
                       (Embeddings unavailable)
                     </Text>
                   )}
+
+                  {/* Authentication Status & Controls */}
+                  <Divider type="vertical" />
+                  {identity ? (
+                    <Tag icon={<UnlockOutlined />} color="success">
+                      Authenticated
+                    </Tag>
+                  ) : (
+                    <Space.Compact>
+                      <Button
+                        icon={<LockOutlined />}
+                        onClick={() => openAuthModal('passphrase')}
+                        size="small"
+                      >
+                        Passphrase
+                      </Button>
+                      <Button
+                        icon={<LockOutlined />}
+                        onClick={() => openAuthModal('mfa-register')}
+                        size="small"
+                      >
+                        MFA Register
+                      </Button>
+                      <Button
+                        icon={<LockOutlined />}
+                        onClick={() => openAuthModal('mfa-auth')}
+                        size="small"
+                      >
+                        MFA Login
+                      </Button>
+                    </Space.Compact>
+                  )}
+
                   <Button
                     icon={<SaveOutlined />}
                     onClick={handleSaveGraph}
@@ -423,6 +569,124 @@ export const RAGWorkspace: React.FC = () => {
           </Card>
         </Col>
       </Row>
+
+      {/* Authentication Modal */}
+      <Modal
+        title={
+          authMode === 'passphrase'
+            ? 'Authenticate with Passphrase'
+            : authMode === 'mfa-register'
+            ? 'Register MFA Credential'
+            : 'Authenticate with MFA'
+        }
+        open={isAuthModalOpen}
+        onCancel={() => {
+          setIsAuthModalOpen(false);
+          passphraseForm.resetFields();
+          mfaForm.resetFields();
+        }}
+        footer={null}
+        width={500}
+      >
+        {authMode === 'passphrase' && (
+          <Form form={passphraseForm} onFinish={handlePassphraseAuth} layout="vertical">
+            <Form.Item
+              label="Passphrase"
+              name="passphrase"
+              rules={[{ required: true, message: 'Please enter your passphrase' }]}
+            >
+              <Input.Password
+                placeholder="Enter your passphrase"
+                autoComplete="current-password"
+              />
+            </Form.Item>
+            <Form.Item>
+              <Space>
+                <Button type="primary" htmlType="submit">
+                  Authenticate
+                </Button>
+                <Button onClick={() => setIsAuthModalOpen(false)}>Cancel</Button>
+              </Space>
+            </Form.Item>
+            <Divider />
+            <Space direction="vertical" style={{ width: '100%' }}>
+              <Text type="secondary">Or use a different method:</Text>
+              <Space>
+                <Button size="small" onClick={() => setAuthMode('mfa-register')}>
+                  Register MFA
+                </Button>
+                <Button size="small" onClick={() => setAuthMode('mfa-auth')}>
+                  Login with MFA
+                </Button>
+              </Space>
+            </Space>
+          </Form>
+        )}
+
+        {authMode === 'mfa-register' && (
+          <Form form={mfaForm} onFinish={handleMFARegister} layout="vertical">
+            <Form.Item
+              label="Username"
+              name="username"
+              rules={[{ required: true, message: 'Please enter a username' }]}
+            >
+              <Input placeholder="Enter username for credential" />
+            </Form.Item>
+            <Form.Item>
+              <Space>
+                <Button type="primary" htmlType="submit">
+                  Register Credential
+                </Button>
+                <Button onClick={() => setIsAuthModalOpen(false)}>Cancel</Button>
+              </Space>
+            </Form.Item>
+            <Divider />
+            <Space direction="vertical" style={{ width: '100%' }}>
+              <Text type="secondary">Or use a different method:</Text>
+              <Space>
+                <Button size="small" onClick={() => setAuthMode('passphrase')}>
+                  Use Passphrase
+                </Button>
+                <Button size="small" onClick={() => setAuthMode('mfa-auth')}>
+                  Login with MFA
+                </Button>
+              </Space>
+            </Space>
+          </Form>
+        )}
+
+        {authMode === 'mfa-auth' && (
+          <Form form={mfaForm} onFinish={handleMFAAuth} layout="vertical">
+            <Form.Item
+              label="Username"
+              name="username"
+              rules={[{ required: true, message: 'Please enter your username' }]}
+            >
+              <Input placeholder="Enter your username" />
+            </Form.Item>
+            <Form.Item>
+              <Space>
+                <Button type="primary" htmlType="submit">
+                  Authenticate
+                </Button>
+                <Button onClick={() => setIsAuthModalOpen(false)}>Cancel</Button>
+              </Space>
+            </Form.Item>
+            <Divider />
+            <Space direction="vertical" style={{ width: '100%' }}>
+              <Text type="secondary">Or use a different method:</Text>
+              <Space>
+                <Button size="small" onClick={() => setAuthMode('passphrase')}>
+                  Use Passphrase
+                </Button>
+                <Button size="small" onClick={() => setAuthMode('mfa-register')}>
+                  Register MFA
+                </Button>
+              </Space>
+            </Space>
+          </Form>
+        )}
+      </Modal>
     </div>
   );
 };

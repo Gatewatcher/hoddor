@@ -98,6 +98,37 @@ pub async fn graph_get_node(_vault_name: &str, _node_id: &str) -> Result<JsValue
     ))
 }
 
+/// List all memory nodes for a vault
+/// Returns encrypted content - caller must decrypt
+#[wasm_bindgen]
+pub async fn graph_list_memory_nodes(
+    vault_name: &str,
+    limit: Option<usize>,
+) -> Result<JsValue, JsValue> {
+    let vault_id = vault_name;
+
+    // Use global singleton graph
+    let nodes = GRAPH
+        .list_nodes_by_type(vault_id, "memory", limit)
+        .await
+        .map_err(converters::to_js_error)?;
+
+    // Convert to JS-friendly format (content remains encrypted)
+    let js_results: Vec<GraphNodeResult> = nodes
+        .into_iter()
+        .map(|node| GraphNodeResult {
+            id: node.id.as_str().to_string(),
+            node_type: node.node_type,
+            encrypted_content: node.encrypted_content,
+            content_hmac: node.content_hmac,
+            labels: node.labels,
+            similarity: None,
+        })
+        .collect();
+
+    serde_wasm_bindgen::to_value(&js_results).map_err(converters::to_js_error)
+}
+
 /// Save the graph for a vault to OPFS with Age encryption
 ///
 /// # Arguments
