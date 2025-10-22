@@ -16,7 +16,7 @@ interface Memory {
 
 interface MemoryManagerProps {
   vaultName?: string;
-  embeddingService: EmbeddingService;
+  embeddingService: EmbeddingService | null;
   onMemoryAdded?: () => void;
 }
 
@@ -41,7 +41,7 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({
       return;
     }
 
-    if (!embeddingService.isReady()) {
+    if (!embeddingService || !embeddingService.isReady()) {
       message.error("Embedding service not ready");
       return;
     }
@@ -139,13 +139,15 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({
               icon={<PlusOutlined />}
               onClick={handleAddMemory}
               loading={isAdding}
-              disabled={!embeddingService.isReady()}
+              disabled={!embeddingService || !embeddingService.isReady()}
             >
               Add Memory to Graph
             </Button>
-            {!embeddingService.isReady() && (
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                Embedding service not ready. Initialize in LLM Chat first.
+            {(!embeddingService || !embeddingService.isReady()) && (
+              <Text type="warning" style={{ fontSize: 12 }}>
+                ⚠️ Embeddings unavailable (CDN issue). RAG features disabled.
+                <br />
+                You can still use the LLM for direct chat without memory context.
               </Text>
             )}
           </Space>

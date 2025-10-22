@@ -14,9 +14,24 @@ export class EmbeddingService {
   constructor(modelId: string = "Xenova/all-MiniLM-L6-v2") {
     this.modelId = modelId;
 
-    // Configure Transformers.js to use HuggingFace CDN
-    env.allowLocalModels = false;
-    env.useBrowserCache = true;
+    // Configure Transformers.js to use remote CDN
+    try {
+      // Set remote-only configuration
+      // @ts-ignore - Use CDN exclusively
+      env.allowLocalModels = false;
+      // @ts-ignore - Don't use browser cache for now (to avoid HTML caching issues)
+      env.useBrowserCache = false;
+      // @ts-ignore - Configure WASM backend
+      env.backends.onnx.wasm.numThreads = 1;
+
+      console.log("📍 Transformers.js configuration:");
+      console.log("  - allowLocalModels:", (env as any).allowLocalModels);
+      console.log("  - useBrowserCache:", (env as any).useBrowserCache);
+      console.log("  - localModelPath:", (env as any).localModelPath);
+      console.log("  - cacheDir:", (env as any).cacheDir);
+    } catch (e) {
+      console.warn("Could not configure Transformers.js env:", e);
+    }
   }
 
   /**
@@ -31,14 +46,57 @@ export class EmbeddingService {
     try {
       console.log(`Initializing embedding model: ${this.modelId}`);
 
+      // Test direct fetch to verify CDN accessibility
+      console.log("🧪 Testing direct HuggingFace CDN access...");
+      try {
+        const testUrl = `https://huggingface.co/${this.modelId}/resolve/main/tokenizer.json`;
+        const testResponse = await fetch(testUrl, { cache: 'no-store' });
+        const testText = await testResponse.text();
+        const isJson = testText.startsWith("{") || testText.startsWith("[");
+        console.log(`  ✅ Direct fetch ${isJson ? 'succeeded' : 'returned HTML'}: ${testText.substring(0, 50)}...`);
+
+        if (!isJson) {
+          console.warn("⚠️ WARNING: HuggingFace is returning HTML instead of JSON!");
+          console.warn("  This might be a network issue, VPN block, or rate limiting.");
+        }
+      } catch (testError) {
+        console.warn("⚠️ Direct CDN test failed:", testError);
+      }
+
+      // Install fetch interceptor to see all requests
+      const originalFetch = window.fetch.bind(window);
+      let fetchCount = 0;
+      window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = input?.toString() || '';
+        if (url.includes('huggingface') || url.includes('Xenova') || url.includes('model')) {
+          fetchCount++;
+          console.log(`🌐 Fetch #${fetchCount}: ${url}`);
+          const response = await originalFetch(input, init);
+          const clonedResponse = response.clone();
+
+          // Log first few bytes to see if it's HTML or JSON
+          clonedResponse.text().then(text => {
+            const preview = text.substring(0, 50);
+            const isHtml = text.startsWith('<!') || text.startsWith('<html');
+            console.log(`  ${isHtml ? '❌ HTML' : '✅ DATA'}: ${preview}...`);
+          }).catch(() => {});
+
+          return response;
+        }
+        return originalFetch(input, init);
+      };
+
       this.model = await pipeline("feature-extraction", this.modelId, {
         progress_callback: (progress: any) => {
-          console.log(`Model loading: ${progress.status} - ${progress.name || ''}`);
+          console.log(`Model loading: ${progress.status} - ${progress.name || ''} - ${progress.file || ''}`);
         }
       });
 
+      // Restore original fetch
+      window.fetch = originalFetch;
+
       this.isInitialized = true;
-      console.log("Embedding service initialized successfully");
+      console.log(`✅ Embedding service initialized successfully (${fetchCount} fetches)`);
     } catch (error) {
       console.error("Failed to initialize embedding service:", error);
       throw new Error(`Embedding initialization failed: ${error}`);

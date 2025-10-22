@@ -130,14 +130,34 @@ Always cite which parts of the context you used to answer.`;
       minSimilarity
     );
 
+    console.log(`🔍 RAG found ${results.length} relevant memories for: "${query}"`);
+
     // Convert results to RAGContext
-    // Note: Results contain encrypted content, we'll just use labels for now
-    // In future: decrypt content for full RAG
-    return results.map((result: any) => ({
-      content: `[Node ${result.node_type}]: ${result.labels.join(", ")}`,
-      relevance: result.similarity,
-      nodeId: result.id,
-    }));
+    // Decrypt content for RAG (currently just base64 encoded, not encrypted)
+    const decoder = new TextDecoder();
+    return results.map((result: any, idx: number) => {
+      let content = "";
+
+      try {
+        // Decrypt/decode the content
+        if (result.encrypted_content && result.encrypted_content.length > 0) {
+          content = decoder.decode(new Uint8Array(result.encrypted_content));
+        } else {
+          content = `[${result.labels.join(", ")}]`;
+        }
+      } catch (error) {
+        console.warn(`Failed to decode memory ${result.id}:`, error);
+        content = `[${result.labels.join(", ")}]`;
+      }
+
+      console.log(`  [${idx + 1}] (${result.similarity.toFixed(2)}): ${content.substring(0, 60)}...`);
+
+      return {
+        content,
+        relevance: result.similarity,
+        nodeId: result.id,
+      };
+    });
   }
 
   /**

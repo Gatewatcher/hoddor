@@ -13,7 +13,7 @@ import {
   Checkbox,
   Divider,
 } from "antd";
-import { SendOutlined, ClearOutlined, RobotOutlined } from "@ant-design/icons";
+import { SendOutlined, ClearOutlined, RobotOutlined, BulbOutlined } from "@ant-design/icons";
 import { WebLLMService, RAGOrchestrator, EmbeddingService } from "../services";
 import { MemoryManager } from "./MemoryManager";
 
@@ -36,6 +36,7 @@ export const RAGWorkspace: React.FC = () => {
   const [selectedModel, setSelectedModel] = useState("Phi-3.5-mini-instruct-q4f16_1-MLC");
   const [selectedVault, setSelectedVault] = useState<string>("");
   const [useRAG, setUseRAG] = useState(true);
+  const [servicesReady, setServicesReady] = useState(false);
 
   const llmServiceRef = useRef<WebLLMService | null>(null);
   const embeddingServiceRef = useRef<EmbeddingService | null>(null);
@@ -79,12 +80,17 @@ export const RAGWorkspace: React.FC = () => {
       const ragOrchestrator = new RAGOrchestrator(llmService, embeddingService);
       ragOrchestratorRef.current = ragOrchestrator;
 
+      // Force re-render to update MemoryManager
+      setServicesReady(true);
+
+      const embeddingsReady = embeddingServiceRef.current?.isReady();
+
       setMessages([
         {
           role: "assistant",
-          content: embeddingServiceRef.current?.isReady()
-            ? "Hello! I'm ready to help. You can add memories and I'll use them to answer questions!"
-            : "Hello! I'm ready to help (embeddings unavailable - RAG disabled)",
+          content: embeddingsReady
+            ? "✅ Hello! I'm ready to help. You can add memories and I'll use them to answer questions!"
+            : "⚠️ Hello! I'm ready to help. Embeddings unavailable (CDN issue) - you can chat without RAG for now.",
           timestamp: new Date(),
         },
       ]);
@@ -174,13 +180,35 @@ export const RAGWorkspace: React.FC = () => {
       <Row gutter={16} style={{ height: "100%" }}>
         {/* Left Column: Memory Manager */}
         <Col span={10} style={{ height: "100%" }}>
-          <MemoryManager
-            vaultName={selectedVault}
-            embeddingService={embeddingServiceRef.current!}
-            onMemoryAdded={() => {
-              console.log("Memory added!");
-            }}
-          />
+          {servicesReady && embeddingServiceRef.current ? (
+            <MemoryManager
+              vaultName={selectedVault}
+              embeddingService={embeddingServiceRef.current}
+              onMemoryAdded={() => {
+                console.log("Memory added!");
+              }}
+            />
+          ) : (
+            <Card
+              title={
+                <Space>
+                  <BulbOutlined />
+                  <Title level={4} style={{ margin: 0 }}>
+                    Memory Manager
+                  </Title>
+                </Space>
+              }
+            >
+              <Space direction="vertical">
+                <Text type="secondary">
+                  Please initialize the services in the chat panel first →
+                </Text>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  Note: If embeddings fail to load (CDN issue), you can still use direct chat.
+                </Text>
+              </Space>
+            </Card>
+          )}
         </Col>
 
         {/* Right Column: Chat */}
