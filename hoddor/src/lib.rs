@@ -20,7 +20,10 @@ pub mod sync;
 pub mod webrtc;
 
 #[cfg(target_arch = "wasm32")]
-pub use facades::wasm::{crypto, graph, webauthn};
+pub use facades::wasm::{crypto, webauthn};
+
+#[cfg(all(target_arch = "wasm32", feature = "graph"))]
+pub use facades::wasm::graph;
 
 pub use domain::vault::{IdentitySalts, NamespaceData, Vault, VaultMetadata};
 pub use platform::Platform;
