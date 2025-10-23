@@ -1,9 +1,10 @@
 import { BulbOutlined } from '@ant-design/icons';
 import { Card, Space, Typography } from 'antd';
 import React, { useEffect, useState } from 'react';
+import { useSelector } from 'react-redux';
 
 import { graph_list_memory_nodes } from '../../../hoddor/pkg/hoddor';
-import { EmbeddingService } from '../services';
+import { appSelectors } from '../store/app.selectors';
 import { MemoryForm } from './memory/MemoryForm';
 import { MemoryList } from './memory/MemoryList';
 
@@ -16,19 +17,9 @@ interface Memory {
   timestamp: Date;
 }
 
-interface MemoryManagerProps {
-  vaultName?: string;
-  embeddingService: EmbeddingService | null;
-  onMemoryAdded?: () => void;
-  refreshTrigger?: number; // Change this to trigger reload from graph
-}
-
-export const MemoryManager: React.FC<MemoryManagerProps> = ({
-  vaultName,
-  embeddingService,
-  onMemoryAdded,
-  refreshTrigger,
-}) => {
+export const MemoryManager: React.FC = () => {
+  const vaultName = useSelector(appSelectors.getSelectedVault);
+  const refreshTrigger = useSelector(appSelectors.getMemoryRefreshTrigger);
   const [memories, setMemories] = useState<Memory[]>([]);
   const [, setIsLoading] = useState(false);
 
@@ -78,7 +69,6 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({
 
   const handleMemoryAdded = (memory: Memory) => {
     setMemories([memory, ...memories]);
-    onMemoryAdded?.();
   };
 
   return (
@@ -100,11 +90,7 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({
 
       {vaultName && (
         <>
-          <MemoryForm
-            vaultName={vaultName}
-            embeddingService={embeddingService}
-            onMemoryAdded={handleMemoryAdded}
-          />
+          <MemoryForm onMemoryAdded={handleMemoryAdded} />
           <MemoryList memories={memories} />
         </>
       )}

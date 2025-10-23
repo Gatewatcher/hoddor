@@ -4,6 +4,7 @@ import { Provider } from 'react-redux';
 
 import { RAGWorkspace } from './components/RAGWorkspace';
 import { Vaults } from './components/Vaults';
+import { ServicesProvider } from './contexts/ServicesContext';
 import { reduxStore } from './store/app.store';
 
 export const App = () => {
@@ -18,23 +19,25 @@ export const App = () => {
 
   return (
     <Provider store={reduxStore}>
-      <Tabs
-        activeKey={activeTab}
-        onChange={setActiveTab}
-        centered
-        items={[
-          {
-            key: 'vaults',
-            label: 'Vaults',
-            children: <Vaults />,
-          },
-          {
-            key: 'rag',
-            label: 'RAG + Graph',
-            children: <RAGWorkspace />,
-          },
-        ]}
-      />
+      <ServicesProvider>
+        <Tabs
+          activeKey={activeTab}
+          onChange={setActiveTab}
+          centered
+          items={[
+            {
+              key: 'vaults',
+              label: 'Vaults',
+              children: <Vaults />,
+            },
+            {
+              key: 'rag',
+              label: 'RAG + Graph',
+              children: <RAGWorkspace />,
+            },
+          ]}
+        />
+      </ServicesProvider>
     </Provider>
   );
 };

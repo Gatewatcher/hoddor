@@ -1,8 +1,12 @@
 import { RobotOutlined } from '@ant-design/icons';
 import { Button, Card, Progress, Select, Space, Typography } from 'antd';
-import React, { useRef, useState } from 'react';
+import React, { useState } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
 
-import { EmbeddingService, RAGOrchestrator, WebLLMService } from '../services';
+import { useServices } from '../contexts/ServicesContext';
+import { WebLLMService } from '../services';
+import { actions } from '../store/app.actions';
+import { appSelectors } from '../store/app.selectors';
 import { ChatInput } from './chat/ChatInput';
 import { ChatMessages } from './chat/ChatMessages';
 
@@ -21,37 +25,22 @@ export const LLMChat: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
   const [initProgress, setInitProgress] = useState(0);
-  const [selectedModel, setSelectedModel] = useState(
-    'Phi-3.5-mini-instruct-q4f16_1-MLC',
-  );
 
-  const llmServiceRef = useRef<WebLLMService | null>(null);
-  const embeddingServiceRef = useRef<EmbeddingService | null>(null);
-  const ragOrchestratorRef = useRef<RAGOrchestrator | null>(null);
+  const selectedModel = useSelector(appSelectors.getSelectedModel);
+  const dispatch = useDispatch();
+
+  const { ragOrchestrator, initializeServices } = useServices();
 
   const handleInitialize = async () => {
     setIsInitializing(true);
     setInitProgress(0);
 
     try {
-      const llmService = new WebLLMService(selectedModel);
-      await llmService.initialize(report => {
-        setInitProgress(report.progress * 100);
+      await initializeServices(selectedModel, progress => {
+        setInitProgress(progress);
       });
-      llmServiceRef.current = llmService;
 
-      let embeddingService: EmbeddingService | null = null;
-      try {
-        embeddingService = new EmbeddingService();
-        await embeddingService.initialize();
-        embeddingServiceRef.current = embeddingService;
-      } catch (embError) {
-        console.error('Embedding initialization failed:', embError);
-        embeddingService = new EmbeddingService();
-      }
-
-      const ragOrchestrator = new RAGOrchestrator(llmService, embeddingService);
-      ragOrchestratorRef.current = ragOrchestrator;
+      dispatch(actions.setServicesReady(true));
 
       setMessages([
         {
@@ -76,7 +65,7 @@ export const LLMChat: React.FC = () => {
   };
 
   const handleSend = async () => {
-    if (!input.trim() || !ragOrchestratorRef.current) return;
+    if (!input.trim() || !ragOrchestrator) return;
 
     const userMessage: Message = {
       role: 'user',
@@ -98,7 +87,7 @@ export const LLMChat: React.FC = () => {
       setMessages(prev => [...prev, assistantMessage]);
 
       let fullResponse = '';
-      for await (const chunk of ragOrchestratorRef.current.queryStream(input)) {
+      for await (const chunk of ragOrchestrator.queryStream(input)) {
         fullResponse += chunk;
         setMessages(prev => {
           const updated = [...prev];
@@ -128,7 +117,7 @@ export const LLMChat: React.FC = () => {
     setMessages([]);
   };
 
-  const isReady = ragOrchestratorRef.current?.isReady() ?? false;
+  const isReady = ragOrchestrator?.isReady() ?? false;
 
   return (
     <Card
@@ -148,7 +137,7 @@ export const LLMChat: React.FC = () => {
             <Text>Select Model:</Text>
             <Select
               value={selectedModel}
-              onChange={setSelectedModel}
+              onChange={model => dispatch(actions.setSelectedModel(model))}
               style={{ width: 300 }}
               disabled={isInitializing}
             >

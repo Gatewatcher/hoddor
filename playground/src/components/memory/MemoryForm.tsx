@@ -1,16 +1,16 @@
 import { PlusOutlined } from '@ant-design/icons';
 import { Button, Input, Space, Typography, message } from 'antd';
 import { useState } from 'react';
+import { useSelector } from 'react-redux';
 
 import { graph_create_memory_node } from '../../../../hoddor/pkg/hoddor';
-import { EmbeddingService } from '../../services';
+import { useServices } from '../../contexts/ServicesContext';
+import { appSelectors } from '../../store/app.selectors';
 
 const { TextArea } = Input;
 const { Text } = Typography;
 
 interface MemoryFormProps {
-  vaultName: string;
-  embeddingService: EmbeddingService | null;
   onMemoryAdded: (memory: {
     id: string;
     content: string;
@@ -19,11 +19,9 @@ interface MemoryFormProps {
   }) => void;
 }
 
-export const MemoryForm = ({
-  vaultName,
-  embeddingService,
-  onMemoryAdded,
-}: MemoryFormProps) => {
+export const MemoryForm = ({ onMemoryAdded }: MemoryFormProps) => {
+  const vaultName = useSelector(appSelectors.getSelectedVault);
+  const { embeddingService } = useServices();
   const [newMemory, setNewMemory] = useState('');
   const [labels, setLabels] = useState('');
   const [isAdding, setIsAdding] = useState(false);
