@@ -1,22 +1,13 @@
-/**
- * Encodes text content to Uint8Array
- */
 export const encodeContent = (content: string): Uint8Array => {
   const encoder = new TextEncoder();
   return encoder.encode(content);
 };
 
-/**
- * Decodes Uint8Array content to string
- */
 export const decodeContent = (contentBytes: Uint8Array): string => {
   const decoder = new TextDecoder();
   return decoder.decode(contentBytes);
 };
 
-/**
- * Generates HMAC-SHA256 hash for content
- */
 export const generateHMAC = async (content: Uint8Array): Promise<string> => {
   const hmac = await crypto.subtle.digest('SHA-256', content);
   return Array.from(new Uint8Array(hmac))
@@ -24,9 +15,6 @@ export const generateHMAC = async (content: Uint8Array): Promise<string> => {
     .join('');
 };
 
-/**
- * Parses comma-separated labels string into array
- */
 export const parseLabels = (labelsString: string): string[] => {
   return labelsString
     .split(',')
@@ -34,9 +22,6 @@ export const parseLabels = (labelsString: string): string[] => {
     .filter(l => l.length > 0);
 };
 
-/**
- * Creates a memory object with timestamp
- */
 export const createMemory = (
   id: string,
   content: string,

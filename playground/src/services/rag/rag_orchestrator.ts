@@ -1,6 +1,6 @@
-import { WebLLMService, ChatMessage } from "../llm/webllm_service";
-import { EmbeddingService } from "../embeddings/embedding_service";
-import { graph_vector_search } from "../../../../hoddor/pkg/hoddor";
+import { graph_vector_search } from '../../../../hoddor/pkg/hoddor';
+import { EmbeddingService } from '../embeddings/embedding_service';
+import { ChatMessage, WebLLMService } from '../llm/webllm_service';
 
 export interface RAGContext {
   content: string;
@@ -13,7 +13,7 @@ export interface RAGQueryOptions {
   minRelevance?: number;
   temperature?: number;
   useStreaming?: boolean;
-  vaultName?: string; // For Phase 2 graph integration
+  vaultName?: string;
 }
 
 export class RAGOrchestrator {
@@ -24,7 +24,7 @@ export class RAGOrchestrator {
   constructor(
     llmService: WebLLMService,
     embeddingService: EmbeddingService,
-    systemPrompt?: string
+    systemPrompt?: string,
   ) {
     this.llmService = llmService;
     this.embeddingService = embeddingService;
@@ -35,33 +35,28 @@ When answering questions, use the provided context from the knowledge base.
 Always cite which parts of the context you used to answer.`;
   }
 
-  /**
-   * Query with RAG pattern (Phase 2: with graph integration)
-   */
   async query(
     question: string,
-    options: RAGQueryOptions = {}
+    options: RAGQueryOptions = {},
   ): Promise<string> {
-    // Phase 2: Try to find relevant context from graph
     let contexts: RAGContext[] = [];
 
     if (options.vaultName && this.embeddingService.isReady()) {
       try {
         contexts = await this.findRelevantContext(question, options);
       } catch (error) {
-        console.warn("Failed to fetch graph context:", error);
-        // Continue without context
+        console.warn('Failed to fetch graph context:', error);
       }
     }
 
-    // Build prompt with context if available
-    const userPrompt = contexts.length > 0
-      ? this.buildPromptWithContext(question, contexts)
-      : question;
+    const userPrompt =
+      contexts.length > 0
+        ? this.buildPromptWithContext(question, contexts)
+        : question;
 
     const messages: ChatMessage[] = [
-      { role: "system", content: this.systemPrompt },
-      { role: "user", content: userPrompt },
+      { role: 'system', content: this.systemPrompt },
+      { role: 'user', content: userPrompt },
     ];
 
     return await this.llmService.chat(messages, {
@@ -70,33 +65,28 @@ Always cite which parts of the context you used to answer.`;
     });
   }
 
-  /**
-   * Stream query response (Phase 2: with graph integration)
-   */
   async *queryStream(
     question: string,
-    options: RAGQueryOptions = {}
+    options: RAGQueryOptions = {},
   ): AsyncGenerator<string, void, unknown> {
-    // Phase 2: Try to find relevant context from graph
     let contexts: RAGContext[] = [];
 
     if (options.vaultName && this.embeddingService.isReady()) {
       try {
         contexts = await this.findRelevantContext(question, options);
       } catch (error) {
-        console.warn("Failed to fetch graph context:", error);
-        // Continue without context
+        console.warn('Failed to fetch graph context:', error);
       }
     }
 
-    // Build prompt with context if available
-    const userPrompt = contexts.length > 0
-      ? this.buildPromptWithContext(question, contexts)
-      : question;
+    const userPrompt =
+      contexts.length > 0
+        ? this.buildPromptWithContext(question, contexts)
+        : question;
 
     const messages: ChatMessage[] = [
-      { role: "system", content: this.systemPrompt },
-      { role: "user", content: userPrompt },
+      { role: 'system', content: this.systemPrompt },
+      { role: 'user', content: userPrompt },
     ];
 
     yield* this.llmService.chatStream(messages, {
@@ -105,21 +95,16 @@ Always cite which parts of the context you used to answer.`;
     });
   }
 
-  /**
-   * Find relevant context from graph using vector search
-   */
   private async findRelevantContext(
     query: string,
-    options: RAGQueryOptions
+    options: RAGQueryOptions,
   ): Promise<RAGContext[]> {
     if (!this.embeddingService.isReady() || !options.vaultName) {
       return [];
     }
 
-    // Generate embedding for query
     const { embedding } = await this.embeddingService.embed(query);
 
-    // Search graph for similar nodes
     const limit = options.maxContextItems ?? 5;
     const minSimilarity = options.minRelevance ?? 0.5;
 
@@ -127,30 +112,35 @@ Always cite which parts of the context you used to answer.`;
       options.vaultName,
       new Float32Array(embedding),
       limit,
-      minSimilarity
+      minSimilarity,
     );
 
-    console.log(`🔍 RAG found ${results.length} relevant memories for: "${query}"`);
+    console.log(
+      `🔍 RAG found ${results.length} relevant memories for: "${query}"`,
+    );
 
-    // Convert results to RAGContext
-    // Decrypt content for RAG (currently just base64 encoded, not encrypted)
     const decoder = new TextDecoder();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return results.map((result: any, idx: number) => {
-      let content = "";
+      let content = '';
 
       try {
-        // Decrypt/decode the content
         if (result.encrypted_content && result.encrypted_content.length > 0) {
           content = decoder.decode(new Uint8Array(result.encrypted_content));
         } else {
-          content = `[${result.labels.join(", ")}]`;
+          content = `[${result.labels.join(', ')}]`;
         }
       } catch (error) {
         console.warn(`Failed to decode memory ${result.id}:`, error);
-        content = `[${result.labels.join(", ")}]`;
+        content = `[${result.labels.join(', ')}]`;
       }
 
-      console.log(`  [${idx + 1}] (${result.similarity.toFixed(2)}): ${content.substring(0, 60)}...`);
+      console.log(
+        `  [${idx + 1}] (${result.similarity.toFixed(2)}): ${content.substring(
+          0,
+          60,
+        )}...`,
+      );
 
       return {
         content,
@@ -160,20 +150,22 @@ Always cite which parts of the context you used to answer.`;
     });
   }
 
-  /**
-   * Build prompt with context citations
-   */
   private buildPromptWithContext(
     question: string,
-    contexts: RAGContext[]
+    contexts: RAGContext[],
   ): string {
     if (contexts.length === 0) {
       return question;
     }
 
     const contextText = contexts
-      .map((ctx, idx) => `[${idx + 1}] (relevance: ${ctx.relevance.toFixed(2)}) ${ctx.content}`)
-      .join("\n");
+      .map(
+        (ctx, idx) =>
+          `[${idx + 1}] (relevance: ${ctx.relevance.toFixed(2)}) ${
+            ctx.content
+          }`,
+      )
+      .join('\n');
 
     return `Context from knowledge base:
 ${contextText}
@@ -183,18 +175,10 @@ Question: ${question}
 Please answer the question using the context above. Cite the context numbers [1], [2], etc. when relevant.`;
   }
 
-  /**
-   * Update system prompt
-   */
   setSystemPrompt(prompt: string): void {
     this.systemPrompt = prompt;
   }
 
-  /**
-   * Check if services are ready
-   * Phase 1: Only requires LLM to be ready
-   * Phase 2: Will also check embedding service when RAG is fully integrated
-   */
   isReady(): boolean {
     return this.llmService.isReady();
   }
