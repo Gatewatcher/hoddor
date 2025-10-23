@@ -1,4 +1,4 @@
-import { message } from 'antd';
+import type { MessageInstance } from 'antd/es/message/interface';
 import { useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 
@@ -9,10 +9,9 @@ import {
 import { actions } from '../store/app.actions';
 import { appSelectors } from '../store/app.selectors';
 
-export const useGraphPersistence = () => {
+export const useGraphPersistence = (messageApi: MessageInstance) => {
   const [isSaving, setIsSaving] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
-  const [messageApi, contextHolder] = message.useMessage();
 
   const selectedVault = useSelector(appSelectors.getSelectedVault);
   const identity = useSelector(appSelectors.getIdentity);
@@ -38,8 +37,8 @@ export const useGraphPersistence = () => {
     try {
       await graph_backup_vault(
         selectedVault,
-        identity.public_key(),
-        identity.private_key(),
+        identity.public_key,
+        identity.private_key,
       );
       messageApi.success(`Graph saved to OPFS for vault: ${selectedVault}`);
     } catch (error) {
@@ -70,11 +69,13 @@ export const useGraphPersistence = () => {
     try {
       const found = await graph_restore_vault(
         selectedVault,
-        identity.public_key(),
-        identity.private_key(),
+        identity.public_key,
+        identity.private_key,
       );
       if (found) {
-        messageApi.success(`Graph loaded from OPFS for vault: ${selectedVault}`);
+        messageApi.success(
+          `Graph loaded from OPFS for vault: ${selectedVault}`,
+        );
         dispatch(actions.triggerMemoryRefresh());
       } else {
         messageApi.info('No saved graph found (this is the first time)');
@@ -90,7 +91,6 @@ export const useGraphPersistence = () => {
   return {
     isSaving,
     isRestoring,
-    contextHolder,
     saveGraph,
     loadGraph,
   };

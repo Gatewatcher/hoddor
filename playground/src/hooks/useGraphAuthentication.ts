@@ -1,4 +1,4 @@
-import { message } from 'antd';
+import type { MessageInstance } from 'antd/es/message/interface';
 import { useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 
@@ -12,10 +12,9 @@ import { appSelectors } from '../store/app.selectors';
 
 type AuthMode = 'passphrase' | 'mfa-register' | 'mfa-auth';
 
-export const useGraphAuthentication = () => {
+export const useGraphAuthentication = (messageApi: MessageInstance) => {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode>('passphrase');
-  const [messageApi, contextHolder] = message.useMessage();
 
   const selectedVault = useSelector(appSelectors.getSelectedVault);
   const dispatch = useDispatch();
@@ -92,7 +91,6 @@ export const useGraphAuthentication = () => {
   return {
     isAuthModalOpen,
     authMode,
-    contextHolder,
     handlePassphraseAuth,
     handleMFARegister,
     handleMFAAuth,

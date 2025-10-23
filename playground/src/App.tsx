@@ -32,7 +32,7 @@ export const App = () => {
             },
             {
               key: 'rag',
-              label: 'RAG + Graph',
+              label: 'RAG + Graph (WIP)',
               children: <RAGWorkspace />,
             },
           ]}

@@ -15,7 +15,7 @@ interface ServicesContextType {
   initializeServices: (
     model: string,
     onProgress?: (progress: number) => void,
-  ) => Promise<void>;
+  ) => Promise<{ embeddingsReady: boolean }>;
 }
 
 const ServicesContext = createContext<ServicesContextType | undefined>(
@@ -45,7 +45,7 @@ export const ServicesProvider: React.FC<ServicesProviderProps> = ({
   const initializeServices = async (
     model: string,
     onProgress?: (progress: number) => void,
-  ) => {
+  ): Promise<{ embeddingsReady: boolean }> => {
     const llmService = new WebLLMService(model);
     await llmService.initialize(report => {
       if (onProgress) {
@@ -55,20 +55,25 @@ export const ServicesProvider: React.FC<ServicesProviderProps> = ({
     llmServiceRef.current = llmService;
 
     let embeddingService: EmbeddingService | null = null;
+    let embeddingsReady = false;
     try {
       embeddingService = new EmbeddingService();
       await embeddingService.initialize();
       embeddingServiceRef.current = embeddingService;
+      embeddingsReady = embeddingService.isReady();
     } catch (embError) {
       console.error('Embedding initialization failed:', embError);
       embeddingService = new EmbeddingService();
       embeddingServiceRef.current = embeddingService;
+      embeddingsReady = false;
     }
 
     const ragOrchestrator = new RAGOrchestrator(llmService, embeddingService);
     ragOrchestratorRef.current = ragOrchestrator;
 
     forceUpdate({});
+
+    return { embeddingsReady };
   };
 
   return (

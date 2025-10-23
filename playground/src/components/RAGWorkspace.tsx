@@ -8,6 +8,7 @@ import {
   Select,
   Space,
   Typography,
+  message,
 } from 'antd';
 import { useDispatch, useSelector } from 'react-redux';
 
@@ -29,6 +30,9 @@ const { Title, Text } = Typography;
 const { Option } = Select;
 
 export const RAGWorkspace = () => {
+  // Single message API instance
+  const [messageApi, contextHolder] = message.useMessage();
+
   // Custom hooks
   const {
     messages,
@@ -46,22 +50,16 @@ export const RAGWorkspace = () => {
   const {
     isAuthModalOpen,
     authMode,
-    contextHolder: authContextHolder,
     handlePassphraseAuth,
     handleMFARegister,
     handleMFAAuth,
     openAuthModal,
     closeAuthModal,
     setAuthMode,
-  } = useGraphAuthentication();
+  } = useGraphAuthentication(messageApi);
 
-  const {
-    isSaving,
-    isRestoring,
-    contextHolder: persistenceContextHolder,
-    saveGraph,
-    loadGraph,
-  } = useGraphPersistence();
+  const { isSaving, isRestoring, saveGraph, loadGraph } =
+    useGraphPersistence(messageApi);
 
   // Redux state
   const selectedVault = useSelector(appSelectors.getSelectedVault);
@@ -100,8 +98,7 @@ export const RAGWorkspace = () => {
 
   return (
     <>
-      {authContextHolder}
-      {persistenceContextHolder}
+      {contextHolder}
       <div style={{ padding: 16, height: '89vh', overflow: 'auto' }}>
         <Row gutter={16} style={{ height: '100%' }}>
           <Col span={10} style={{ height: '100%' }}>

@@ -10,7 +10,7 @@ export const useServiceInitialization = () => {
   const [initProgress, setInitProgress] = useState(0);
 
   const selectedModel = useSelector(appSelectors.getSelectedModel);
-  const { initializeServices, embeddingService } = useServices();
+  const services = useServices();
   const dispatch = useDispatch();
 
   const initialize = async (onSuccess?: (embeddingsReady: boolean) => void) => {
@@ -18,13 +18,14 @@ export const useServiceInitialization = () => {
     setInitProgress(0);
 
     try {
-      await initializeServices(selectedModel, progress => {
-        setInitProgress(progress);
-      });
+      const { embeddingsReady } = await services.initializeServices(
+        selectedModel,
+        progress => {
+          setInitProgress(progress);
+        },
+      );
 
       dispatch(actions.setServicesReady(true));
-
-      const embeddingsReady = embeddingService?.isReady() ?? false;
 
       if (onSuccess) {
         onSuccess(embeddingsReady);
