@@ -1,34 +1,17 @@
-import {
-  BulbOutlined,
-  ClearOutlined,
-  FolderOpenOutlined,
-  LockOutlined,
-  RobotOutlined,
-  SaveOutlined,
-  SendOutlined,
-  UnlockOutlined,
-} from '@ant-design/icons';
+import { BulbOutlined, RobotOutlined } from '@ant-design/icons';
 import {
   Button,
   Card,
-  Checkbox,
   Col,
-  Divider,
-  Form,
-  Input,
-  List,
-  Modal,
   Progress,
   Row,
   Select,
   Space,
-  Tag,
   Typography,
   message,
 } from 'antd';
-import React, { useEffect, useRef, useState } from 'react';
-import { useSelector } from 'react-redux';
-import { useDispatch } from 'react-redux';
+import React, { useRef, useState } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
 
 import {
   create_credential,
@@ -40,9 +23,12 @@ import {
 import { EmbeddingService, RAGOrchestrator, WebLLMService } from '../services';
 import { actions } from '../store/app.actions';
 import { appSelectors } from '../store/app.selectors';
+import { ChatInput } from './chat/ChatInput';
+import { ChatMessages } from './chat/ChatMessages';
 import { MemoryManager } from './MemoryManager';
+import { GraphAuthModal } from './rag/GraphAuthModal';
+import { RAGControls } from './rag/RAGControls';
 
-const { TextArea } = Input;
 const { Title, Text } = Typography;
 const { Option } = Select;
 
@@ -73,8 +59,6 @@ export const RAGWorkspace: React.FC = () => {
   const [authMode, setAuthMode] = useState<
     'passphrase' | 'mfa-register' | 'mfa-auth'
   >('passphrase');
-  const [passphraseForm] = Form.useForm();
-  const [mfaForm] = Form.useForm();
 
   const identity = useSelector(appSelectors.getIdentity);
   const dispatch = useDispatch();
@@ -83,15 +67,6 @@ export const RAGWorkspace: React.FC = () => {
   const llmServiceRef = useRef<WebLLMService | null>(null);
   const embeddingServiceRef = useRef<EmbeddingService | null>(null);
   const ragOrchestratorRef = useRef<RAGOrchestrator | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
 
   const handleInitialize = async () => {
     setIsInitializing(true);
@@ -210,13 +185,6 @@ export const RAGWorkspace: React.FC = () => {
     setMessages([]);
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
-  };
-
   const handleSaveGraph = async () => {
     if (!selectedVault) {
       messageApi.warning('Please select a vault first');
@@ -300,7 +268,6 @@ export const RAGWorkspace: React.FC = () => {
       dispatch(actions.addIdentity(identityHandle.to_json()));
       messageApi.success('Authenticated successfully!');
       setIsAuthModalOpen(false);
-      passphraseForm.resetFields();
     } catch (error) {
       console.error('Passphrase auth failed:', error);
       messageApi.error(`Authentication failed: ${error}`);
@@ -321,7 +288,6 @@ export const RAGWorkspace: React.FC = () => {
       dispatch(actions.addIdentity(identityHandle.to_json()));
       messageApi.success('MFA registered successfully!');
       setIsAuthModalOpen(false);
-      mfaForm.resetFields();
     } catch (error) {
       console.error('MFA register failed:', error);
       messageApi.error(`MFA registration failed: ${error}`);
@@ -342,7 +308,6 @@ export const RAGWorkspace: React.FC = () => {
       dispatch(actions.addIdentity(identityHandle.to_json()));
       messageApi.success('Authenticated successfully!');
       setIsAuthModalOpen(false);
-      mfaForm.resetFields();
     } catch (error) {
       console.error('MFA auth failed:', error);
       messageApi.error(`MFA authentication failed: ${error}`);
@@ -445,296 +410,46 @@ export const RAGWorkspace: React.FC = () => {
             )}
 
             {isReady && (
-              <>
-                <Space style={{ marginBottom: 16 }} wrap>
-                  <Text>Vault:</Text>
-                  <Input
-                    value={selectedVault}
-                    onChange={e => setSelectedVault(e.target.value)}
-                    placeholder="Enter vault name (e.g., 'my-vault')"
-                    style={{ width: 200 }}
-                  />
-                  <Checkbox
-                    checked={useRAG}
-                    onChange={e => setUseRAG(e.target.checked)}
-                  >
-                    Use RAG
-                  </Checkbox>
-                  {useRAG && !canUseRAG && (
-                    <Text type="warning" style={{ fontSize: 12 }}>
-                      (Embeddings unavailable)
-                    </Text>
-                  )}
-
-                  {/* Authentication Status & Controls */}
-                  <Divider type="vertical" />
-                  {identity ? (
-                    <Tag icon={<UnlockOutlined />} color="success">
-                      Authenticated
-                    </Tag>
-                  ) : (
-                    <Space.Compact>
-                      <Button
-                        icon={<LockOutlined />}
-                        onClick={() => openAuthModal('passphrase')}
-                        size="small"
-                      >
-                        Passphrase
-                      </Button>
-                      <Button
-                        icon={<LockOutlined />}
-                        onClick={() => openAuthModal('mfa-register')}
-                        size="small"
-                      >
-                        MFA Register
-                      </Button>
-                      <Button
-                        icon={<LockOutlined />}
-                        onClick={() => openAuthModal('mfa-auth')}
-                        size="small"
-                      >
-                        MFA Login
-                      </Button>
-                    </Space.Compact>
-                  )}
-
-                  <Button
-                    icon={<SaveOutlined />}
-                    onClick={handleSaveGraph}
-                    loading={isSaving}
-                    disabled={!selectedVault || !identity}
-                    type="primary"
-                  >
-                    Save Graph
-                  </Button>
-                  <Button
-                    icon={<FolderOpenOutlined />}
-                    onClick={handleLoadGraph}
-                    loading={isRestoring}
-                    disabled={!selectedVault || !identity}
-                  >
-                    Load Graph
-                  </Button>
-                </Space>
-                <Divider style={{ margin: '8px 0' }} />
-              </>
+              <RAGControls
+                selectedVault={selectedVault}
+                onVaultChange={setSelectedVault}
+                useRAG={useRAG}
+                onRAGChange={setUseRAG}
+                canUseRAG={canUseRAG}
+                isAuthenticated={!!identity}
+                onAuthPassphrase={() => openAuthModal('passphrase')}
+                onAuthMFARegister={() => openAuthModal('mfa-register')}
+                onAuthMFALogin={() => openAuthModal('mfa-auth')}
+                onSaveGraph={handleSaveGraph}
+                onLoadGraph={handleLoadGraph}
+                isSaving={isSaving}
+                isRestoring={isRestoring}
+              />
             )}
 
-            <div
-              style={{
-                flex: 1,
-                overflow: 'auto',
-                marginBottom: 16,
-                padding: 16,
-                border: '1px solid #f0f0f0',
-                borderRadius: 8,
-              }}
-            >
-              <List
-                dataSource={messages}
-                renderItem={msg => (
-                  <List.Item
-                    style={{
-                      justifyContent:
-                        msg.role === 'user' ? 'flex-end' : 'flex-start',
-                      border: 'none',
-                    }}
-                  >
-                    <div
-                      style={{
-                        maxWidth: '70%',
-                        padding: '8px 12px',
-                        borderRadius: 8,
-                        backgroundColor:
-                          msg.role === 'user' ? '#1890ff' : '#f0f0f0',
-                        color: msg.role === 'user' ? 'white' : 'black',
-                      }}
-                    >
-                      <Text
-                        style={{
-                          color: msg.role === 'user' ? 'white' : 'black',
-                          whiteSpace: 'pre-wrap',
-                        }}
-                      >
-                        {msg.content}
-                      </Text>
-                      <div style={{ fontSize: 10, marginTop: 4, opacity: 0.7 }}>
-                        {msg.timestamp.toLocaleTimeString()}
-                      </div>
-                    </div>
-                  </List.Item>
-                )}
-              />
-              <div ref={messagesEndRef} />
-            </div>
+            <ChatMessages messages={messages} />
 
-            <Space.Compact style={{ width: '100%' }}>
-              <TextArea
-                value={input}
-                onChange={e => setInput(e.target.value)}
-                onKeyPress={handleKeyPress}
-                placeholder="Ask a question... (Enter to send)"
-                autoSize={{ minRows: 1, maxRows: 4 }}
-                disabled={!isReady || isLoading}
-              />
-              <Button
-                type="primary"
-                icon={<SendOutlined />}
-                onClick={handleSend}
-                loading={isLoading}
-                disabled={!isReady || !input.trim()}
-              >
-                Send
-              </Button>
-              <Button
-                icon={<ClearOutlined />}
-                onClick={handleClear}
-                disabled={!isReady}
-              >
-                Clear
-              </Button>
-            </Space.Compact>
+            <ChatInput
+              value={input}
+              onChange={setInput}
+              onSend={handleSend}
+              onClear={handleClear}
+              disabled={!isReady}
+              loading={isLoading}
+            />
           </Card>
         </Col>
       </Row>
 
-      {/* Authentication Modal */}
-      <Modal
-        title={
-          authMode === 'passphrase'
-            ? 'Authenticate with Passphrase'
-            : authMode === 'mfa-register'
-            ? 'Register MFA Credential'
-            : 'Authenticate with MFA'
-        }
-        open={isAuthModalOpen}
-        onCancel={() => {
-          setIsAuthModalOpen(false);
-          passphraseForm.resetFields();
-          mfaForm.resetFields();
-        }}
-        footer={null}
-        width={500}
-      >
-        {authMode === 'passphrase' && (
-          <Form
-            form={passphraseForm}
-            onFinish={handlePassphraseAuth}
-            layout="vertical"
-          >
-            <Form.Item
-              label="Passphrase"
-              name="passphrase"
-              rules={[
-                { required: true, message: 'Please enter your passphrase' },
-              ]}
-            >
-              <Input.Password
-                placeholder="Enter your passphrase"
-                autoComplete="current-password"
-              />
-            </Form.Item>
-            <Form.Item>
-              <Space>
-                <Button type="primary" htmlType="submit">
-                  Authenticate
-                </Button>
-                <Button onClick={() => setIsAuthModalOpen(false)}>
-                  Cancel
-                </Button>
-              </Space>
-            </Form.Item>
-            <Divider />
-            <Space direction="vertical" style={{ width: '100%' }}>
-              <Text type="secondary">Or use a different method:</Text>
-              <Space>
-                <Button
-                  size="small"
-                  onClick={() => setAuthMode('mfa-register')}
-                >
-                  Register MFA
-                </Button>
-                <Button size="small" onClick={() => setAuthMode('mfa-auth')}>
-                  Login with MFA
-                </Button>
-              </Space>
-            </Space>
-          </Form>
-        )}
-
-        {authMode === 'mfa-register' && (
-          <Form form={mfaForm} onFinish={handleMFARegister} layout="vertical">
-            <Form.Item
-              label="Username"
-              name="username"
-              rules={[{ required: true, message: 'Please enter a username' }]}
-            >
-              <Input placeholder="Enter username for credential" />
-            </Form.Item>
-            <Form.Item>
-              <Space>
-                <Button type="primary" htmlType="submit">
-                  Register Credential
-                </Button>
-                <Button onClick={() => setIsAuthModalOpen(false)}>
-                  Cancel
-                </Button>
-              </Space>
-            </Form.Item>
-            <Divider />
-            <Space direction="vertical" style={{ width: '100%' }}>
-              <Text type="secondary">Or use a different method:</Text>
-              <Space>
-                <Button size="small" onClick={() => setAuthMode('passphrase')}>
-                  Use Passphrase
-                </Button>
-                <Button size="small" onClick={() => setAuthMode('mfa-auth')}>
-                  Login with MFA
-                </Button>
-              </Space>
-            </Space>
-          </Form>
-        )}
-
-        {authMode === 'mfa-auth' && (
-          <Form form={mfaForm} onFinish={handleMFAAuth} layout="vertical">
-            <Form.Item
-              label="Username"
-              name="username"
-              rules={[
-                { required: true, message: 'Please enter your username' },
-              ]}
-            >
-              <Input placeholder="Enter your username" />
-            </Form.Item>
-            <Form.Item>
-              <Space>
-                <Button type="primary" htmlType="submit">
-                  Authenticate
-                </Button>
-                <Button onClick={() => setIsAuthModalOpen(false)}>
-                  Cancel
-                </Button>
-              </Space>
-            </Form.Item>
-            <Divider />
-            <Space direction="vertical" style={{ width: '100%' }}>
-              <Text type="secondary">Or use a different method:</Text>
-              <Space>
-                <Button size="small" onClick={() => setAuthMode('passphrase')}>
-                  Use Passphrase
-                </Button>
-                <Button
-                  size="small"
-                  onClick={() => setAuthMode('mfa-register')}
-                >
-                  Register MFA
-                </Button>
-              </Space>
-            </Space>
-          </Form>
-        )}
-      </Modal>
+      <GraphAuthModal
+        isOpen={isAuthModalOpen}
+        authMode={authMode}
+        onClose={() => setIsAuthModalOpen(false)}
+        onPassphraseAuth={handlePassphraseAuth}
+        onMFARegister={handleMFARegister}
+        onMFAAuth={handleMFAAuth}
+        onAuthModeChange={setAuthMode}
+      />
       </div>
     </>
   );

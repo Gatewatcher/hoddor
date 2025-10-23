@@ -1,23 +1,12 @@
-import { BulbOutlined, PlusOutlined } from '@ant-design/icons';
-import {
-  Button,
-  Card,
-  Input,
-  List,
-  Space,
-  Tag,
-  Typography,
-  message,
-} from 'antd';
+import { BulbOutlined } from '@ant-design/icons';
+import { Card, Space, Typography } from 'antd';
 import React, { useEffect, useState } from 'react';
 
-import {
-  graph_create_memory_node,
-  graph_list_memory_nodes,
-} from '../../../hoddor/pkg/hoddor';
+import { graph_list_memory_nodes } from '../../../hoddor/pkg/hoddor';
 import { EmbeddingService } from '../services';
+import { MemoryForm } from './memory/MemoryForm';
+import { MemoryList } from './memory/MemoryList';
 
-const { TextArea } = Input;
 const { Title, Text } = Typography;
 
 interface Memory {
@@ -41,11 +30,7 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({
   refreshTrigger,
 }) => {
   const [memories, setMemories] = useState<Memory[]>([]);
-  const [newMemory, setNewMemory] = useState('');
-  const [labels, setLabels] = useState('');
-  const [isAdding, setIsAdding] = useState(false);
   const [, setIsLoading] = useState(false);
-  const [messageApi, contextHolder] = message.useMessage();
 
   // Load memories from graph when vault changes or refresh is triggered
   useEffect(() => {
@@ -91,89 +76,22 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({
     loadMemories();
   }, [vaultName, refreshTrigger]);
 
-  const handleAddMemory = async () => {
-    if (!newMemory.trim()) {
-      messageApi.warning('Please enter memory content');
-      return;
-    }
-
-    if (!vaultName) {
-      messageApi.warning('Please select a vault first');
-      return;
-    }
-
-    if (!embeddingService || !embeddingService.isReady()) {
-      messageApi.error('Embedding service not ready');
-      return;
-    }
-
-    setIsAdding(true);
-
-    try {
-      // Generate embedding
-      const { embedding } = await embeddingService.embed(newMemory);
-
-      // For now, we'll use simple encryption (just encode to bytes)
-      // TODO: Integrate with Age encryption from vault identity
-      const encoder = new TextEncoder();
-      const contentBytes = encoder.encode(newMemory);
-
-      // Simple HMAC placeholder (should use proper crypto)
-      const hmac = await crypto.subtle.digest('SHA-256', contentBytes);
-      const hmacHex = Array.from(new Uint8Array(hmac))
-        .map(b => b.toString(16).padStart(2, '0'))
-        .join('');
-
-      // Parse labels
-      const labelList = labels
-        .split(',')
-        .map(l => l.trim())
-        .filter(l => l.length > 0);
-
-      // Create memory node in graph
-      const nodeId = await graph_create_memory_node(
-        vaultName,
-        contentBytes,
-        hmacHex,
-        new Float32Array(embedding),
-        labelList,
-      );
-
-      // Add to local list
-      const memory: Memory = {
-        id: nodeId,
-        content: newMemory,
-        labels: labelList,
-        timestamp: new Date(),
-      };
-
-      setMemories([memory, ...memories]);
-      setNewMemory('');
-      setLabels('');
-
-      messageApi.success('Memory added to graph!');
-      onMemoryAdded?.();
-    } catch (error) {
-      console.error('Failed to add memory:', error);
-      messageApi.error(`Failed to add memory: ${error}`);
-    } finally {
-      setIsAdding(false);
-    }
+  const handleMemoryAdded = (memory: Memory) => {
+    setMemories([memory, ...memories]);
+    onMemoryAdded?.();
   };
 
   return (
-    <>
-      {contextHolder}
-      <Card
-        title={
-          <Space>
-            <BulbOutlined />
-            <Title level={4} style={{ margin: 0 }}>
-              Memory Manager
-            </Title>
-          </Space>
-        }
-      >
+    <Card
+      title={
+        <Space>
+          <BulbOutlined />
+          <Title level={4} style={{ margin: 0 }}>
+            Memory Manager
+          </Title>
+        </Space>
+      }
+    >
       {!vaultName && (
         <Text type="warning">
           Please select a vault to start adding memories
@@ -182,77 +100,14 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({
 
       {vaultName && (
         <>
-          <Space
-            direction="vertical"
-            style={{ width: '100%', marginBottom: 16 }}
-          >
-            <Text strong>Vault: {vaultName}</Text>
-            <TextArea
-              value={newMemory}
-              onChange={e => setNewMemory(e.target.value)}
-              placeholder="Enter a memory to store in the graph (e.g., 'My favorite color is blue')"
-              autoSize={{ minRows: 3, maxRows: 6 }}
-              disabled={isAdding}
-            />
-            <Input
-              value={labels}
-              onChange={e => setLabels(e.target.value)}
-              placeholder="Labels (comma-separated, e.g., 'personal, preferences')"
-              disabled={isAdding}
-            />
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={handleAddMemory}
-              loading={isAdding}
-              disabled={!embeddingService || !embeddingService.isReady()}
-            >
-              Add Memory to Graph
-            </Button>
-            {(!embeddingService || !embeddingService.isReady()) && (
-              <Text type="warning" style={{ fontSize: 12 }}>
-                ⚠️ Embeddings unavailable (CDN issue). RAG features disabled.
-                <br />
-                You can still use the LLM for direct chat without memory
-                context.
-              </Text>
-            )}
-          </Space>
-
-          <Title level={5}>Recent Memories ({memories.length})</Title>
-          <List
-            dataSource={memories}
-            renderItem={memory => (
-              <List.Item>
-                <List.Item.Meta
-                  title={
-                    <Space>
-                      <Text>{memory.content}</Text>
-                      {memory.labels.map(label => (
-                        <Tag key={label} color="blue">
-                          {label}
-                        </Tag>
-                      ))}
-                    </Space>
-                  }
-                  description={
-                    <Space direction="vertical" size={0}>
-                      <Text type="secondary" style={{ fontSize: 12 }}>
-                        ID: {memory.id}
-                      </Text>
-                      <Text type="secondary" style={{ fontSize: 12 }}>
-                        Added: {memory.timestamp.toLocaleString()}
-                      </Text>
-                    </Space>
-                  }
-                />
-              </List.Item>
-            )}
-            locale={{ emptyText: 'No memories added yet' }}
+          <MemoryForm
+            vaultName={vaultName}
+            embeddingService={embeddingService}
+            onMemoryAdded={handleMemoryAdded}
           />
+          <MemoryList memories={memories} />
         </>
       )}
-      </Card>
-    </>
+    </Card>
   );
 };

@@ -1,19 +1,11 @@
-import { ClearOutlined, RobotOutlined, SendOutlined } from '@ant-design/icons';
-import {
-  Button,
-  Card,
-  Input,
-  List,
-  Progress,
-  Select,
-  Space,
-  Typography,
-} from 'antd';
-import React, { useEffect, useRef, useState } from 'react';
+import { RobotOutlined } from '@ant-design/icons';
+import { Button, Card, Progress, Select, Space, Typography } from 'antd';
+import React, { useRef, useState } from 'react';
 
 import { EmbeddingService, RAGOrchestrator, WebLLMService } from '../services';
+import { ChatInput } from './chat/ChatInput';
+import { ChatMessages } from './chat/ChatMessages';
 
-const { TextArea } = Input;
 const { Title, Text } = Typography;
 const { Option } = Select;
 
@@ -36,15 +28,6 @@ export const LLMChat: React.FC = () => {
   const llmServiceRef = useRef<WebLLMService | null>(null);
   const embeddingServiceRef = useRef<EmbeddingService | null>(null);
   const ragOrchestratorRef = useRef<RAGOrchestrator | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
 
   const handleInitialize = async () => {
     setIsInitializing(true);
@@ -145,13 +128,6 @@ export const LLMChat: React.FC = () => {
     setMessages([]);
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
-  };
-
   const isReady = ragOrchestratorRef.current?.isReady() ?? false;
 
   return (
@@ -200,84 +176,16 @@ export const LLMChat: React.FC = () => {
         </Space>
       )}
 
-      <div
-        style={{
-          flex: 1,
-          overflow: 'auto',
-          marginBottom: 16,
-          padding: 16,
-          border: '1px solid #f0f0f0',
-          borderRadius: 8,
-        }}
-      >
-        <List
-          dataSource={messages}
-          renderItem={msg => (
-            <List.Item
-              style={{
-                justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start',
-                border: 'none',
-              }}
-            >
-              <div
-                style={{
-                  maxWidth: '70%',
-                  padding: '8px 12px',
-                  borderRadius: 8,
-                  backgroundColor: msg.role === 'user' ? '#1890ff' : '#f0f0f0',
-                  color: msg.role === 'user' ? 'white' : 'black',
-                }}
-              >
-                <Text
-                  style={{
-                    color: msg.role === 'user' ? 'white' : 'black',
-                    whiteSpace: 'pre-wrap',
-                  }}
-                >
-                  {msg.content}
-                </Text>
-                <div
-                  style={{
-                    fontSize: 10,
-                    marginTop: 4,
-                    opacity: 0.7,
-                  }}
-                >
-                  {msg.timestamp.toLocaleTimeString()}
-                </div>
-              </div>
-            </List.Item>
-          )}
-        />
-        <div ref={messagesEndRef} />
-      </div>
+      <ChatMessages messages={messages} />
 
-      <Space.Compact style={{ width: '100%' }}>
-        <TextArea
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          onKeyPress={handleKeyPress}
-          placeholder="Type your message... (Enter to send, Shift+Enter for new line)"
-          autoSize={{ minRows: 1, maxRows: 4 }}
-          disabled={!isReady || isLoading}
-        />
-        <Button
-          type="primary"
-          icon={<SendOutlined />}
-          onClick={handleSend}
-          loading={isLoading}
-          disabled={!isReady || !input.trim()}
-        >
-          Send
-        </Button>
-        <Button
-          icon={<ClearOutlined />}
-          onClick={handleClear}
-          disabled={!isReady}
-        >
-          Clear
-        </Button>
-      </Space.Compact>
+      <ChatInput
+        value={input}
+        onChange={setInput}
+        onSend={handleSend}
+        onClear={handleClear}
+        disabled={!isReady}
+        loading={isLoading}
+      />
     </Card>
   );
 };
