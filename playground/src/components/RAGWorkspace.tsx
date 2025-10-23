@@ -8,19 +8,14 @@ import {
   Select,
   Space,
   Typography,
-  message,
 } from 'antd';
-import React, { useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 
-import {
-  create_credential,
-  get_credential,
-  graph_backup_vault,
-  graph_restore_vault,
-  vault_identity_from_passphrase,
-} from '../../../hoddor/pkg/hoddor';
 import { useServices } from '../contexts/ServicesContext';
+import { useChatMessages } from '../hooks/useChatMessages';
+import { useGraphAuthentication } from '../hooks/useGraphAuthentication';
+import { useGraphPersistence } from '../hooks/useGraphPersistence';
+import { useServiceInitialization } from '../hooks/useServiceInitialization';
 import { WebLLMService } from '../services';
 import { actions } from '../store/app.actions';
 import { appSelectors } from '../store/app.selectors';
@@ -33,26 +28,40 @@ import { RAGControls } from './rag/RAGControls';
 const { Title, Text } = Typography;
 const { Option } = Select;
 
-interface Message {
-  role: 'user' | 'assistant';
-  content: string;
-  timestamp: Date;
-}
+export const RAGWorkspace = () => {
+  // Custom hooks
+  const {
+    messages,
+    input,
+    isLoading,
+    setInput,
+    sendMessage,
+    clearMessages,
+    addMessage,
+  } = useChatMessages({ enableRAG: true });
 
-export const RAGWorkspace: React.FC = () => {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [isInitializing, setIsInitializing] = useState(false);
-  const [initProgress, setInitProgress] = useState(0);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isRestoring, setIsRestoring] = useState(false);
+  const { isInitializing, initProgress, initialize } =
+    useServiceInitialization();
 
-  // Authentication state
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [authMode, setAuthMode] = useState<
-    'passphrase' | 'mfa-register' | 'mfa-auth'
-  >('passphrase');
+  const {
+    isAuthModalOpen,
+    authMode,
+    contextHolder: authContextHolder,
+    handlePassphraseAuth,
+    handleMFARegister,
+    handleMFAAuth,
+    openAuthModal,
+    closeAuthModal,
+    setAuthMode,
+  } = useGraphAuthentication();
+
+  const {
+    isSaving,
+    isRestoring,
+    contextHolder: persistenceContextHolder,
+    saveGraph,
+    loadGraph,
+  } = useGraphPersistence();
 
   // Redux state
   const selectedVault = useSelector(appSelectors.getSelectedVault);
@@ -62,240 +71,28 @@ export const RAGWorkspace: React.FC = () => {
   const identity = useSelector(appSelectors.getIdentity);
 
   const dispatch = useDispatch();
-  const [messageApi, contextHolder] = message.useMessage();
 
   // Services from context
-  const { ragOrchestrator, embeddingService, initializeServices } =
-    useServices();
+  const { ragOrchestrator, embeddingService } = useServices();
 
   const handleInitialize = async () => {
-    setIsInitializing(true);
-    setInitProgress(0);
-
     try {
-      await initializeServices(selectedModel, progress => {
-        setInitProgress(progress);
-      });
-
-      dispatch(actions.setServicesReady(true));
-
-      const embeddingsReady = embeddingService?.isReady();
-
-      setMessages([
-        {
+      await initialize(embeddingsReady => {
+        addMessage({
           role: 'assistant',
           content: embeddingsReady
             ? "✅ Hello! I'm ready to help. You can add memories and I'll use them to answer questions!"
             : "⚠️ Hello! I'm ready to help. Embeddings unavailable (CDN issue) - you can chat without RAG for now.",
           timestamp: new Date(),
-        },
-      ]);
-    } catch (error) {
-      console.error('Initialization failed:', error);
-      setMessages([
-        {
-          role: 'assistant',
-          content: `Failed to initialize: ${error}`,
-          timestamp: new Date(),
-        },
-      ]);
-    } finally {
-      setIsInitializing(false);
-      setInitProgress(0);
-    }
-  };
-
-  const handleSend = async () => {
-    if (!input.trim() || !ragOrchestrator) return;
-
-    const userMessage: Message = {
-      role: 'user',
-      content: input,
-      timestamp: new Date(),
-    };
-
-    setMessages(prev => [...prev, userMessage]);
-    setInput('');
-    setIsLoading(true);
-
-    try {
-      const assistantMessage: Message = {
-        role: 'assistant',
-        content: '',
-        timestamp: new Date(),
-      };
-
-      setMessages(prev => [...prev, assistantMessage]);
-
-      // Pass vault name if RAG is enabled and vault is selected
-      const options =
-        useRAG && selectedVault ? { vaultName: selectedVault } : {};
-
-      let fullResponse = '';
-      for await (const chunk of ragOrchestrator.queryStream(input, options)) {
-        fullResponse += chunk;
-        setMessages(prev => {
-          const updated = [...prev];
-          updated[updated.length - 1] = {
-            ...assistantMessage,
-            content: fullResponse,
-          };
-          return updated;
         });
-      }
+      });
     } catch (error) {
-      console.error('Chat failed:', error);
-      setMessages(prev => [
-        ...prev,
-        {
-          role: 'assistant',
-          content: `Error: ${error}`,
-          timestamp: new Date(),
-        },
-      ]);
-    } finally {
-      setIsLoading(false);
+      addMessage({
+        role: 'assistant',
+        content: `Failed to initialize: ${error}`,
+        timestamp: new Date(),
+      });
     }
-  };
-
-  const handleClear = () => {
-    setMessages([]);
-  };
-
-  const handleSaveGraph = async () => {
-    if (!selectedVault) {
-      messageApi.warning('Please select a vault first');
-      return;
-    }
-
-    if (!identity) {
-      messageApi.error('Please authenticate first (Passphrase or MFA)');
-      return;
-    }
-
-    if (!identity.public_key || !identity.private_key) {
-      messageApi.error('Identity is incomplete - please authenticate again');
-      return;
-    }
-
-    setIsSaving(true);
-    try {
-      await graph_backup_vault(
-        selectedVault,
-        identity.public_key(),
-        identity.private_key(),
-      );
-      messageApi.success(`Graph saved to OPFS for vault: ${selectedVault}`);
-    } catch (error) {
-      console.error('Failed to save graph:', error);
-      messageApi.error(`Failed to save graph: ${error}`);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleLoadGraph = async () => {
-    if (!selectedVault) {
-      messageApi.warning('Please select a vault first');
-      return;
-    }
-
-    if (!identity) {
-      messageApi.error('Please authenticate first (Passphrase or MFA)');
-      return;
-    }
-
-    if (!identity.public_key || !identity.private_key) {
-      messageApi.error('Identity is incomplete - please authenticate again');
-      return;
-    }
-
-    setIsRestoring(true);
-    try {
-      const found = await graph_restore_vault(
-        selectedVault,
-        identity.public_key(),
-        identity.private_key(),
-      );
-      if (found) {
-        messageApi.success(
-          `Graph loaded from OPFS for vault: ${selectedVault}`,
-        );
-        dispatch(actions.triggerMemoryRefresh());
-      } else {
-        messageApi.info('No saved graph found (this is the first time)');
-      }
-    } catch (error) {
-      console.error('Failed to load graph:', error);
-      messageApi.error(`Failed to load graph: ${error}`);
-    } finally {
-      setIsRestoring(false);
-    }
-  };
-
-  const handlePassphraseAuth = async (values: { passphrase: string }) => {
-    if (!selectedVault) {
-      messageApi.warning('Please select a vault first');
-      return;
-    }
-
-    try {
-      const identityHandle = await vault_identity_from_passphrase(
-        values.passphrase,
-        selectedVault,
-      );
-      dispatch(actions.addIdentity(identityHandle.to_json()));
-      messageApi.success('Authenticated successfully!');
-      setIsAuthModalOpen(false);
-    } catch (error) {
-      console.error('Passphrase auth failed:', error);
-      messageApi.error(`Authentication failed: ${error}`);
-    }
-  };
-
-  const handleMFARegister = async (values: { username: string }) => {
-    if (!selectedVault) {
-      messageApi.warning('Please select a vault first');
-      return;
-    }
-
-    try {
-      const identityHandle = await create_credential(
-        selectedVault,
-        values.username,
-      );
-      dispatch(actions.addIdentity(identityHandle.to_json()));
-      messageApi.success('MFA registered successfully!');
-      setIsAuthModalOpen(false);
-    } catch (error) {
-      console.error('MFA register failed:', error);
-      messageApi.error(`MFA registration failed: ${error}`);
-    }
-  };
-
-  const handleMFAAuth = async (values: { username: string }) => {
-    if (!selectedVault) {
-      messageApi.warning('Please select a vault first');
-      return;
-    }
-
-    try {
-      const identityHandle = await get_credential(
-        selectedVault,
-        values.username,
-      );
-      dispatch(actions.addIdentity(identityHandle.to_json()));
-      messageApi.success('Authenticated successfully!');
-      setIsAuthModalOpen(false);
-    } catch (error) {
-      console.error('MFA auth failed:', error);
-      messageApi.error(`MFA authentication failed: ${error}`);
-    }
-  };
-
-  const openAuthModal = (mode: 'passphrase' | 'mfa-register' | 'mfa-auth') => {
-    setAuthMode(mode);
-    setIsAuthModalOpen(true);
   };
 
   const isReady = ragOrchestrator?.isReady() ?? false;
@@ -303,7 +100,8 @@ export const RAGWorkspace: React.FC = () => {
 
   return (
     <>
-      {contextHolder}
+      {authContextHolder}
+      {persistenceContextHolder}
       <div style={{ padding: 16, height: '89vh', overflow: 'auto' }}>
         <Row gutter={16} style={{ height: '100%' }}>
           <Col span={10} style={{ height: '100%' }}>
@@ -400,8 +198,8 @@ export const RAGWorkspace: React.FC = () => {
                   onAuthPassphrase={() => openAuthModal('passphrase')}
                   onAuthMFARegister={() => openAuthModal('mfa-register')}
                   onAuthMFALogin={() => openAuthModal('mfa-auth')}
-                  onSaveGraph={handleSaveGraph}
-                  onLoadGraph={handleLoadGraph}
+                  onSaveGraph={saveGraph}
+                  onLoadGraph={loadGraph}
                   isSaving={isSaving}
                   isRestoring={isRestoring}
                 />
@@ -412,8 +210,8 @@ export const RAGWorkspace: React.FC = () => {
               <ChatInput
                 value={input}
                 onChange={setInput}
-                onSend={handleSend}
-                onClear={handleClear}
+                onSend={sendMessage}
+                onClear={clearMessages}
                 disabled={!isReady}
                 loading={isLoading}
               />
@@ -424,7 +222,7 @@ export const RAGWorkspace: React.FC = () => {
         <GraphAuthModal
           isOpen={isAuthModalOpen}
           authMode={authMode}
-          onClose={() => setIsAuthModalOpen(false)}
+          onClose={closeAuthModal}
           onPassphraseAuth={handlePassphraseAuth}
           onMFARegister={handleMFARegister}
           onMFAAuth={handleMFAAuth}

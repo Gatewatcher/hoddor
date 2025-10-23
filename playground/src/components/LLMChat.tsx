@@ -1,9 +1,9 @@
 import { RobotOutlined } from '@ant-design/icons';
 import { Button, Card, Progress, Select, Space, Typography } from 'antd';
-import React, { useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 
-import { useServices } from '../contexts/ServicesContext';
+import { useChatMessages } from '../hooks/useChatMessages';
+import { useServiceInitialization } from '../hooks/useServiceInitialization';
 import { WebLLMService } from '../services';
 import { actions } from '../store/app.actions';
 import { appSelectors } from '../store/app.selectors';
@@ -13,111 +13,41 @@ import { ChatMessages } from './chat/ChatMessages';
 const { Title, Text } = Typography;
 const { Option } = Select;
 
-interface Message {
-  role: 'user' | 'assistant';
-  content: string;
-  timestamp: Date;
-}
-
-export const LLMChat: React.FC = () => {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [isInitializing, setIsInitializing] = useState(false);
-  const [initProgress, setInitProgress] = useState(0);
+export const LLMChat = () => {
+  const {
+    messages,
+    input,
+    isLoading,
+    setInput,
+    sendMessage,
+    clearMessages,
+    addMessage,
+  } = useChatMessages({ enableRAG: false });
+  const { isInitializing, initProgress, initialize } =
+    useServiceInitialization();
 
   const selectedModel = useSelector(appSelectors.getSelectedModel);
   const dispatch = useDispatch();
 
-  const { ragOrchestrator, initializeServices } = useServices();
-
   const handleInitialize = async () => {
-    setIsInitializing(true);
-    setInitProgress(0);
-
     try {
-      await initializeServices(selectedModel, progress => {
-        setInitProgress(progress);
-      });
-
-      dispatch(actions.setServicesReady(true));
-
-      setMessages([
-        {
+      await initialize(() => {
+        addMessage({
           role: 'assistant',
           content: "Hello! I'm ready to help. Ask me anything!",
           timestamp: new Date(),
-        },
-      ]);
-    } catch (error) {
-      console.error('Initialization failed:', error);
-      setMessages([
-        {
-          role: 'assistant',
-          content: `Failed to initialize: ${error}`,
-          timestamp: new Date(),
-        },
-      ]);
-    } finally {
-      setIsInitializing(false);
-      setInitProgress(0);
-    }
-  };
-
-  const handleSend = async () => {
-    if (!input.trim() || !ragOrchestrator) return;
-
-    const userMessage: Message = {
-      role: 'user',
-      content: input,
-      timestamp: new Date(),
-    };
-
-    setMessages(prev => [...prev, userMessage]);
-    setInput('');
-    setIsLoading(true);
-
-    try {
-      const assistantMessage: Message = {
-        role: 'assistant',
-        content: '',
-        timestamp: new Date(),
-      };
-
-      setMessages(prev => [...prev, assistantMessage]);
-
-      let fullResponse = '';
-      for await (const chunk of ragOrchestrator.queryStream(input)) {
-        fullResponse += chunk;
-        setMessages(prev => {
-          const updated = [...prev];
-          updated[updated.length - 1] = {
-            ...assistantMessage,
-            content: fullResponse,
-          };
-          return updated;
         });
-      }
+      });
     } catch (error) {
-      console.error('Chat failed:', error);
-      setMessages(prev => [
-        ...prev,
-        {
-          role: 'assistant',
-          content: `Error: ${error}`,
-          timestamp: new Date(),
-        },
-      ]);
-    } finally {
-      setIsLoading(false);
+      addMessage({
+        role: 'assistant',
+        content: `Failed to initialize: ${error}`,
+        timestamp: new Date(),
+      });
     }
   };
 
-  const handleClear = () => {
-    setMessages([]);
-  };
-
-  const isReady = ragOrchestrator?.isReady() ?? false;
+  const isReady = messages.length > 0;
 
   return (
     <Card
@@ -170,8 +100,8 @@ export const LLMChat: React.FC = () => {
       <ChatInput
         value={input}
         onChange={setInput}
-        onSend={handleSend}
-        onClear={handleClear}
+        onSend={sendMessage}
+        onClear={clearMessages}
         disabled={!isReady}
         loading={isLoading}
       />

@@ -6,6 +6,12 @@ import { useSelector } from 'react-redux';
 import { graph_create_memory_node } from '../../../../hoddor/pkg/hoddor';
 import { useServices } from '../../contexts/ServicesContext';
 import { appSelectors } from '../../store/app.selectors';
+import {
+  createMemory,
+  encodeContent,
+  generateHMAC,
+  parseLabels,
+} from '../../utils/memoryUtils';
 
 const { TextArea } = Input;
 const { Text } = Typography;
@@ -48,18 +54,9 @@ export const MemoryForm = ({ onMemoryAdded }: MemoryFormProps) => {
     try {
       const { embedding } = await embeddingService.embed(newMemory);
 
-      const encoder = new TextEncoder();
-      const contentBytes = encoder.encode(newMemory);
-
-      const hmac = await crypto.subtle.digest('SHA-256', contentBytes);
-      const hmacHex = Array.from(new Uint8Array(hmac))
-        .map(b => b.toString(16).padStart(2, '0'))
-        .join('');
-
-      const labelList = labels
-        .split(',')
-        .map(l => l.trim())
-        .filter(l => l.length > 0);
+      const contentBytes = encodeContent(newMemory);
+      const hmacHex = await generateHMAC(contentBytes);
+      const labelList = parseLabels(labels);
 
       const nodeId = await graph_create_memory_node(
         vaultName,
@@ -69,13 +66,7 @@ export const MemoryForm = ({ onMemoryAdded }: MemoryFormProps) => {
         labelList,
       );
 
-      const memory = {
-        id: nodeId,
-        content: newMemory,
-        labels: labelList,
-        timestamp: new Date(),
-      };
-
+      const memory = createMemory(nodeId, newMemory, labelList);
       onMemoryAdded(memory);
       setNewMemory('');
       setLabels('');
