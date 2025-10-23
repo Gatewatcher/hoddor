@@ -9,14 +9,11 @@ edition = "2021"
 crate-type = ["cdylib", "rlib"]
 
 [features]
-default = ["console_error_panic_hook", "vault", "graph"]
+default = ["vault", "graph"]
 
-# Minimal: Just crypto primitives and storage abstraction
-minimal = ["console_error_panic_hook"]
-
-# Vault: Adds vault operations (namespaces, encryption, WebAuthn)
-# Depends on minimal for core functionality
-vault = ["minimal"]
+# Vault: Core functionality - encrypted vaults with namespaces, WebAuthn, etc.
+# This is the base feature of Hoddor
+vault = ["console_error_panic_hook"]
 
 # Graph: Adds CozoDB graph database with vector search
 # Requires vault for persistence and encryption
