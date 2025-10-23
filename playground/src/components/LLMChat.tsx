@@ -51,30 +51,22 @@ export const LLMChat: React.FC = () => {
     setInitProgress(0);
 
     try {
-      // Initialize LLM
       const llmService = new WebLLMService(selectedModel);
       await llmService.initialize(report => {
         setInitProgress(report.progress * 100);
       });
       llmServiceRef.current = llmService;
 
-      // Initialize Embeddings (optional for Phase 1)
       let embeddingService: EmbeddingService | null = null;
       try {
         embeddingService = new EmbeddingService();
         await embeddingService.initialize();
         embeddingServiceRef.current = embeddingService;
-        console.log('Embeddings initialized successfully');
       } catch (embError) {
-        console.warn(
-          'Embedding initialization failed (optional for Phase 1):',
-          embError,
-        );
-        // Create a mock embedding service that's not ready
+        console.error('Embedding initialization failed:', embError);
         embeddingService = new EmbeddingService();
       }
 
-      // Initialize RAG Orchestrator
       const ragOrchestrator = new RAGOrchestrator(llmService, embeddingService);
       ragOrchestratorRef.current = ragOrchestrator;
 
@@ -114,7 +106,6 @@ export const LLMChat: React.FC = () => {
     setIsLoading(true);
 
     try {
-      // Start streaming response
       const assistantMessage: Message = {
         role: 'assistant',
         content: '',

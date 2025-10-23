@@ -45,6 +45,7 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({
   const [labels, setLabels] = useState('');
   const [isAdding, setIsAdding] = useState(false);
   const [, setIsLoading] = useState(false);
+  const [messageApi, contextHolder] = message.useMessage();
 
   // Load memories from graph when vault changes or refresh is triggered
   useEffect(() => {
@@ -56,7 +57,6 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({
 
       setIsLoading(true);
       try {
-        console.log('📂 Loading memories from graph for vault:', vaultName);
         const nodes = await graph_list_memory_nodes(vaultName, 100);
 
         const decoder = new TextDecoder();
@@ -68,7 +68,7 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({
               content = decoder.decode(new Uint8Array(node.encrypted_content));
             }
           } catch (error) {
-            console.warn(`Failed to decode memory ${node.id}:`, error);
+            console.error('Failed to decode memory:', error);
             content = '[Unable to decode content]';
           }
 
@@ -76,15 +76,13 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({
             id: node.id,
             content,
             labels: node.labels || [],
-            timestamp: new Date(), // We don't store timestamps in graph yet
+            timestamp: new Date(),
           };
         });
 
-        console.log(`✅ Loaded ${loadedMemories.length} memories from graph`);
         setMemories(loadedMemories);
       } catch (error) {
         console.error('Failed to load memories:', error);
-        // Don't show error message - might just be empty graph
       } finally {
         setIsLoading(false);
       }
@@ -95,17 +93,17 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({
 
   const handleAddMemory = async () => {
     if (!newMemory.trim()) {
-      message.warning('Please enter memory content');
+      messageApi.warning('Please enter memory content');
       return;
     }
 
     if (!vaultName) {
-      message.warning('Please select a vault first');
+      messageApi.warning('Please select a vault first');
       return;
     }
 
     if (!embeddingService || !embeddingService.isReady()) {
-      message.error('Embedding service not ready');
+      messageApi.error('Embedding service not ready');
       return;
     }
 
@@ -153,27 +151,29 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({
       setNewMemory('');
       setLabels('');
 
-      message.success('Memory added to graph!');
+      messageApi.success('Memory added to graph!');
       onMemoryAdded?.();
     } catch (error) {
       console.error('Failed to add memory:', error);
-      message.error(`Failed to add memory: ${error}`);
+      messageApi.error(`Failed to add memory: ${error}`);
     } finally {
       setIsAdding(false);
     }
   };
 
   return (
-    <Card
-      title={
-        <Space>
-          <BulbOutlined />
-          <Title level={4} style={{ margin: 0 }}>
-            Memory Manager
-          </Title>
-        </Space>
-      }
-    >
+    <>
+      {contextHolder}
+      <Card
+        title={
+          <Space>
+            <BulbOutlined />
+            <Title level={4} style={{ margin: 0 }}>
+              Memory Manager
+            </Title>
+          </Space>
+        }
+      >
       {!vaultName && (
         <Text type="warning">
           Please select a vault to start adding memories
@@ -252,6 +252,7 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({
           />
         </>
       )}
-    </Card>
+      </Card>
+    </>
   );
 };

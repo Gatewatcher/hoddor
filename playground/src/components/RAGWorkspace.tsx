@@ -78,6 +78,7 @@ export const RAGWorkspace: React.FC = () => {
 
   const identity = useSelector(appSelectors.getIdentity);
   const dispatch = useDispatch();
+  const [messageApi, contextHolder] = message.useMessage();
 
   const llmServiceRef = useRef<WebLLMService | null>(null);
   const embeddingServiceRef = useRef<EmbeddingService | null>(null);
@@ -110,9 +111,8 @@ export const RAGWorkspace: React.FC = () => {
         embeddingService = new EmbeddingService();
         await embeddingService.initialize();
         embeddingServiceRef.current = embeddingService;
-        console.log('Embeddings initialized successfully');
       } catch (embError) {
-        console.warn('Embedding initialization failed:', embError);
+        console.error('Embedding initialization failed:', embError);
         embeddingService = new EmbeddingService();
         embeddingServiceRef.current = embeddingService;
       }
@@ -218,114 +218,77 @@ export const RAGWorkspace: React.FC = () => {
   };
 
   const handleSaveGraph = async () => {
-    console.log('🔍 handleSaveGraph called');
-    console.log('  - selectedVault:', selectedVault);
-    console.log('  - identity:', identity);
-
     if (!selectedVault) {
-      console.log('❌ No vault selected');
-      message.warning('Please select a vault first');
+      messageApi.warning('Please select a vault first');
       return;
     }
 
     if (!identity) {
-      console.log('❌ No identity');
-      message.error('Please authenticate first (Passphrase or MFA)');
+      messageApi.error('Please authenticate first (Passphrase or MFA)');
       return;
     }
 
-    console.log('  - identity.public_key:', identity.public_key);
-    console.log(
-      '  - identity.private_key:',
-      identity.private_key() ? '***' : undefined,
-    );
-
     if (!identity.public_key || !identity.private_key) {
-      console.log('❌ Identity missing keys');
-      message.error('Identity is incomplete - please authenticate again');
+      messageApi.error('Identity is incomplete - please authenticate again');
       return;
     }
 
     setIsSaving(true);
-    console.log('💾 Calling graph_backup_vault...');
     try {
       await graph_backup_vault(
         selectedVault,
         identity.public_key(),
         identity.private_key(),
       );
-      console.log('✅ graph_backup_vault succeeded');
-      message.success(`Graph saved to OPFS for vault: ${selectedVault}`);
+      messageApi.success(`Graph saved to OPFS for vault: ${selectedVault}`);
     } catch (error) {
-      console.error('❌ Failed to save graph:', error);
-      message.error(`Failed to save graph: ${error}`);
+      console.error('Failed to save graph:', error);
+      messageApi.error(`Failed to save graph: ${error}`);
     } finally {
       setIsSaving(false);
-      console.log('🏁 handleSaveGraph finished');
     }
   };
 
   const handleLoadGraph = async () => {
-    console.log('🔍 handleLoadGraph called');
-    console.log('  - selectedVault:', selectedVault);
-    console.log('  - identity:', identity);
-
     if (!selectedVault) {
-      console.log('❌ No vault selected');
-      message.warning('Please select a vault first');
+      messageApi.warning('Please select a vault first');
       return;
     }
 
     if (!identity) {
-      console.log('❌ No identity');
-      message.error('Please authenticate first (Passphrase or MFA)');
+      messageApi.error('Please authenticate first (Passphrase or MFA)');
       return;
     }
 
-    console.log('  - identity.public_key:', identity.public_key);
-    console.log(
-      '  - identity.private_key:',
-      identity.private_key() ? '***' : undefined,
-    );
-
     if (!identity.public_key || !identity.private_key) {
-      console.log('❌ Identity missing keys');
-      message.error('Identity is incomplete - please authenticate again');
+      messageApi.error('Identity is incomplete - please authenticate again');
       return;
     }
 
     setIsRestoring(true);
-    console.log('📂 Calling graph_restore_vault...');
     try {
       const found = await graph_restore_vault(
         selectedVault,
         identity.public_key(),
         identity.private_key(),
       );
-      console.log('  - found:', found);
       if (found) {
-        console.log(
-          '✅ graph_restore_vault succeeded - backup found and restored',
-        );
-        message.success(`Graph loaded from OPFS for vault: ${selectedVault}`);
-        // Trigger memory list refresh
+        messageApi.success(`Graph loaded from OPFS for vault: ${selectedVault}`);
         setMemoryRefreshTrigger(prev => prev + 1);
       } else {
-        console.log('ℹ️ No backup found (first time)');
-        message.info('No saved graph found (this is the first time)');
+        messageApi.info('No saved graph found (this is the first time)');
       }
     } catch (error) {
-      console.error('❌ Failed to load graph:', error);
-      message.error(`Failed to load graph: ${error}`);
+      console.error('Failed to load graph:', error);
+      messageApi.error(`Failed to load graph: ${error}`);
     } finally {
       setIsRestoring(false);
-      console.log('🏁 handleLoadGraph finished');
     }
   };
 
   const handlePassphraseAuth = async (values: { passphrase: string }) => {
     if (!selectedVault) {
-      message.warning('Please select a vault first');
+      messageApi.warning('Please select a vault first');
       return;
     }
 
@@ -335,18 +298,18 @@ export const RAGWorkspace: React.FC = () => {
         selectedVault,
       );
       dispatch(actions.addIdentity(identityHandle.to_json()));
-      message.success('Authenticated successfully!');
+      messageApi.success('Authenticated successfully!');
       setIsAuthModalOpen(false);
       passphraseForm.resetFields();
     } catch (error) {
       console.error('Passphrase auth failed:', error);
-      message.error(`Authentication failed: ${error}`);
+      messageApi.error(`Authentication failed: ${error}`);
     }
   };
 
   const handleMFARegister = async (values: { username: string }) => {
     if (!selectedVault) {
-      message.warning('Please select a vault first');
+      messageApi.warning('Please select a vault first');
       return;
     }
 
@@ -356,18 +319,18 @@ export const RAGWorkspace: React.FC = () => {
         values.username,
       );
       dispatch(actions.addIdentity(identityHandle.to_json()));
-      message.success('MFA registered successfully!');
+      messageApi.success('MFA registered successfully!');
       setIsAuthModalOpen(false);
       mfaForm.resetFields();
     } catch (error) {
       console.error('MFA register failed:', error);
-      message.error(`MFA registration failed: ${error}`);
+      messageApi.error(`MFA registration failed: ${error}`);
     }
   };
 
   const handleMFAAuth = async (values: { username: string }) => {
     if (!selectedVault) {
-      message.warning('Please select a vault first');
+      messageApi.warning('Please select a vault first');
       return;
     }
 
@@ -377,12 +340,12 @@ export const RAGWorkspace: React.FC = () => {
         values.username,
       );
       dispatch(actions.addIdentity(identityHandle.to_json()));
-      message.success('Authenticated successfully!');
+      messageApi.success('Authenticated successfully!');
       setIsAuthModalOpen(false);
       mfaForm.resetFields();
     } catch (error) {
       console.error('MFA auth failed:', error);
-      message.error(`MFA authentication failed: ${error}`);
+      messageApi.error(`MFA authentication failed: ${error}`);
     }
   };
 
@@ -395,17 +358,17 @@ export const RAGWorkspace: React.FC = () => {
   const canUseRAG = embeddingServiceRef.current?.isReady() ?? false;
 
   return (
-    <div style={{ padding: 16, height: '89vh', overflow: 'auto' }}>
-      <Row gutter={16} style={{ height: '100%' }}>
+    <>
+      {contextHolder}
+      <div style={{ padding: 16, height: '89vh', overflow: 'auto' }}>
+        <Row gutter={16} style={{ height: '100%' }}>
         <Col span={10} style={{ height: '100%' }}>
           {servicesReady && embeddingServiceRef.current ? (
             <MemoryManager
               vaultName={selectedVault}
               embeddingService={embeddingServiceRef.current}
               refreshTrigger={memoryRefreshTrigger}
-              onMemoryAdded={() => {
-                console.log('Memory added!');
-              }}
+              onMemoryAdded={() => {}}
             />
           ) : (
             <Card
@@ -772,6 +735,7 @@ export const RAGWorkspace: React.FC = () => {
           </Form>
         )}
       </Modal>
-    </div>
+      </div>
+    </>
   );
 };
