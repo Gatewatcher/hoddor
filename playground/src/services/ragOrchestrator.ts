@@ -1,6 +1,6 @@
-import { graph_vector_search } from '../../../../hoddor/pkg/hoddor';
-import { EmbeddingService } from '../embeddings/embedding_service';
-import { ChatMessage, WebLLMService } from '../llm/webllm_service';
+import { graph_vector_search } from '../../../hoddor/pkg/hoddor';
+import { EmbeddingService } from './embedding';
+import { ChatMessage, WebLLMService } from './webllm';
 
 export interface RAGContext {
   content: string;

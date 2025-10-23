@@ -1,11 +1,11 @@
 // LLM Services
-export { WebLLMService } from "./llm/webllm_service";
-export type { ChatMessage, ChatOptions } from "./llm/webllm_service";
+export { WebLLMService } from './webllm';
+export type { ChatMessage, ChatOptions } from './webllm';
 
 // Embedding Services
-export { EmbeddingService } from "./embeddings/embedding_service";
-export type { EmbeddingResult } from "./embeddings/embedding_service";
+export { EmbeddingService } from './embedding';
+export type { EmbeddingResult } from './embedding';
 
 // RAG Orchestrator
-export { RAGOrchestrator } from "./rag/rag_orchestrator";
-export type { RAGContext, RAGQueryOptions } from "./rag/rag_orchestrator";
+export { RAGOrchestrator } from './ragOrchestrator';
+export type { RAGContext, RAGQueryOptions } from './ragOrchestrator';
