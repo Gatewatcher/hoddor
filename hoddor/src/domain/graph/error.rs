@@ -1,48 +1,19 @@
 use std::fmt;
 
-/// Errors specific to graph operations
 #[derive(Debug)]
 pub enum GraphError {
-    /// Node not found
     NodeNotFound(String),
-
-    /// Edge not found
     EdgeNotFound(String),
-
-    /// Node already exists
     NodeAlreadyExists(String),
-
-    /// Invalid node type
     InvalidNodeType(String),
-
-    /// Invalid edge type
     InvalidEdgeType(String),
-
-    /// Encryption error
     EncryptionError(String),
-
-    /// Decryption error
     DecryptionError(String),
-
-    /// Serialization error
     SerializationError(String),
-
-    /// Database error (CozoDB)
     DatabaseError(String),
-
-    /// HMAC verification failed
     IntegrityError(String),
-
-    /// Invalid embedding dimension
     InvalidEmbedding(String),
-
-    /// Vault mismatch
-    VaultMismatch {
-        expected: String,
-        found: String,
-    },
-
-    /// Generic error
+    VaultMismatch { expected: String, found: String },
     Other(String),
 }
 
@@ -74,5 +45,4 @@ impl fmt::Display for GraphError {
 
 impl std::error::Error for GraphError {}
 
-/// Result type for graph operations
 pub type GraphResult<T> = Result<T, GraphError>;

@@ -8,26 +8,22 @@ use cozo::{DataValue, DbInstance, ScriptMutability};
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-/// CozoDB adapter for graph operations
 pub struct CozoGraphAdapter {
     db: Arc<DbInstance>,
 }
 
 impl CozoGraphAdapter {
-    /// Create a new CozoDB adapter with in-memory storage
     pub fn new_in_memory() -> GraphResult<Self> {
         let db = DbInstance::new("mem", "", Default::default())
             .map_err(|e| GraphError::DatabaseError(format!("Failed to create database: {}", e)))?;
 
         let adapter = Self { db: Arc::new(db) };
 
-        // Initialize schema
         adapter.initialize_schema()?;
 
         Ok(adapter)
     }
 
-    /// Helper to convert serde_json::Value to DataValue
     fn json_to_datavalue(value: &serde_json::Value) -> DataValue {
         match value {
             serde_json::Value::Null => DataValue::Null,
@@ -46,15 +42,10 @@ impl CozoGraphAdapter {
                 let vec: Vec<DataValue> = arr.iter().map(|v| Self::json_to_datavalue(v)).collect();
                 DataValue::List(vec)
             }
-            serde_json::Value::Object(_) => {
-                // For now, convert objects to JSON strings
-                // TODO: Handle this better if needed
-                DataValue::from(value.to_string())
-            }
+            serde_json::Value::Object(_) => DataValue::from(value.to_string()),
         }
     }
 
-    /// Helper to build params from serde_json::Value
     fn build_params(json: serde_json::Value) -> BTreeMap<String, DataValue> {
         let mut params = BTreeMap::new();
         if let serde_json::Value::Object(map) = json {
@@ -65,9 +56,7 @@ impl CozoGraphAdapter {
         params
     }
 
-    /// Initialize the database schema
     fn initialize_schema(&self) -> GraphResult<()> {
-        // Create nodes relation
         let nodes_schema = r#"
             :create nodes {
                 id: String
@@ -91,9 +80,10 @@ impl CozoGraphAdapter {
 
         self.db
             .run_script(nodes_schema, Default::default(), ScriptMutability::Mutable)
-            .map_err(|e| GraphError::DatabaseError(format!("Failed to create nodes schema: {}", e)))?;
+            .map_err(|e| {
+                GraphError::DatabaseError(format!("Failed to create nodes schema: {}", e))
+            })?;
 
-        // Create edges relation
         let edges_schema = r#"
             :create edges {
                 id: String
@@ -111,15 +101,13 @@ impl CozoGraphAdapter {
 
         self.db
             .run_script(edges_schema, Default::default(), ScriptMutability::Mutable)
-            .map_err(|e| GraphError::DatabaseError(format!("Failed to create edges schema: {}", e)))?;
-
-        // Note: Primary keys are automatically indexed.
-        // Additional indexes can be created using HNSW or FTS when needed.
+            .map_err(|e| {
+                GraphError::DatabaseError(format!("Failed to create edges schema: {}", e))
+            })?;
 
         Ok(())
     }
 
-    /// Helper to deserialize a node from CozoDB row
     fn deserialize_node(&self, row: &[serde_json::Value]) -> GraphResult<GraphNode> {
         if row.len() < 15 {
             return Err(GraphError::SerializationError(
@@ -127,7 +115,6 @@ impl CozoGraphAdapter {
             ));
         }
 
-        // id is at index 0 (primary key comes first)
         let id = NodeId::from_string(
             row[0]
                 .as_str()
@@ -218,7 +205,6 @@ impl CozoGraphAdapter {
         })
     }
 
-    /// Helper to deserialize an edge from CozoDB row
     fn deserialize_edge(&self, row: &[serde_json::Value]) -> GraphResult<GraphEdge> {
         if row.len() < 9 {
             return Err(GraphError::SerializationError(
@@ -291,9 +277,7 @@ impl CozoGraphAdapter {
         })
     }
 
-    /// Get current timestamp (milliseconds)
     fn get_timestamp() -> u64 {
-        // Use js_sys::Date for WASM compatibility
         js_sys::Date::now() as u64
     }
 }
@@ -329,10 +313,8 @@ impl GraphPort for CozoGraphAdapter {
             access_count: 0,
         };
 
-        // Validate node
         validate_node(&node)?;
 
-        // Insert into database
         let query = r#"
             ?[id, node_type, vault_id, namespace, labels, embedding, encrypted_content,
               content_hmac, content_size, version, expires_at, created_at, updated_at,
@@ -348,20 +330,76 @@ impl GraphPort for CozoGraphAdapter {
         "#;
 
         let mut params = BTreeMap::new();
-        params.insert("node_type".to_string(), DataValue::from(node.node_type.as_str()));
-        params.insert("vault_id".to_string(), DataValue::from(node.vault_id.as_str()));
-        params.insert("namespace".to_string(), node.namespace.as_ref().map(|s| DataValue::from(s.as_str())).unwrap_or(DataValue::Null));
-        params.insert("labels".to_string(), DataValue::List(node.labels.iter().map(|s| DataValue::from(s.as_str())).collect()));
-        params.insert("embedding".to_string(), node.embedding.as_ref().map(|v| DataValue::List(v.iter().map(|f| DataValue::from(*f as f64)).collect())).unwrap_or(DataValue::Null));
-        params.insert("encrypted_content".to_string(), DataValue::Bytes(node.encrypted_content.clone()));
-        params.insert("content_hmac".to_string(), DataValue::from(node.content_hmac.as_str()));
-        params.insert("content_size".to_string(), DataValue::from(node.metadata.content_size as i64));
-        params.insert("version".to_string(), DataValue::from(node.metadata.version as i64));
-        params.insert("expires_at".to_string(), node.metadata.expires_at.map(|e| DataValue::from(e as i64)).unwrap_or(DataValue::Null));
-        params.insert("created_at".to_string(), DataValue::from(node.created_at as i64));
-        params.insert("updated_at".to_string(), DataValue::from(node.updated_at as i64));
-        params.insert("accessed_at".to_string(), DataValue::from(node.accessed_at as i64));
-        params.insert("access_count".to_string(), DataValue::from(node.access_count as i64));
+        params.insert(
+            "node_type".to_string(),
+            DataValue::from(node.node_type.as_str()),
+        );
+        params.insert(
+            "vault_id".to_string(),
+            DataValue::from(node.vault_id.as_str()),
+        );
+        params.insert(
+            "namespace".to_string(),
+            node.namespace
+                .as_ref()
+                .map(|s| DataValue::from(s.as_str()))
+                .unwrap_or(DataValue::Null),
+        );
+        params.insert(
+            "labels".to_string(),
+            DataValue::List(
+                node.labels
+                    .iter()
+                    .map(|s| DataValue::from(s.as_str()))
+                    .collect(),
+            ),
+        );
+        params.insert(
+            "embedding".to_string(),
+            node.embedding
+                .as_ref()
+                .map(|v| DataValue::List(v.iter().map(|f| DataValue::from(*f as f64)).collect()))
+                .unwrap_or(DataValue::Null),
+        );
+        params.insert(
+            "encrypted_content".to_string(),
+            DataValue::Bytes(node.encrypted_content.clone()),
+        );
+        params.insert(
+            "content_hmac".to_string(),
+            DataValue::from(node.content_hmac.as_str()),
+        );
+        params.insert(
+            "content_size".to_string(),
+            DataValue::from(node.metadata.content_size as i64),
+        );
+        params.insert(
+            "version".to_string(),
+            DataValue::from(node.metadata.version as i64),
+        );
+        params.insert(
+            "expires_at".to_string(),
+            node.metadata
+                .expires_at
+                .map(|e| DataValue::from(e as i64))
+                .unwrap_or(DataValue::Null),
+        );
+        params.insert(
+            "created_at".to_string(),
+            DataValue::from(node.created_at as i64),
+        );
+        params.insert(
+            "updated_at".to_string(),
+            DataValue::from(node.updated_at as i64),
+        );
+        params.insert(
+            "accessed_at".to_string(),
+            DataValue::from(node.accessed_at as i64),
+        );
+        params.insert(
+            "access_count".to_string(),
+            DataValue::from(node.access_count as i64),
+        );
         params.insert("id".to_string(), DataValue::from(node.id.as_str()));
 
         self.db
@@ -396,11 +434,10 @@ impl GraphPort for CozoGraphAdapter {
             .run_script(query, params, ScriptMutability::Immutable)
             .map_err(|e| GraphError::DatabaseError(format!("Failed to query node: {}", e)))?;
 
-        // Convert NamedRows to JSON
-        let result_json: serde_json::Value = serde_json::to_value(&result)
-            .map_err(|e| GraphError::SerializationError(format!("Failed to serialize result: {}", e)))?;
+        let result_json: serde_json::Value = serde_json::to_value(&result).map_err(|e| {
+            GraphError::SerializationError(format!("Failed to serialize result: {}", e))
+        })?;
 
-        // CozoDB returns: {"ok": true, "rows": [[...]], "headers": [...]}
         let rows = result_json["rows"]
             .as_array()
             .ok_or_else(|| GraphError::DatabaseError("Invalid result format".to_string()))?;
@@ -409,16 +446,13 @@ impl GraphPort for CozoGraphAdapter {
             return Ok(None);
         }
 
-        // Get first row
         let row = rows[0]
             .as_array()
             .ok_or_else(|| GraphError::DatabaseError("Invalid row format".to_string()))?;
 
-        // Deserialize node
         let node = self.deserialize_node(row)?;
         Ok(Some(node))
     }
-
 
     async fn update_node(
         &self,
@@ -456,7 +490,6 @@ impl GraphPort for CozoGraphAdapter {
     }
 
     async fn delete_node(&self, vault_id: &str, node_id: &NodeId) -> GraphResult<()> {
-        // First, delete all edges connected to this node
         let delete_edges = r#"
             ?[id] := *edges{id, from_node: from, to_node: to, vault_id: vid},
                      (from == $node_id || to == $node_id),
@@ -475,7 +508,6 @@ impl GraphPort for CozoGraphAdapter {
             .run_script(delete_edges, edge_params, ScriptMutability::Mutable)
             .map_err(|e| GraphError::DatabaseError(format!("Failed to delete edges: {}", e)))?;
 
-        // Then delete the node
         let delete_node = r#"
             ?[id] := *nodes{id, vault_id: vid},
                      id == $node_id,
@@ -503,7 +535,6 @@ impl GraphPort for CozoGraphAdapter {
         _node_type: &str,
         _limit: Option<usize>,
     ) -> GraphResult<Vec<GraphNode>> {
-        // TODO: Implement list
         Ok(vec![])
     }
 
@@ -528,10 +559,8 @@ impl GraphPort for CozoGraphAdapter {
             created_at: now,
         };
 
-        // Validate edge
         validate_edge(&edge)?;
 
-        // Insert into database
         let query = r#"
             ?[id, from_node, to_node, edge_type, vault_id, weight, bidirectional,
               encrypted_context, created_at] <- [[$id, $from_node, $to_node, $edge_type,
@@ -570,30 +599,36 @@ impl GraphPort for CozoGraphAdapter {
         direction: EdgeDirection,
     ) -> GraphResult<Vec<GraphEdge>> {
         let query = match direction {
-            EdgeDirection::Outgoing => r#"
+            EdgeDirection::Outgoing => {
+                r#"
                 ?[id, from_node, to_node, edge_type, vault_id, weight, bidirectional,
                   encrypted_context, created_at] :=
                     *edges{id, from_node, to_node, edge_type, vault_id, weight, bidirectional,
                            encrypted_context, created_at},
                     from_node == $node_id,
                     vault_id == $vault_id
-            "#,
-            EdgeDirection::Incoming => r#"
+            "#
+            }
+            EdgeDirection::Incoming => {
+                r#"
                 ?[id, from_node, to_node, edge_type, vault_id, weight, bidirectional,
                   encrypted_context, created_at] :=
                     *edges{id, from_node, to_node, edge_type, vault_id, weight, bidirectional,
                            encrypted_context, created_at},
                     to_node == $node_id,
                     vault_id == $vault_id
-            "#,
-            EdgeDirection::Both => r#"
+            "#
+            }
+            EdgeDirection::Both => {
+                r#"
                 ?[id, from_node, to_node, edge_type, vault_id, weight, bidirectional,
                   encrypted_context, created_at] :=
                     *edges{id, from_node, to_node, edge_type, vault_id, weight, bidirectional,
                            encrypted_context, created_at},
                     (from_node == $node_id || to_node == $node_id),
                     vault_id == $vault_id
-            "#,
+            "#
+            }
         };
 
         let params_json = serde_json::json!({
@@ -607,9 +642,9 @@ impl GraphPort for CozoGraphAdapter {
             .run_script(query, params, ScriptMutability::Immutable)
             .map_err(|e| GraphError::DatabaseError(format!("Failed to query edges: {}", e)))?;
 
-        // Parse result
-        let result_json: serde_json::Value = serde_json::to_value(&result)
-            .map_err(|e| GraphError::SerializationError(format!("Failed to serialize result: {}", e)))?;
+        let result_json: serde_json::Value = serde_json::to_value(&result).map_err(|e| {
+            GraphError::SerializationError(format!("Failed to serialize result: {}", e))
+        })?;
 
         let rows = result_json["rows"]
             .as_array()
@@ -628,10 +663,7 @@ impl GraphPort for CozoGraphAdapter {
         Ok(edges)
     }
 
-    /// Helper to deserialize an edge from CozoDB row
-
     async fn delete_edge(&self, _vault_id: &str, _edge_id: &EdgeId) -> GraphResult<()> {
-        // TODO: Implement delete_edge
         Err(GraphError::Other(
             "Delete edge not yet implemented".to_string(),
         ))
@@ -643,7 +675,6 @@ impl GraphPort for CozoGraphAdapter {
         node_id: &NodeId,
         edge_types: Option<Vec<String>>,
     ) -> GraphResult<Vec<GraphNode>> {
-        // Build query based on whether we filter by edge types
         let query = if let Some(types) = edge_types {
             let types_list = types
                 .iter()
@@ -700,9 +731,9 @@ impl GraphPort for CozoGraphAdapter {
             .run_script(&query, params, ScriptMutability::Immutable)
             .map_err(|e| GraphError::DatabaseError(format!("Failed to query neighbors: {}", e)))?;
 
-        // Parse result
-        let result_json: serde_json::Value = serde_json::to_value(&result)
-            .map_err(|e| GraphError::SerializationError(format!("Failed to parse result: {}", e)))?;
+        let result_json: serde_json::Value = serde_json::to_value(&result).map_err(|e| {
+            GraphError::SerializationError(format!("Failed to parse result: {}", e))
+        })?;
 
         let rows = result_json["rows"]
             .as_array()
@@ -728,9 +759,6 @@ impl GraphPort for CozoGraphAdapter {
         limit: usize,
         min_similarity: Option<f32>,
     ) -> GraphResult<Vec<(GraphNode, f32)>> {
-        // TODO: Implement HNSW vector search using CozoDB's native support
-        // For now, return empty results
-        // In future: Use CozoDB's `~` operator for nearest neighbor search
         let _ = (vault_id, query_embedding, limit, min_similarity);
         Ok(Vec::new())
     }
@@ -755,7 +783,6 @@ mod tests {
     async fn test_create_and_get_node() {
         let adapter = CozoGraphAdapter::new_in_memory().unwrap();
 
-        // Create a node
         let content = vec![1, 2, 3, 4, 5];
         let node_id = adapter
             .create_node(
@@ -770,7 +797,6 @@ mod tests {
             .await
             .expect("Failed to create node");
 
-        // Get the node back
         let retrieved = adapter
             .get_node("test_vault", &node_id)
             .await
@@ -793,7 +819,6 @@ mod tests {
     async fn test_create_update_get_node() {
         let adapter = CozoGraphAdapter::new_in_memory().unwrap();
 
-        // Create
         let node_id = adapter
             .create_node(
                 "test_vault",
@@ -807,7 +832,6 @@ mod tests {
             .await
             .unwrap();
 
-        // Update
         let new_content = vec![4, 5, 6, 7];
         adapter
             .update_node(
@@ -820,7 +844,6 @@ mod tests {
             .await
             .expect("Failed to update node");
 
-        // Get and verify
         let node = adapter
             .get_node("test_vault", &node_id)
             .await
@@ -836,7 +859,6 @@ mod tests {
     async fn test_create_and_delete_node() {
         let adapter = CozoGraphAdapter::new_in_memory().unwrap();
 
-        // Create
         let node_id = adapter
             .create_node(
                 "test_vault",
@@ -850,20 +872,17 @@ mod tests {
             .await
             .unwrap();
 
-        // Verify it exists
         assert!(adapter
             .get_node("test_vault", &node_id)
             .await
             .unwrap()
             .is_some());
 
-        // Delete
         adapter
             .delete_node("test_vault", &node_id)
             .await
             .expect("Failed to delete node");
 
-        // Verify it's gone
         assert!(adapter
             .get_node("test_vault", &node_id)
             .await
@@ -875,7 +894,6 @@ mod tests {
     async fn test_create_and_get_edges() {
         let adapter = CozoGraphAdapter::new_in_memory().unwrap();
 
-        // Create two nodes
         let from_id = adapter
             .create_node(
                 "test_vault",
@@ -902,7 +920,6 @@ mod tests {
             .await
             .unwrap();
 
-        // Create edge
         let edge_id = adapter
             .create_edge(
                 "test_vault",
@@ -919,7 +936,6 @@ mod tests {
             .await
             .expect("Failed to create edge");
 
-        // Get outgoing edges from first node
         let outgoing = adapter
             .get_edges("test_vault", &from_id, EdgeDirection::Outgoing)
             .await
@@ -932,7 +948,6 @@ mod tests {
         assert_eq!(outgoing[0].edge_type, "relates_to");
         assert_eq!(outgoing[0].properties.weight, 0.8);
 
-        // Get incoming edges to second node
         let incoming = adapter
             .get_edges("test_vault", &to_id, EdgeDirection::Incoming)
             .await
@@ -946,23 +961,45 @@ mod tests {
     async fn test_get_neighbors() {
         let adapter = CozoGraphAdapter::new_in_memory().unwrap();
 
-        // Create a small graph: A -> B -> C
         let node_a = adapter
-            .create_node("test_vault", "entity", vec![1], "h1".to_string(), vec![], None, None)
+            .create_node(
+                "test_vault",
+                "entity",
+                vec![1],
+                "h1".to_string(),
+                vec![],
+                None,
+                None,
+            )
             .await
             .unwrap();
 
         let node_b = adapter
-            .create_node("test_vault", "entity", vec![2], "h2".to_string(), vec![], None, None)
+            .create_node(
+                "test_vault",
+                "entity",
+                vec![2],
+                "h2".to_string(),
+                vec![],
+                None,
+                None,
+            )
             .await
             .unwrap();
 
         let node_c = adapter
-            .create_node("test_vault", "entity", vec![3], "h3".to_string(), vec![], None, None)
+            .create_node(
+                "test_vault",
+                "entity",
+                vec![3],
+                "h3".to_string(),
+                vec![],
+                None,
+                None,
+            )
             .await
             .unwrap();
 
-        // A -> B
         adapter
             .create_edge(
                 "test_vault",
@@ -974,7 +1011,6 @@ mod tests {
             .await
             .unwrap();
 
-        // B -> C
         adapter
             .create_edge(
                 "test_vault",
@@ -986,7 +1022,6 @@ mod tests {
             .await
             .unwrap();
 
-        // Get neighbors of B (should be A and C)
         let neighbors = adapter
             .get_neighbors("test_vault", &node_b, None)
             .await
@@ -1002,14 +1037,29 @@ mod tests {
     async fn test_delete_node_with_edges() {
         let adapter = CozoGraphAdapter::new_in_memory().unwrap();
 
-        // Create nodes and edge
         let node_a = adapter
-            .create_node("test_vault", "entity", vec![1], "h1".to_string(), vec![], None, None)
+            .create_node(
+                "test_vault",
+                "entity",
+                vec![1],
+                "h1".to_string(),
+                vec![],
+                None,
+                None,
+            )
             .await
             .unwrap();
 
         let node_b = adapter
-            .create_node("test_vault", "entity", vec![2], "h2".to_string(), vec![], None, None)
+            .create_node(
+                "test_vault",
+                "entity",
+                vec![2],
+                "h2".to_string(),
+                vec![],
+                None,
+                None,
+            )
             .await
             .unwrap();
 
@@ -1024,20 +1074,20 @@ mod tests {
             .await
             .unwrap();
 
-        // Verify edge exists
         let edges = adapter
             .get_edges("test_vault", &node_a, EdgeDirection::Outgoing)
             .await
             .unwrap();
         assert_eq!(edges.len(), 1);
 
-        // Delete node A (should also delete the edge)
         adapter.delete_node("test_vault", &node_a).await.unwrap();
 
-        // Verify node is deleted
-        assert!(adapter.get_node("test_vault", &node_a).await.unwrap().is_none());
+        assert!(adapter
+            .get_node("test_vault", &node_a)
+            .await
+            .unwrap()
+            .is_none());
 
-        // Verify edge is also deleted
         let edges = adapter
             .get_edges("test_vault", &node_b, EdgeDirection::Incoming)
             .await

@@ -1,9 +1,9 @@
+import { Tabs } from 'antd';
 import { useState } from 'react';
 import { Provider } from 'react-redux';
-import { Tabs } from 'antd';
 
-import { Vaults } from './components/Vaults';
 import { RAGWorkspace } from './components/RAGWorkspace';
+import { Vaults } from './components/Vaults';
 import { reduxStore } from './store/app.store';
 
 export const App = () => {
@@ -21,6 +21,7 @@ export const App = () => {
       <Tabs
         activeKey={activeTab}
         onChange={setActiveTab}
+        centered
         items={[
           {
             key: 'vaults',
@@ -33,7 +34,6 @@ export const App = () => {
             children: <RAGWorkspace />,
           },
         ]}
-        style={{ height: '100vh' }}
       />
     </Provider>
   );

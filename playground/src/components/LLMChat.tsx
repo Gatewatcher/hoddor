@@ -1,25 +1,37 @@
-import React, { useState, useEffect, useRef } from "react";
-import { Card, Input, Button, Select, Space, Typography, Progress, List } from "antd";
-import { SendOutlined, ClearOutlined, RobotOutlined } from "@ant-design/icons";
-import { WebLLMService, RAGOrchestrator, EmbeddingService } from "../services";
+import { ClearOutlined, RobotOutlined, SendOutlined } from '@ant-design/icons';
+import {
+  Button,
+  Card,
+  Input,
+  List,
+  Progress,
+  Select,
+  Space,
+  Typography,
+} from 'antd';
+import React, { useEffect, useRef, useState } from 'react';
+
+import { EmbeddingService, RAGOrchestrator, WebLLMService } from '../services';
 
 const { TextArea } = Input;
 const { Title, Text } = Typography;
 const { Option } = Select;
 
 interface Message {
-  role: "user" | "assistant";
+  role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
 }
 
 export const LLMChat: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState("");
+  const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
   const [initProgress, setInitProgress] = useState(0);
-  const [selectedModel, setSelectedModel] = useState("Phi-3.5-mini-instruct-q4f16_1-MLC");
+  const [selectedModel, setSelectedModel] = useState(
+    'Phi-3.5-mini-instruct-q4f16_1-MLC',
+  );
 
   const llmServiceRef = useRef<WebLLMService | null>(null);
   const embeddingServiceRef = useRef<EmbeddingService | null>(null);
@@ -27,7 +39,7 @@ export const LLMChat: React.FC = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
   useEffect(() => {
@@ -41,7 +53,7 @@ export const LLMChat: React.FC = () => {
     try {
       // Initialize LLM
       const llmService = new WebLLMService(selectedModel);
-      await llmService.initialize((report) => {
+      await llmService.initialize(report => {
         setInitProgress(report.progress * 100);
       });
       llmServiceRef.current = llmService;
@@ -52,9 +64,12 @@ export const LLMChat: React.FC = () => {
         embeddingService = new EmbeddingService();
         await embeddingService.initialize();
         embeddingServiceRef.current = embeddingService;
-        console.log("Embeddings initialized successfully");
+        console.log('Embeddings initialized successfully');
       } catch (embError) {
-        console.warn("Embedding initialization failed (optional for Phase 1):", embError);
+        console.warn(
+          'Embedding initialization failed (optional for Phase 1):',
+          embError,
+        );
         // Create a mock embedding service that's not ready
         embeddingService = new EmbeddingService();
       }
@@ -65,16 +80,16 @@ export const LLMChat: React.FC = () => {
 
       setMessages([
         {
-          role: "assistant",
+          role: 'assistant',
           content: "Hello! I'm ready to help. Ask me anything!",
           timestamp: new Date(),
         },
       ]);
     } catch (error) {
-      console.error("Initialization failed:", error);
+      console.error('Initialization failed:', error);
       setMessages([
         {
-          role: "assistant",
+          role: 'assistant',
           content: `Failed to initialize: ${error}`,
           timestamp: new Date(),
         },
@@ -89,29 +104,29 @@ export const LLMChat: React.FC = () => {
     if (!input.trim() || !ragOrchestratorRef.current) return;
 
     const userMessage: Message = {
-      role: "user",
+      role: 'user',
       content: input,
       timestamp: new Date(),
     };
 
-    setMessages((prev) => [...prev, userMessage]);
-    setInput("");
+    setMessages(prev => [...prev, userMessage]);
+    setInput('');
     setIsLoading(true);
 
     try {
       // Start streaming response
       const assistantMessage: Message = {
-        role: "assistant",
-        content: "",
+        role: 'assistant',
+        content: '',
         timestamp: new Date(),
       };
 
-      setMessages((prev) => [...prev, assistantMessage]);
+      setMessages(prev => [...prev, assistantMessage]);
 
-      let fullResponse = "";
+      let fullResponse = '';
       for await (const chunk of ragOrchestratorRef.current.queryStream(input)) {
         fullResponse += chunk;
-        setMessages((prev) => {
+        setMessages(prev => {
           const updated = [...prev];
           updated[updated.length - 1] = {
             ...assistantMessage,
@@ -121,11 +136,11 @@ export const LLMChat: React.FC = () => {
         });
       }
     } catch (error) {
-      console.error("Chat failed:", error);
-      setMessages((prev) => [
+      console.error('Chat failed:', error);
+      setMessages(prev => [
         ...prev,
         {
-          role: "assistant",
+          role: 'assistant',
           content: `Error: ${error}`,
           timestamp: new Date(),
         },
@@ -140,7 +155,7 @@ export const LLMChat: React.FC = () => {
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+    if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
@@ -158,10 +173,10 @@ export const LLMChat: React.FC = () => {
           </Title>
         </Space>
       }
-      style={{ height: "100vh", display: "flex", flexDirection: "column" }}
+      style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}
     >
       {!isReady && (
-        <Space direction="vertical" style={{ width: "100%", marginBottom: 16 }}>
+        <Space direction="vertical" style={{ width: '100%', marginBottom: 16 }}>
           <Space>
             <Text>Select Model:</Text>
             <Select
@@ -170,7 +185,7 @@ export const LLMChat: React.FC = () => {
               style={{ width: 300 }}
               disabled={isInitializing}
             >
-              {WebLLMService.getAvailableModels().map((model) => (
+              {WebLLMService.getAvailableModels().map(model => (
                 <Option key={model} value={model}>
                   {model}
                 </Option>
@@ -188,7 +203,7 @@ export const LLMChat: React.FC = () => {
             <Progress
               percent={Math.round(initProgress)}
               status="active"
-              strokeColor={{ from: "#108ee9", to: "#87d068" }}
+              strokeColor={{ from: '#108ee9', to: '#87d068' }}
             />
           )}
         </Space>
@@ -197,35 +212,35 @@ export const LLMChat: React.FC = () => {
       <div
         style={{
           flex: 1,
-          overflow: "auto",
+          overflow: 'auto',
           marginBottom: 16,
           padding: 16,
-          border: "1px solid #f0f0f0",
+          border: '1px solid #f0f0f0',
           borderRadius: 8,
         }}
       >
         <List
           dataSource={messages}
-          renderItem={(msg) => (
+          renderItem={msg => (
             <List.Item
               style={{
-                justifyContent: msg.role === "user" ? "flex-end" : "flex-start",
-                border: "none",
+                justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start',
+                border: 'none',
               }}
             >
               <div
                 style={{
-                  maxWidth: "70%",
-                  padding: "8px 12px",
+                  maxWidth: '70%',
+                  padding: '8px 12px',
                   borderRadius: 8,
-                  backgroundColor: msg.role === "user" ? "#1890ff" : "#f0f0f0",
-                  color: msg.role === "user" ? "white" : "black",
+                  backgroundColor: msg.role === 'user' ? '#1890ff' : '#f0f0f0',
+                  color: msg.role === 'user' ? 'white' : 'black',
                 }}
               >
                 <Text
                   style={{
-                    color: msg.role === "user" ? "white" : "black",
-                    whiteSpace: "pre-wrap",
+                    color: msg.role === 'user' ? 'white' : 'black',
+                    whiteSpace: 'pre-wrap',
                   }}
                 >
                   {msg.content}
@@ -246,10 +261,10 @@ export const LLMChat: React.FC = () => {
         <div ref={messagesEndRef} />
       </div>
 
-      <Space.Compact style={{ width: "100%" }}>
+      <Space.Compact style={{ width: '100%' }}>
         <TextArea
           value={input}
-          onChange={(e) => setInput(e.target.value)}
+          onChange={e => setInput(e.target.value)}
           onKeyPress={handleKeyPress}
           placeholder="Type your message... (Enter to send, Shift+Enter for new line)"
           autoSize={{ minRows: 1, maxRows: 4 }}
@@ -264,7 +279,11 @@ export const LLMChat: React.FC = () => {
         >
           Send
         </Button>
-        <Button icon={<ClearOutlined />} onClick={handleClear} disabled={!isReady}>
+        <Button
+          icon={<ClearOutlined />}
+          onClick={handleClear}
+          disabled={!isReady}
+        >
           Clear
         </Button>
       </Space.Compact>

@@ -33,7 +33,7 @@ export const Vaults = () => {
           <Layout.Content
             style={{
               background: '#FFFFFF',
-              minHeight: '86vh',
+              minHeight: '79vh',
               padding: 24,
               borderRadius: 8,
               overflowY: 'scroll',

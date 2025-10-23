@@ -7,15 +7,12 @@ use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-/// Simple in-memory graph adapter using HashMaps
-/// This is a lightweight alternative to CozoDB for MVP
 pub struct SimpleGraphAdapter {
     nodes: Arc<Mutex<HashMap<NodeId, GraphNode>>>,
     edges: Arc<Mutex<HashMap<EdgeId, GraphEdge>>>,
 }
 
 impl SimpleGraphAdapter {
-    /// Create a new in-memory graph adapter
     pub fn new() -> Self {
         Self {
             nodes: Arc::new(Mutex::new(HashMap::new())),
@@ -23,12 +20,10 @@ impl SimpleGraphAdapter {
         }
     }
 
-    /// Get current timestamp (milliseconds)
     fn get_timestamp() -> u64 {
         js_sys::Date::now() as u64
     }
 
-    /// Calculate cosine similarity between two vectors
     fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
         if a.len() != b.len() {
             return 0.0;
@@ -89,10 +84,8 @@ impl GraphPort for SimpleGraphAdapter {
             access_count: 0,
         };
 
-        // Validate node
         validate_node(&node)?;
 
-        // Insert into storage
         let mut nodes = self.nodes.lock().unwrap();
         nodes.insert(node_id.clone(), node);
 
@@ -103,7 +96,6 @@ impl GraphPort for SimpleGraphAdapter {
         let nodes = self.nodes.lock().unwrap();
 
         if let Some(node) = nodes.get(node_id) {
-            // Verify vault_id matches
             if node.vault_id == vault_id {
                 Ok(Some(node.clone()))
             } else {
@@ -137,14 +129,11 @@ impl GraphPort for SimpleGraphAdapter {
     }
 
     async fn delete_node(&self, vault_id: &str, node_id: &NodeId) -> GraphResult<()> {
-        // First delete all edges connected to this node
         let mut edges = self.edges.lock().unwrap();
         edges.retain(|_, edge| {
-            !(edge.vault_id == vault_id &&
-              (edge.from_node == *node_id || edge.to_node == *node_id))
+            !(edge.vault_id == vault_id && (edge.from_node == *node_id || edge.to_node == *node_id))
         });
 
-        // Then delete the node
         let mut nodes = self.nodes.lock().unwrap();
         if nodes.remove(node_id).is_some() {
             Ok(())
@@ -195,10 +184,8 @@ impl GraphPort for SimpleGraphAdapter {
             created_at: now,
         };
 
-        // Validate edge
         validate_edge(&edge)?;
 
-        // Insert into storage
         let mut edges = self.edges.lock().unwrap();
         edges.insert(edge_id.clone(), edge);
 
@@ -216,11 +203,14 @@ impl GraphPort for SimpleGraphAdapter {
         let result: Vec<GraphEdge> = edges
             .values()
             .filter(|edge| {
-                edge.vault_id == vault_id && match direction {
-                    EdgeDirection::Outgoing => edge.from_node == *node_id,
-                    EdgeDirection::Incoming => edge.to_node == *node_id,
-                    EdgeDirection::Both => edge.from_node == *node_id || edge.to_node == *node_id,
-                }
+                edge.vault_id == vault_id
+                    && match direction {
+                        EdgeDirection::Outgoing => edge.from_node == *node_id,
+                        EdgeDirection::Incoming => edge.to_node == *node_id,
+                        EdgeDirection::Both => {
+                            edge.from_node == *node_id || edge.to_node == *node_id
+                        }
+                    }
             })
             .cloned()
             .collect();
@@ -252,13 +242,14 @@ impl GraphPort for SimpleGraphAdapter {
         let edges = self.edges.lock().unwrap();
         let nodes = self.nodes.lock().unwrap();
 
-        // Find all connected node IDs
         let neighbor_ids: Vec<NodeId> = edges
             .values()
             .filter(|edge| {
-                edge.vault_id == vault_id &&
-                (edge.from_node == *node_id || edge.to_node == *node_id) &&
-                edge_types.as_ref().map_or(true, |types| types.contains(&edge.edge_type))
+                edge.vault_id == vault_id
+                    && (edge.from_node == *node_id || edge.to_node == *node_id)
+                    && edge_types
+                        .as_ref()
+                        .map_or(true, |types| types.contains(&edge.edge_type))
             })
             .map(|edge| {
                 if edge.from_node == *node_id {
@@ -269,7 +260,6 @@ impl GraphPort for SimpleGraphAdapter {
             })
             .collect();
 
-        // Get the actual nodes
         let result: Vec<GraphNode> = neighbor_ids
             .iter()
             .filter_map(|id| nodes.get(id).cloned())
@@ -287,22 +277,15 @@ impl GraphPort for SimpleGraphAdapter {
     ) -> GraphResult<Vec<(GraphNode, f32)>> {
         let nodes = self.nodes.lock().unwrap();
 
-        // Calculate similarity for all nodes with embeddings
         let mut results: Vec<(GraphNode, f32)> = nodes
             .values()
-            .filter(|node| {
-                // Filter by vault_id and check if node has embedding
-                node.vault_id == vault_id && node.embedding.is_some()
-            })
+            .filter(|node| node.vault_id == vault_id && node.embedding.is_some())
             .map(|node| {
-                let similarity = Self::cosine_similarity(
-                    &query_embedding,
-                    node.embedding.as_ref().unwrap(),
-                );
+                let similarity =
+                    Self::cosine_similarity(&query_embedding, node.embedding.as_ref().unwrap());
                 (node.clone(), similarity)
             })
             .filter(|(_, similarity)| {
-                // Apply minimum similarity threshold if provided
                 if let Some(min_sim) = min_similarity {
                     *similarity >= min_sim
                 } else {
@@ -311,10 +294,8 @@ impl GraphPort for SimpleGraphAdapter {
             })
             .collect();
 
-        // Sort by similarity descending
         results.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
 
-        // Apply limit
         results.truncate(limit);
 
         Ok(results)
@@ -341,7 +322,6 @@ mod tests {
     async fn test_create_and_get_node() {
         let adapter = SimpleGraphAdapter::new();
 
-        // Create a node
         let content = vec![1, 2, 3, 4, 5];
         let node_id = adapter
             .create_node(
@@ -356,7 +336,6 @@ mod tests {
             .await
             .expect("Failed to create node");
 
-        // Get the node back
         let retrieved = adapter
             .get_node("test_vault", &node_id)
             .await
@@ -379,7 +358,6 @@ mod tests {
     async fn test_create_update_get_node() {
         let adapter = SimpleGraphAdapter::new();
 
-        // Create
         let node_id = adapter
             .create_node(
                 "test_vault",
@@ -393,7 +371,6 @@ mod tests {
             .await
             .unwrap();
 
-        // Update
         let new_content = vec![4, 5, 6, 7];
         adapter
             .update_node(
@@ -406,7 +383,6 @@ mod tests {
             .await
             .expect("Failed to update node");
 
-        // Get and verify
         let node = adapter
             .get_node("test_vault", &node_id)
             .await
@@ -422,7 +398,6 @@ mod tests {
     async fn test_create_and_delete_node() {
         let adapter = SimpleGraphAdapter::new();
 
-        // Create
         let node_id = adapter
             .create_node(
                 "test_vault",
@@ -436,20 +411,17 @@ mod tests {
             .await
             .unwrap();
 
-        // Verify it exists
         assert!(adapter
             .get_node("test_vault", &node_id)
             .await
             .unwrap()
             .is_some());
 
-        // Delete
         adapter
             .delete_node("test_vault", &node_id)
             .await
             .expect("Failed to delete node");
 
-        // Verify it's gone
         assert!(adapter
             .get_node("test_vault", &node_id)
             .await
@@ -461,7 +433,6 @@ mod tests {
     async fn test_create_and_get_edges() {
         let adapter = SimpleGraphAdapter::new();
 
-        // Create two nodes
         let from_id = adapter
             .create_node(
                 "test_vault",
@@ -488,7 +459,6 @@ mod tests {
             .await
             .unwrap();
 
-        // Create edge
         let edge_id = adapter
             .create_edge(
                 "test_vault",
@@ -505,7 +475,6 @@ mod tests {
             .await
             .expect("Failed to create edge");
 
-        // Get outgoing edges from first node
         let outgoing = adapter
             .get_edges("test_vault", &from_id, EdgeDirection::Outgoing)
             .await
@@ -518,7 +487,6 @@ mod tests {
         assert_eq!(outgoing[0].edge_type, "relates_to");
         assert_eq!(outgoing[0].properties.weight, 0.8);
 
-        // Get incoming edges to second node
         let incoming = adapter
             .get_edges("test_vault", &to_id, EdgeDirection::Incoming)
             .await
@@ -532,23 +500,45 @@ mod tests {
     async fn test_get_neighbors() {
         let adapter = SimpleGraphAdapter::new();
 
-        // Create a small graph: A -> B -> C
         let node_a = adapter
-            .create_node("test_vault", "entity", vec![1], "h1".to_string(), vec![], None, None)
+            .create_node(
+                "test_vault",
+                "entity",
+                vec![1],
+                "h1".to_string(),
+                vec![],
+                None,
+                None,
+            )
             .await
             .unwrap();
 
         let node_b = adapter
-            .create_node("test_vault", "entity", vec![2], "h2".to_string(), vec![], None, None)
+            .create_node(
+                "test_vault",
+                "entity",
+                vec![2],
+                "h2".to_string(),
+                vec![],
+                None,
+                None,
+            )
             .await
             .unwrap();
 
         let node_c = adapter
-            .create_node("test_vault", "entity", vec![3], "h3".to_string(), vec![], None, None)
+            .create_node(
+                "test_vault",
+                "entity",
+                vec![3],
+                "h3".to_string(),
+                vec![],
+                None,
+                None,
+            )
             .await
             .unwrap();
 
-        // A -> B
         adapter
             .create_edge(
                 "test_vault",
@@ -560,7 +550,6 @@ mod tests {
             .await
             .unwrap();
 
-        // B -> C
         adapter
             .create_edge(
                 "test_vault",
@@ -572,7 +561,6 @@ mod tests {
             .await
             .unwrap();
 
-        // Get neighbors of B (should be A and C)
         let neighbors = adapter
             .get_neighbors("test_vault", &node_b, None)
             .await
@@ -588,14 +576,29 @@ mod tests {
     async fn test_delete_node_with_edges() {
         let adapter = SimpleGraphAdapter::new();
 
-        // Create nodes and edge
         let node_a = adapter
-            .create_node("test_vault", "entity", vec![1], "h1".to_string(), vec![], None, None)
+            .create_node(
+                "test_vault",
+                "entity",
+                vec![1],
+                "h1".to_string(),
+                vec![],
+                None,
+                None,
+            )
             .await
             .unwrap();
 
         let node_b = adapter
-            .create_node("test_vault", "entity", vec![2], "h2".to_string(), vec![], None, None)
+            .create_node(
+                "test_vault",
+                "entity",
+                vec![2],
+                "h2".to_string(),
+                vec![],
+                None,
+                None,
+            )
             .await
             .unwrap();
 
@@ -610,20 +613,20 @@ mod tests {
             .await
             .unwrap();
 
-        // Verify edge exists
         let edges = adapter
             .get_edges("test_vault", &node_a, EdgeDirection::Outgoing)
             .await
             .unwrap();
         assert_eq!(edges.len(), 1);
 
-        // Delete node A (should also delete the edge)
         adapter.delete_node("test_vault", &node_a).await.unwrap();
 
-        // Verify node is deleted
-        assert!(adapter.get_node("test_vault", &node_a).await.unwrap().is_none());
+        assert!(adapter
+            .get_node("test_vault", &node_a)
+            .await
+            .unwrap()
+            .is_none());
 
-        // Verify edge is also deleted
         let edges = adapter
             .get_edges("test_vault", &node_b, EdgeDirection::Incoming)
             .await

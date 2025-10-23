@@ -1,35 +1,29 @@
 use super::error::{GraphError, GraphResult};
 use super::types::{EdgeProperties, GraphEdge, GraphNode, NodeMetadata};
 
-/// Validate a node before creation
 pub fn validate_node(node: &GraphNode) -> GraphResult<()> {
-    // Validate vault_id is not empty
     if node.vault_id.is_empty() {
         return Err(GraphError::Other("vault_id cannot be empty".to_string()));
     }
 
-    // Validate node_type is not empty
     if node.node_type.is_empty() {
         return Err(GraphError::InvalidNodeType(
             "node_type cannot be empty".to_string(),
         ));
     }
 
-    // Validate encrypted_content is not empty
     if node.encrypted_content.is_empty() {
         return Err(GraphError::Other(
             "encrypted_content cannot be empty".to_string(),
         ));
     }
 
-    // Validate HMAC
     if node.content_hmac.is_empty() {
         return Err(GraphError::IntegrityError(
             "content_hmac cannot be empty".to_string(),
         ));
     }
 
-    // Validate embedding if present
     if let Some(ref emb) = node.embedding {
         if emb.is_empty() {
             return Err(GraphError::InvalidEmbedding(
@@ -41,38 +35,30 @@ pub fn validate_node(node: &GraphNode) -> GraphResult<()> {
     Ok(())
 }
 
-/// Validate an edge before creation
 pub fn validate_edge(edge: &GraphEdge) -> GraphResult<()> {
-    // Validate vault_id
     if edge.vault_id.is_empty() {
         return Err(GraphError::Other("vault_id cannot be empty".to_string()));
     }
 
-    // Validate edge_type
     if edge.edge_type.is_empty() {
         return Err(GraphError::InvalidEdgeType(
             "edge_type cannot be empty".to_string(),
         ));
     }
 
-    // Validate weight
     if edge.properties.weight < 0.0 || edge.properties.weight > 1.0 {
         return Err(GraphError::Other(
             "edge weight must be between 0.0 and 1.0".to_string(),
         ));
     }
 
-    // Self-loop check
     if edge.from_node == edge.to_node {
-        return Err(GraphError::Other(
-            "self-loops are not allowed".to_string(),
-        ));
+        return Err(GraphError::Other("self-loops are not allowed".to_string()));
     }
 
     Ok(())
 }
 
-/// Create node metadata
 pub fn create_node_metadata(content_size: usize, expires_at: Option<u64>) -> NodeMetadata {
     NodeMetadata {
         content_size,
@@ -81,7 +67,6 @@ pub fn create_node_metadata(content_size: usize, expires_at: Option<u64>) -> Nod
     }
 }
 
-/// Create default edge properties
 pub fn create_edge_properties(weight: f64, bidirectional: bool) -> EdgeProperties {
     EdgeProperties {
         weight,
@@ -91,7 +76,6 @@ pub fn create_edge_properties(weight: f64, bidirectional: bool) -> EdgePropertie
     }
 }
 
-/// Check if a node has expired
 pub fn is_node_expired(node: &GraphNode, current_time: u64) -> bool {
     if let Some(expires_at) = node.metadata.expires_at {
         current_time > expires_at
@@ -100,7 +84,6 @@ pub fn is_node_expired(node: &GraphNode, current_time: u64) -> bool {
     }
 }
 
-/// Update node access stats
 pub fn update_node_access(node: &mut GraphNode, current_time: u64) {
     node.accessed_at = current_time;
     node.access_count = node.access_count.saturating_add(1);

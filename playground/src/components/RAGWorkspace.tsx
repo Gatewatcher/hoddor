@@ -1,49 +1,67 @@
-import React, { useState, useEffect, useRef } from "react";
-import { useSelector } from "react-redux";
 import {
-  Row,
-  Col,
-  Card,
-  Input,
+  BulbOutlined,
+  ClearOutlined,
+  FolderOpenOutlined,
+  LockOutlined,
+  RobotOutlined,
+  SaveOutlined,
+  SendOutlined,
+  UnlockOutlined,
+} from '@ant-design/icons';
+import {
   Button,
+  Card,
+  Checkbox,
+  Col,
+  Divider,
+  Form,
+  Input,
+  List,
+  Modal,
+  Progress,
+  Row,
   Select,
   Space,
-  Typography,
-  Progress,
-  List,
-  Checkbox,
-  Divider,
-  message,
-  Modal,
-  Form,
   Tag,
-} from "antd";
-import { SendOutlined, ClearOutlined, RobotOutlined, BulbOutlined, SaveOutlined, FolderOpenOutlined, LockOutlined, UnlockOutlined } from "@ant-design/icons";
-import { WebLLMService, RAGOrchestrator, EmbeddingService } from "../services";
-import { MemoryManager } from "./MemoryManager";
-import { graph_backup_vault, graph_restore_vault, vault_identity_from_passphrase, create_credential, get_credential } from "../../../hoddor/pkg/hoddor";
-import { appSelectors } from "../store/app.selectors";
-import { useDispatch } from "react-redux";
-import { actions } from "../store/app.actions";
+  Typography,
+  message,
+} from 'antd';
+import React, { useEffect, useRef, useState } from 'react';
+import { useSelector } from 'react-redux';
+import { useDispatch } from 'react-redux';
+
+import {
+  create_credential,
+  get_credential,
+  graph_backup_vault,
+  graph_restore_vault,
+  vault_identity_from_passphrase,
+} from '../../../hoddor/pkg/hoddor';
+import { EmbeddingService, RAGOrchestrator, WebLLMService } from '../services';
+import { actions } from '../store/app.actions';
+import { appSelectors } from '../store/app.selectors';
+import { MemoryManager } from './MemoryManager';
 
 const { TextArea } = Input;
 const { Title, Text } = Typography;
 const { Option } = Select;
 
 interface Message {
-  role: "user" | "assistant";
+  role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
 }
 
 export const RAGWorkspace: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState("");
+  const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
   const [initProgress, setInitProgress] = useState(0);
-  const [selectedModel, setSelectedModel] = useState("Phi-3.5-mini-instruct-q4f16_1-MLC");
-  const [selectedVault, setSelectedVault] = useState<string>("");
+  const [selectedModel, setSelectedModel] = useState(
+    'Phi-3.5-mini-instruct-q4f16_1-MLC',
+  );
+  const [selectedVault, setSelectedVault] = useState<string>('');
   const [useRAG, setUseRAG] = useState(true);
   const [servicesReady, setServicesReady] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -52,7 +70,9 @@ export const RAGWorkspace: React.FC = () => {
 
   // Authentication state
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [authMode, setAuthMode] = useState<'passphrase' | 'mfa-register' | 'mfa-auth'>('passphrase');
+  const [authMode, setAuthMode] = useState<
+    'passphrase' | 'mfa-register' | 'mfa-auth'
+  >('passphrase');
   const [passphraseForm] = Form.useForm();
   const [mfaForm] = Form.useForm();
 
@@ -65,7 +85,7 @@ export const RAGWorkspace: React.FC = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
   useEffect(() => {
@@ -79,7 +99,7 @@ export const RAGWorkspace: React.FC = () => {
     try {
       // Initialize LLM
       const llmService = new WebLLMService(selectedModel);
-      await llmService.initialize((report) => {
+      await llmService.initialize(report => {
         setInitProgress(report.progress * 100);
       });
       llmServiceRef.current = llmService;
@@ -90,9 +110,9 @@ export const RAGWorkspace: React.FC = () => {
         embeddingService = new EmbeddingService();
         await embeddingService.initialize();
         embeddingServiceRef.current = embeddingService;
-        console.log("Embeddings initialized successfully");
+        console.log('Embeddings initialized successfully');
       } catch (embError) {
-        console.warn("Embedding initialization failed:", embError);
+        console.warn('Embedding initialization failed:', embError);
         embeddingService = new EmbeddingService();
         embeddingServiceRef.current = embeddingService;
       }
@@ -108,7 +128,7 @@ export const RAGWorkspace: React.FC = () => {
 
       setMessages([
         {
-          role: "assistant",
+          role: 'assistant',
           content: embeddingsReady
             ? "✅ Hello! I'm ready to help. You can add memories and I'll use them to answer questions!"
             : "⚠️ Hello! I'm ready to help. Embeddings unavailable (CDN issue) - you can chat without RAG for now.",
@@ -116,10 +136,10 @@ export const RAGWorkspace: React.FC = () => {
         },
       ]);
     } catch (error) {
-      console.error("Initialization failed:", error);
+      console.error('Initialization failed:', error);
       setMessages([
         {
-          role: "assistant",
+          role: 'assistant',
           content: `Failed to initialize: ${error}`,
           timestamp: new Date(),
         },
@@ -134,31 +154,35 @@ export const RAGWorkspace: React.FC = () => {
     if (!input.trim() || !ragOrchestratorRef.current) return;
 
     const userMessage: Message = {
-      role: "user",
+      role: 'user',
       content: input,
       timestamp: new Date(),
     };
 
-    setMessages((prev) => [...prev, userMessage]);
-    setInput("");
+    setMessages(prev => [...prev, userMessage]);
+    setInput('');
     setIsLoading(true);
 
     try {
       const assistantMessage: Message = {
-        role: "assistant",
-        content: "",
+        role: 'assistant',
+        content: '',
         timestamp: new Date(),
       };
 
-      setMessages((prev) => [...prev, assistantMessage]);
+      setMessages(prev => [...prev, assistantMessage]);
 
       // Pass vault name if RAG is enabled and vault is selected
-      const options = useRAG && selectedVault ? { vaultName: selectedVault } : {};
+      const options =
+        useRAG && selectedVault ? { vaultName: selectedVault } : {};
 
-      let fullResponse = "";
-      for await (const chunk of ragOrchestratorRef.current.queryStream(input, options)) {
+      let fullResponse = '';
+      for await (const chunk of ragOrchestratorRef.current.queryStream(
+        input,
+        options,
+      )) {
         fullResponse += chunk;
-        setMessages((prev) => {
+        setMessages(prev => {
           const updated = [...prev];
           updated[updated.length - 1] = {
             ...assistantMessage,
@@ -168,11 +192,11 @@ export const RAGWorkspace: React.FC = () => {
         });
       }
     } catch (error) {
-      console.error("Chat failed:", error);
-      setMessages((prev) => [
+      console.error('Chat failed:', error);
+      setMessages(prev => [
         ...prev,
         {
-          role: "assistant",
+          role: 'assistant',
           content: `Error: ${error}`,
           timestamp: new Date(),
         },
@@ -187,152 +211,177 @@ export const RAGWorkspace: React.FC = () => {
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+    if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
   };
 
   const handleSaveGraph = async () => {
-    console.log("🔍 handleSaveGraph called");
-    console.log("  - selectedVault:", selectedVault);
-    console.log("  - identity:", identity);
+    console.log('🔍 handleSaveGraph called');
+    console.log('  - selectedVault:', selectedVault);
+    console.log('  - identity:', identity);
 
     if (!selectedVault) {
-      console.log("❌ No vault selected");
-      message.warning("Please select a vault first");
+      console.log('❌ No vault selected');
+      message.warning('Please select a vault first');
       return;
     }
 
     if (!identity) {
-      console.log("❌ No identity");
-      message.error("Please authenticate first (Passphrase or MFA)");
+      console.log('❌ No identity');
+      message.error('Please authenticate first (Passphrase or MFA)');
       return;
     }
 
-    console.log("  - identity.public_key:", identity.public_key);
-    console.log("  - identity.private_key:", identity.private_key ? "***" : undefined);
+    console.log('  - identity.public_key:', identity.public_key);
+    console.log(
+      '  - identity.private_key:',
+      identity.private_key() ? '***' : undefined,
+    );
 
     if (!identity.public_key || !identity.private_key) {
-      console.log("❌ Identity missing keys");
-      message.error("Identity is incomplete - please authenticate again");
+      console.log('❌ Identity missing keys');
+      message.error('Identity is incomplete - please authenticate again');
       return;
     }
 
     setIsSaving(true);
-    console.log("💾 Calling graph_backup_vault...");
+    console.log('💾 Calling graph_backup_vault...');
     try {
-      await graph_backup_vault(selectedVault, identity.public_key, identity.private_key);
-      console.log("✅ graph_backup_vault succeeded");
+      await graph_backup_vault(
+        selectedVault,
+        identity.public_key(),
+        identity.private_key(),
+      );
+      console.log('✅ graph_backup_vault succeeded');
       message.success(`Graph saved to OPFS for vault: ${selectedVault}`);
     } catch (error) {
-      console.error("❌ Failed to save graph:", error);
+      console.error('❌ Failed to save graph:', error);
       message.error(`Failed to save graph: ${error}`);
     } finally {
       setIsSaving(false);
-      console.log("🏁 handleSaveGraph finished");
+      console.log('🏁 handleSaveGraph finished');
     }
   };
 
   const handleLoadGraph = async () => {
-    console.log("🔍 handleLoadGraph called");
-    console.log("  - selectedVault:", selectedVault);
-    console.log("  - identity:", identity);
+    console.log('🔍 handleLoadGraph called');
+    console.log('  - selectedVault:', selectedVault);
+    console.log('  - identity:', identity);
 
     if (!selectedVault) {
-      console.log("❌ No vault selected");
-      message.warning("Please select a vault first");
+      console.log('❌ No vault selected');
+      message.warning('Please select a vault first');
       return;
     }
 
     if (!identity) {
-      console.log("❌ No identity");
-      message.error("Please authenticate first (Passphrase or MFA)");
+      console.log('❌ No identity');
+      message.error('Please authenticate first (Passphrase or MFA)');
       return;
     }
 
-    console.log("  - identity.public_key:", identity.public_key);
-    console.log("  - identity.private_key:", identity.private_key ? "***" : undefined);
+    console.log('  - identity.public_key:', identity.public_key);
+    console.log(
+      '  - identity.private_key:',
+      identity.private_key() ? '***' : undefined,
+    );
 
     if (!identity.public_key || !identity.private_key) {
-      console.log("❌ Identity missing keys");
-      message.error("Identity is incomplete - please authenticate again");
+      console.log('❌ Identity missing keys');
+      message.error('Identity is incomplete - please authenticate again');
       return;
     }
 
     setIsRestoring(true);
-    console.log("📂 Calling graph_restore_vault...");
+    console.log('📂 Calling graph_restore_vault...');
     try {
-      const found = await graph_restore_vault(selectedVault, identity.public_key, identity.private_key);
-      console.log("  - found:", found);
+      const found = await graph_restore_vault(
+        selectedVault,
+        identity.public_key(),
+        identity.private_key(),
+      );
+      console.log('  - found:', found);
       if (found) {
-        console.log("✅ graph_restore_vault succeeded - backup found and restored");
+        console.log(
+          '✅ graph_restore_vault succeeded - backup found and restored',
+        );
         message.success(`Graph loaded from OPFS for vault: ${selectedVault}`);
         // Trigger memory list refresh
         setMemoryRefreshTrigger(prev => prev + 1);
       } else {
-        console.log("ℹ️ No backup found (first time)");
-        message.info("No saved graph found (this is the first time)");
+        console.log('ℹ️ No backup found (first time)');
+        message.info('No saved graph found (this is the first time)');
       }
     } catch (error) {
-      console.error("❌ Failed to load graph:", error);
+      console.error('❌ Failed to load graph:', error);
       message.error(`Failed to load graph: ${error}`);
     } finally {
       setIsRestoring(false);
-      console.log("🏁 handleLoadGraph finished");
+      console.log('🏁 handleLoadGraph finished');
     }
   };
 
   const handlePassphraseAuth = async (values: { passphrase: string }) => {
     if (!selectedVault) {
-      message.warning("Please select a vault first");
+      message.warning('Please select a vault first');
       return;
     }
 
     try {
-      const identityHandle = await vault_identity_from_passphrase(values.passphrase, selectedVault);
+      const identityHandle = await vault_identity_from_passphrase(
+        values.passphrase,
+        selectedVault,
+      );
       dispatch(actions.addIdentity(identityHandle.to_json()));
-      message.success("Authenticated successfully!");
+      message.success('Authenticated successfully!');
       setIsAuthModalOpen(false);
       passphraseForm.resetFields();
     } catch (error) {
-      console.error("Passphrase auth failed:", error);
+      console.error('Passphrase auth failed:', error);
       message.error(`Authentication failed: ${error}`);
     }
   };
 
   const handleMFARegister = async (values: { username: string }) => {
     if (!selectedVault) {
-      message.warning("Please select a vault first");
+      message.warning('Please select a vault first');
       return;
     }
 
     try {
-      const identityHandle = await create_credential(selectedVault, values.username);
+      const identityHandle = await create_credential(
+        selectedVault,
+        values.username,
+      );
       dispatch(actions.addIdentity(identityHandle.to_json()));
-      message.success("MFA registered successfully!");
+      message.success('MFA registered successfully!');
       setIsAuthModalOpen(false);
       mfaForm.resetFields();
     } catch (error) {
-      console.error("MFA register failed:", error);
+      console.error('MFA register failed:', error);
       message.error(`MFA registration failed: ${error}`);
     }
   };
 
   const handleMFAAuth = async (values: { username: string }) => {
     if (!selectedVault) {
-      message.warning("Please select a vault first");
+      message.warning('Please select a vault first');
       return;
     }
 
     try {
-      const identityHandle = await get_credential(selectedVault, values.username);
+      const identityHandle = await get_credential(
+        selectedVault,
+        values.username,
+      );
       dispatch(actions.addIdentity(identityHandle.to_json()));
-      message.success("Authenticated successfully!");
+      message.success('Authenticated successfully!');
       setIsAuthModalOpen(false);
       mfaForm.resetFields();
     } catch (error) {
-      console.error("MFA auth failed:", error);
+      console.error('MFA auth failed:', error);
       message.error(`MFA authentication failed: ${error}`);
     }
   };
@@ -346,17 +395,16 @@ export const RAGWorkspace: React.FC = () => {
   const canUseRAG = embeddingServiceRef.current?.isReady() ?? false;
 
   return (
-    <div style={{ padding: 16, height: "100vh", overflow: "auto" }}>
-      <Row gutter={16} style={{ height: "100%" }}>
-        {/* Left Column: Memory Manager */}
-        <Col span={10} style={{ height: "100%" }}>
+    <div style={{ padding: 16, height: '89vh', overflow: 'auto' }}>
+      <Row gutter={16} style={{ height: '100%' }}>
+        <Col span={10} style={{ height: '100%' }}>
           {servicesReady && embeddingServiceRef.current ? (
             <MemoryManager
               vaultName={selectedVault}
               embeddingService={embeddingServiceRef.current}
               refreshTrigger={memoryRefreshTrigger}
               onMemoryAdded={() => {
-                console.log("Memory added!");
+                console.log('Memory added!');
               }}
             />
           ) : (
@@ -375,7 +423,8 @@ export const RAGWorkspace: React.FC = () => {
                   Please initialize the services in the chat panel first →
                 </Text>
                 <Text type="secondary" style={{ fontSize: 12 }}>
-                  Note: If embeddings fail to load (CDN issue), you can still use direct chat.
+                  Note: If embeddings fail to load (CDN issue), you can still
+                  use direct chat.
                 </Text>
               </Space>
             </Card>
@@ -383,7 +432,7 @@ export const RAGWorkspace: React.FC = () => {
         </Col>
 
         {/* Right Column: Chat */}
-        <Col span={14} style={{ height: "100%" }}>
+        <Col span={14} style={{ height: '100%' }}>
           <Card
             title={
               <Space>
@@ -393,10 +442,13 @@ export const RAGWorkspace: React.FC = () => {
                 </Title>
               </Space>
             }
-            style={{ height: "100%", display: "flex", flexDirection: "column" }}
+            style={{ height: '100%', display: 'flex', flexDirection: 'column' }}
           >
             {!isReady && (
-              <Space direction="vertical" style={{ width: "100%", marginBottom: 16 }}>
+              <Space
+                direction="vertical"
+                style={{ width: '100%', marginBottom: 16 }}
+              >
                 <Space>
                   <Text>Model:</Text>
                   <Select
@@ -405,13 +457,17 @@ export const RAGWorkspace: React.FC = () => {
                     style={{ width: 250 }}
                     disabled={isInitializing}
                   >
-                    {WebLLMService.getAvailableModels().map((model) => (
+                    {WebLLMService.getAvailableModels().map(model => (
                       <Option key={model} value={model}>
                         {model}
                       </Option>
                     ))}
                   </Select>
-                  <Button type="primary" onClick={handleInitialize} loading={isInitializing}>
+                  <Button
+                    type="primary"
+                    onClick={handleInitialize}
+                    loading={isInitializing}
+                  >
                     Initialize
                   </Button>
                 </Space>
@@ -419,7 +475,7 @@ export const RAGWorkspace: React.FC = () => {
                   <Progress
                     percent={Math.round(initProgress)}
                     status="active"
-                    strokeColor={{ from: "#108ee9", to: "#87d068" }}
+                    strokeColor={{ from: '#108ee9', to: '#87d068' }}
                   />
                 )}
               </Space>
@@ -431,11 +487,14 @@ export const RAGWorkspace: React.FC = () => {
                   <Text>Vault:</Text>
                   <Input
                     value={selectedVault}
-                    onChange={(e) => setSelectedVault(e.target.value)}
+                    onChange={e => setSelectedVault(e.target.value)}
                     placeholder="Enter vault name (e.g., 'my-vault')"
                     style={{ width: 200 }}
                   />
-                  <Checkbox checked={useRAG} onChange={(e) => setUseRAG(e.target.checked)}>
+                  <Checkbox
+                    checked={useRAG}
+                    onChange={e => setUseRAG(e.target.checked)}
+                  >
                     Use RAG
                   </Checkbox>
                   {useRAG && !canUseRAG && (
@@ -494,42 +553,44 @@ export const RAGWorkspace: React.FC = () => {
                     Load Graph
                   </Button>
                 </Space>
-                <Divider style={{ margin: "8px 0" }} />
+                <Divider style={{ margin: '8px 0' }} />
               </>
             )}
 
             <div
               style={{
                 flex: 1,
-                overflow: "auto",
+                overflow: 'auto',
                 marginBottom: 16,
                 padding: 16,
-                border: "1px solid #f0f0f0",
+                border: '1px solid #f0f0f0',
                 borderRadius: 8,
               }}
             >
               <List
                 dataSource={messages}
-                renderItem={(msg) => (
+                renderItem={msg => (
                   <List.Item
                     style={{
-                      justifyContent: msg.role === "user" ? "flex-end" : "flex-start",
-                      border: "none",
+                      justifyContent:
+                        msg.role === 'user' ? 'flex-end' : 'flex-start',
+                      border: 'none',
                     }}
                   >
                     <div
                       style={{
-                        maxWidth: "70%",
-                        padding: "8px 12px",
+                        maxWidth: '70%',
+                        padding: '8px 12px',
                         borderRadius: 8,
-                        backgroundColor: msg.role === "user" ? "#1890ff" : "#f0f0f0",
-                        color: msg.role === "user" ? "white" : "black",
+                        backgroundColor:
+                          msg.role === 'user' ? '#1890ff' : '#f0f0f0',
+                        color: msg.role === 'user' ? 'white' : 'black',
                       }}
                     >
                       <Text
                         style={{
-                          color: msg.role === "user" ? "white" : "black",
-                          whiteSpace: "pre-wrap",
+                          color: msg.role === 'user' ? 'white' : 'black',
+                          whiteSpace: 'pre-wrap',
                         }}
                       >
                         {msg.content}
@@ -544,10 +605,10 @@ export const RAGWorkspace: React.FC = () => {
               <div ref={messagesEndRef} />
             </div>
 
-            <Space.Compact style={{ width: "100%" }}>
+            <Space.Compact style={{ width: '100%' }}>
               <TextArea
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
+                onChange={e => setInput(e.target.value)}
                 onKeyPress={handleKeyPress}
                 placeholder="Ask a question... (Enter to send)"
                 autoSize={{ minRows: 1, maxRows: 4 }}
@@ -562,7 +623,11 @@ export const RAGWorkspace: React.FC = () => {
               >
                 Send
               </Button>
-              <Button icon={<ClearOutlined />} onClick={handleClear} disabled={!isReady}>
+              <Button
+                icon={<ClearOutlined />}
+                onClick={handleClear}
+                disabled={!isReady}
+              >
                 Clear
               </Button>
             </Space.Compact>
@@ -589,11 +654,17 @@ export const RAGWorkspace: React.FC = () => {
         width={500}
       >
         {authMode === 'passphrase' && (
-          <Form form={passphraseForm} onFinish={handlePassphraseAuth} layout="vertical">
+          <Form
+            form={passphraseForm}
+            onFinish={handlePassphraseAuth}
+            layout="vertical"
+          >
             <Form.Item
               label="Passphrase"
               name="passphrase"
-              rules={[{ required: true, message: 'Please enter your passphrase' }]}
+              rules={[
+                { required: true, message: 'Please enter your passphrase' },
+              ]}
             >
               <Input.Password
                 placeholder="Enter your passphrase"
@@ -605,14 +676,19 @@ export const RAGWorkspace: React.FC = () => {
                 <Button type="primary" htmlType="submit">
                   Authenticate
                 </Button>
-                <Button onClick={() => setIsAuthModalOpen(false)}>Cancel</Button>
+                <Button onClick={() => setIsAuthModalOpen(false)}>
+                  Cancel
+                </Button>
               </Space>
             </Form.Item>
             <Divider />
             <Space direction="vertical" style={{ width: '100%' }}>
               <Text type="secondary">Or use a different method:</Text>
               <Space>
-                <Button size="small" onClick={() => setAuthMode('mfa-register')}>
+                <Button
+                  size="small"
+                  onClick={() => setAuthMode('mfa-register')}
+                >
                   Register MFA
                 </Button>
                 <Button size="small" onClick={() => setAuthMode('mfa-auth')}>
@@ -637,7 +713,9 @@ export const RAGWorkspace: React.FC = () => {
                 <Button type="primary" htmlType="submit">
                   Register Credential
                 </Button>
-                <Button onClick={() => setIsAuthModalOpen(false)}>Cancel</Button>
+                <Button onClick={() => setIsAuthModalOpen(false)}>
+                  Cancel
+                </Button>
               </Space>
             </Form.Item>
             <Divider />
@@ -660,7 +738,9 @@ export const RAGWorkspace: React.FC = () => {
             <Form.Item
               label="Username"
               name="username"
-              rules={[{ required: true, message: 'Please enter your username' }]}
+              rules={[
+                { required: true, message: 'Please enter your username' },
+              ]}
             >
               <Input placeholder="Enter your username" />
             </Form.Item>
@@ -669,7 +749,9 @@ export const RAGWorkspace: React.FC = () => {
                 <Button type="primary" htmlType="submit">
                   Authenticate
                 </Button>
-                <Button onClick={() => setIsAuthModalOpen(false)}>Cancel</Button>
+                <Button onClick={() => setIsAuthModalOpen(false)}>
+                  Cancel
+                </Button>
               </Space>
             </Form.Item>
             <Divider />
@@ -679,7 +761,10 @@ export const RAGWorkspace: React.FC = () => {
                 <Button size="small" onClick={() => setAuthMode('passphrase')}>
                   Use Passphrase
                 </Button>
-                <Button size="small" onClick={() => setAuthMode('mfa-register')}>
+                <Button
+                  size="small"
+                  onClick={() => setAuthMode('mfa-register')}
+                >
                   Register MFA
                 </Button>
               </Space>

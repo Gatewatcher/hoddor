@@ -1,8 +1,21 @@
-import React, { useState, useEffect } from "react";
-import { Card, Input, Button, Space, Typography, List, Tag, message } from "antd";
-import { PlusOutlined, BulbOutlined, ReloadOutlined } from "@ant-design/icons";
-import { EmbeddingService } from "../services";
-import { graph_create_memory_node, graph_list_memory_nodes } from "../../../hoddor/pkg/hoddor";
+import { BulbOutlined, PlusOutlined } from '@ant-design/icons';
+import {
+  Button,
+  Card,
+  Input,
+  List,
+  Space,
+  Tag,
+  Typography,
+  message,
+} from 'antd';
+import React, { useEffect, useState } from 'react';
+
+import {
+  graph_create_memory_node,
+  graph_list_memory_nodes,
+} from '../../../hoddor/pkg/hoddor';
+import { EmbeddingService } from '../services';
 
 const { TextArea } = Input;
 const { Title, Text } = Typography;
@@ -28,10 +41,10 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({
   refreshTrigger,
 }) => {
   const [memories, setMemories] = useState<Memory[]>([]);
-  const [newMemory, setNewMemory] = useState("");
-  const [labels, setLabels] = useState("");
+  const [newMemory, setNewMemory] = useState('');
+  const [labels, setLabels] = useState('');
   const [isAdding, setIsAdding] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [, setIsLoading] = useState(false);
 
   // Load memories from graph when vault changes or refresh is triggered
   useEffect(() => {
@@ -43,19 +56,20 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({
 
       setIsLoading(true);
       try {
-        console.log("📂 Loading memories from graph for vault:", vaultName);
+        console.log('📂 Loading memories from graph for vault:', vaultName);
         const nodes = await graph_list_memory_nodes(vaultName, 100);
 
         const decoder = new TextDecoder();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const loadedMemories: Memory[] = nodes.map((node: any) => {
-          let content = "";
+          let content = '';
           try {
             if (node.encrypted_content && node.encrypted_content.length > 0) {
               content = decoder.decode(new Uint8Array(node.encrypted_content));
             }
           } catch (error) {
             console.warn(`Failed to decode memory ${node.id}:`, error);
-            content = "[Unable to decode content]";
+            content = '[Unable to decode content]';
           }
 
           return {
@@ -69,7 +83,7 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({
         console.log(`✅ Loaded ${loadedMemories.length} memories from graph`);
         setMemories(loadedMemories);
       } catch (error) {
-        console.error("Failed to load memories:", error);
+        console.error('Failed to load memories:', error);
         // Don't show error message - might just be empty graph
       } finally {
         setIsLoading(false);
@@ -81,17 +95,17 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({
 
   const handleAddMemory = async () => {
     if (!newMemory.trim()) {
-      message.warning("Please enter memory content");
+      message.warning('Please enter memory content');
       return;
     }
 
     if (!vaultName) {
-      message.warning("Please select a vault first");
+      message.warning('Please select a vault first');
       return;
     }
 
     if (!embeddingService || !embeddingService.isReady()) {
-      message.error("Embedding service not ready");
+      message.error('Embedding service not ready');
       return;
     }
 
@@ -107,16 +121,16 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({
       const contentBytes = encoder.encode(newMemory);
 
       // Simple HMAC placeholder (should use proper crypto)
-      const hmac = await crypto.subtle.digest("SHA-256", contentBytes);
+      const hmac = await crypto.subtle.digest('SHA-256', contentBytes);
       const hmacHex = Array.from(new Uint8Array(hmac))
-        .map((b) => b.toString(16).padStart(2, "0"))
-        .join("");
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
 
       // Parse labels
       const labelList = labels
-        .split(",")
-        .map((l) => l.trim())
-        .filter((l) => l.length > 0);
+        .split(',')
+        .map(l => l.trim())
+        .filter(l => l.length > 0);
 
       // Create memory node in graph
       const nodeId = await graph_create_memory_node(
@@ -124,7 +138,7 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({
         contentBytes,
         hmacHex,
         new Float32Array(embedding),
-        labelList
+        labelList,
       );
 
       // Add to local list
@@ -136,13 +150,13 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({
       };
 
       setMemories([memory, ...memories]);
-      setNewMemory("");
-      setLabels("");
+      setNewMemory('');
+      setLabels('');
 
-      message.success("Memory added to graph!");
+      message.success('Memory added to graph!');
       onMemoryAdded?.();
     } catch (error) {
-      console.error("Failed to add memory:", error);
+      console.error('Failed to add memory:', error);
       message.error(`Failed to add memory: ${error}`);
     } finally {
       setIsAdding(false);
@@ -168,18 +182,21 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({
 
       {vaultName && (
         <>
-          <Space direction="vertical" style={{ width: "100%", marginBottom: 16 }}>
+          <Space
+            direction="vertical"
+            style={{ width: '100%', marginBottom: 16 }}
+          >
             <Text strong>Vault: {vaultName}</Text>
             <TextArea
               value={newMemory}
-              onChange={(e) => setNewMemory(e.target.value)}
+              onChange={e => setNewMemory(e.target.value)}
               placeholder="Enter a memory to store in the graph (e.g., 'My favorite color is blue')"
               autoSize={{ minRows: 3, maxRows: 6 }}
               disabled={isAdding}
             />
             <Input
               value={labels}
-              onChange={(e) => setLabels(e.target.value)}
+              onChange={e => setLabels(e.target.value)}
               placeholder="Labels (comma-separated, e.g., 'personal, preferences')"
               disabled={isAdding}
             />
@@ -196,7 +213,8 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({
               <Text type="warning" style={{ fontSize: 12 }}>
                 ⚠️ Embeddings unavailable (CDN issue). RAG features disabled.
                 <br />
-                You can still use the LLM for direct chat without memory context.
+                You can still use the LLM for direct chat without memory
+                context.
               </Text>
             )}
           </Space>
@@ -204,13 +222,13 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({
           <Title level={5}>Recent Memories ({memories.length})</Title>
           <List
             dataSource={memories}
-            renderItem={(memory) => (
+            renderItem={memory => (
               <List.Item>
                 <List.Item.Meta
                   title={
                     <Space>
                       <Text>{memory.content}</Text>
-                      {memory.labels.map((label) => (
+                      {memory.labels.map(label => (
                         <Tag key={label} color="blue">
                           {label}
                         </Tag>
@@ -230,7 +248,7 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({
                 />
               </List.Item>
             )}
-            locale={{ emptyText: "No memories added yet" }}
+            locale={{ emptyText: 'No memories added yet' }}
           />
         </>
       )}
