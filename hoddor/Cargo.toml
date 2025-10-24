@@ -15,9 +15,9 @@ default = ["vault", "graph"]
 # This is the base feature of Hoddor
 vault = ["console_error_panic_hook"]
 
-# Graph: Adds CozoDB graph database with vector search
+# Graph: Adds graph database with vector search
 # Requires vault for persistence and encryption
-graph = ["vault", "cozo", "uuid", "rayon"]
+graph = ["vault", "uuid"]
 
 [dependencies]
 once_cell = "1.20.2"
@@ -60,12 +60,7 @@ hkdf = "0.12.4"
 x25519-dalek = { version = "2.0.1", features = ["static_secrets"] }
 async-trait = "0.1.89"
 
-# --- Graph Database (CozoDB) ---
-# Note: cozo dependency is target-specific (see bottom of file)
-# These dependencies are only needed when "graph" feature is enabled
 uuid = { version = "1.11", features = ["v4", "serde", "js"], optional = true }
-# Pin rayon to 1.10 to fix compatibility with graph_builder (https://github.com/cozodb/cozo/issues/298)
-rayon = { version = "=1.10", optional = true }
 
 [dependencies.web-sys]
 version = "0.3.77"
@@ -142,17 +137,6 @@ features = [
 [dependencies.gloo-timers]
 version = "0.3.0"
 features = ['futures']
-
-# Target-specific dependencies for CozoDB
-# Only included when "graph" feature is enabled
-# For WASM: use in-memory storage only (no SQLite/RocksDB which don't compile to WASM)
-# Note: wasm feature is required for WASM builds
-# For native: can use full features with SQLite backend
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-cozo = { version = "0.7", default-features = false, features = ["wasm"], optional = true }
-
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-cozo = { version = "0.7", default-features = false, features = ["compact"], optional = true }
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3.50"

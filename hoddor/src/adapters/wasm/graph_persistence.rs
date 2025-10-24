@@ -51,10 +51,12 @@ impl<G: GraphPort, S: StoragePort> GraphPersistence<G, S> {
         }
     }
 
+    #[cfg(test)]
     pub fn enable_encryption(&mut self, encryption: EncryptionConfig) {
         self.encryption = Some(encryption);
     }
 
+    #[cfg(test)]
     pub fn disable_encryption(&mut self) {
         self.encryption = None;
     }
@@ -254,6 +256,7 @@ impl<G: GraphPort, S: StoragePort> GraphPersistence<G, S> {
             .is_ok()
     }
 
+    #[cfg(test)]
     pub async fn delete_backup(&self, vault_id: &str) -> GraphResult<()> {
         let file_extension = if self.encryption.is_some() {
             "age"
