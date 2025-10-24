@@ -8,13 +8,6 @@ export const decodeContent = (contentBytes: Uint8Array): string => {
   return decoder.decode(contentBytes);
 };
 
-export const generateHMAC = async (content: Uint8Array): Promise<string> => {
-  const hmac = await crypto.subtle.digest('SHA-256', content);
-  return Array.from(new Uint8Array(hmac))
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('');
-};
-
 export const parseLabels = (labelsString: string): string[] => {
   return labelsString
     .split(',')

@@ -15,8 +15,7 @@ pub trait GraphPort {
         &self,
         vault_id: &str,
         node_type: &str,
-        encrypted_content: Vec<u8>,
-        content_hmac: String,
+        content: Vec<u8>,
         labels: Vec<String>,
         embedding: Option<Vec<f32>>,
         namespace: Option<String>,
@@ -30,8 +29,7 @@ pub trait GraphPort {
         &self,
         vault_id: &str,
         node_id: &NodeId,
-        encrypted_content: Vec<u8>,
-        content_hmac: String,
+        content: Vec<u8>,
         embedding: Option<Vec<f32>>,
     ) -> GraphResult<()>;
 

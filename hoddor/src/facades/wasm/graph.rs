@@ -14,8 +14,7 @@ static PLATFORM: Lazy<Platform> = Lazy::new(|| Platform::new());
 pub struct GraphNodeResult {
     pub id: String,
     pub node_type: String,
-    pub encrypted_content: Vec<u8>,
-    pub content_hmac: String,
+    pub content: Vec<u8>,
     pub labels: Vec<String>,
     pub similarity: Option<f32>,
 }
@@ -23,8 +22,7 @@ pub struct GraphNodeResult {
 #[wasm_bindgen]
 pub async fn graph_create_memory_node(
     vault_name: &str,
-    encrypted_content: Vec<u8>,
-    content_hmac: String,
+    content: Vec<u8>,
     embedding: Vec<f32>,
     labels: Vec<String>,
 ) -> Result<String, JsValue> {
@@ -34,8 +32,7 @@ pub async fn graph_create_memory_node(
         .create_node(
             vault_id,
             "memory",
-            encrypted_content,
-            content_hmac,
+            content,
             labels,
             Some(embedding),
             Some("user_memories".to_string()),
@@ -65,8 +62,7 @@ pub async fn graph_vector_search(
         .map(|(node, similarity)| GraphNodeResult {
             id: node.id.as_str().to_string(),
             node_type: node.node_type,
-            encrypted_content: node.encrypted_content,
-            content_hmac: node.content_hmac,
+            content: node.content,
             labels: node.labels,
             similarity: Some(similarity),
         })
@@ -99,8 +95,7 @@ pub async fn graph_list_memory_nodes(
         .map(|node| GraphNodeResult {
             id: node.id.as_str().to_string(),
             node_type: node.node_type,
-            encrypted_content: node.encrypted_content,
-            content_hmac: node.content_hmac,
+            content: node.content,
             labels: node.labels,
             similarity: None,
         })
@@ -227,8 +222,7 @@ pub async fn graph_restore_vault(
             .create_node(
                 &node.vault_id,
                 &node.node_type,
-                node.encrypted_content.clone(),
-                node.content_hmac.clone(),
+                node.content.clone(),
                 node.labels.clone(),
                 node.embedding.clone(),
                 node.namespace.clone(),

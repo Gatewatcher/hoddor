@@ -9,7 +9,6 @@ import { appSelectors } from '../../store/app.selectors';
 import {
   createMemory,
   encodeContent,
-  generateHMAC,
   parseLabels,
 } from '../../utils/memoryUtils';
 
@@ -55,13 +54,11 @@ export const MemoryForm = ({ onMemoryAdded }: MemoryFormProps) => {
       const { embedding } = await embeddingService.embed(newMemory);
 
       const contentBytes = encodeContent(newMemory);
-      const hmacHex = await generateHMAC(contentBytes);
       const labelList = parseLabels(labels);
 
       const nodeId = await graph_create_memory_node(
         vaultName,
         contentBytes,
-        hmacHex,
         new Float32Array(embedding),
         labelList,
       );

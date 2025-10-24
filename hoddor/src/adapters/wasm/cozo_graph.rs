@@ -66,8 +66,7 @@ impl CozoGraphAdapter {
                 namespace: String?,
                 labels: [String],
                 embedding: [Float]?,
-                encrypted_content: Bytes,
-                content_hmac: String,
+                content: Bytes,
                 content_size: Int,
                 version: Int,
                 expires_at: Int?,
@@ -109,7 +108,7 @@ impl CozoGraphAdapter {
     }
 
     fn deserialize_node(&self, row: &[serde_json::Value]) -> GraphResult<GraphNode> {
-        if row.len() < 15 {
+        if row.len() < 14 {
             return Err(GraphError::SerializationError(
                 "Invalid row length".to_string(),
             ));
@@ -147,43 +146,38 @@ impl CozoGraphAdapter {
                 .collect()
         });
 
-        let encrypted_content: Vec<u8> = row[6]
+        let content: Vec<u8> = row[6]
             .as_array()
-            .ok_or_else(|| GraphError::SerializationError("Invalid encrypted_content".to_string()))?
+            .ok_or_else(|| GraphError::SerializationError("Invalid content".to_string()))?
             .iter()
             .filter_map(|v| v.as_u64().map(|u| u as u8))
             .collect();
 
-        let content_hmac = row[7]
-            .as_str()
-            .ok_or_else(|| GraphError::SerializationError("Invalid content_hmac".to_string()))?
-            .to_string();
-
-        let content_size = row[8]
+        let content_size = row[7]
             .as_u64()
             .ok_or_else(|| GraphError::SerializationError("Invalid content_size".to_string()))?
             as usize;
 
-        let _version = row[9]
+        let _version = row[8]
             .as_u64()
             .ok_or_else(|| GraphError::SerializationError("Invalid version".to_string()))?
             as u32;
 
-        let expires_at = row[10].as_u64();
+        let expires_at = row[9].as_u64();
 
-        let created_at = row[11]
+        let created_at = row[10]
             .as_u64()
             .ok_or_else(|| GraphError::SerializationError("Invalid created_at".to_string()))?;
 
-        let updated_at = row[12]
+        let updated_at = row[11]
             .as_u64()
             .ok_or_else(|| GraphError::SerializationError("Invalid updated_at".to_string()))?;
 
-        let accessed_at = row[13]
+        let accessed_at = row[12]
             .as_u64()
             .ok_or_else(|| GraphError::SerializationError("Invalid accessed_at".to_string()))?;
 
-        let access_count = row[14]
+        let access_count = row[13]
             .as_u64()
             .ok_or_else(|| GraphError::SerializationError("Invalid access_count".to_string()))?
             as u32;
@@ -195,8 +189,7 @@ impl CozoGraphAdapter {
             namespace,
             labels,
             embedding,
-            encrypted_content,
-            content_hmac,
+            content,
             metadata: create_node_metadata(content_size, expires_at),
             created_at,
             updated_at,
@@ -288,8 +281,7 @@ impl GraphPort for CozoGraphAdapter {
         &self,
         vault_id: &str,
         node_type: &str,
-        encrypted_content: Vec<u8>,
-        content_hmac: String,
+        content: Vec<u8>,
         labels: Vec<String>,
         embedding: Option<Vec<f32>>,
         namespace: Option<String>,
@@ -304,8 +296,7 @@ impl GraphPort for CozoGraphAdapter {
             namespace,
             labels,
             embedding,
-            encrypted_content,
-            content_hmac,
+            content,
             metadata: create_node_metadata(0, None),
             created_at: now,
             updated_at: now,
@@ -316,15 +307,15 @@ impl GraphPort for CozoGraphAdapter {
         validate_node(&node)?;
 
         let query = r#"
-            ?[id, node_type, vault_id, namespace, labels, embedding, encrypted_content,
-              content_hmac, content_size, version, expires_at, created_at, updated_at,
+            ?[id, node_type, vault_id, namespace, labels, embedding, content,
+              content_size, version, expires_at, created_at, updated_at,
               accessed_at, access_count] <- [[$id, $node_type, $vault_id, $namespace,
-              $labels, $embedding, $encrypted_content, $content_hmac, $content_size,
+              $labels, $embedding, $content, $content_size,
               $version, $expires_at, $created_at, $updated_at, $accessed_at, $access_count]]
 
             :put nodes {
-                id => node_type, vault_id, namespace, labels, embedding, encrypted_content,
-                content_hmac, content_size, version, expires_at, created_at, updated_at,
+                id => node_type, vault_id, namespace, labels, embedding, content,
+                content_size, version, expires_at, created_at, updated_at,
                 accessed_at, access_count
             }
         "#;
@@ -362,12 +353,8 @@ impl GraphPort for CozoGraphAdapter {
                 .unwrap_or(DataValue::Null),
         );
         params.insert(
-            "encrypted_content".to_string(),
-            DataValue::Bytes(node.encrypted_content.clone()),
-        );
-        params.insert(
-            "content_hmac".to_string(),
-            DataValue::from(node.content_hmac.as_str()),
+            "content".to_string(),
+            DataValue::Bytes(node.content.clone()),
         );
         params.insert(
             "content_size".to_string(),
@@ -411,12 +398,12 @@ impl GraphPort for CozoGraphAdapter {
 
     async fn get_node(&self, vault_id: &str, node_id: &NodeId) -> GraphResult<Option<GraphNode>> {
         let query = r#"
-            ?[id, node_type, vault_id, namespace, labels, embedding, encrypted_content,
-              content_hmac, content_size, version, expires_at, created_at, updated_at,
+            ?[id, node_type, vault_id, namespace, labels, embedding, content,
+              content_size, version, expires_at, created_at, updated_at,
               accessed_at, access_count] :=
                 *nodes{
-                    id, node_type, vault_id, namespace, labels, embedding, encrypted_content,
-                    content_hmac, content_size, version, expires_at, created_at, updated_at,
+                    id, node_type, vault_id, namespace, labels, embedding, content,
+                    content_size, version, expires_at, created_at, updated_at,
                     accessed_at, access_count
                 },
                 id == $id,
@@ -458,25 +445,23 @@ impl GraphPort for CozoGraphAdapter {
         &self,
         _vault_id: &str,
         node_id: &NodeId,
-        encrypted_content: Vec<u8>,
-        content_hmac: String,
+        content: Vec<u8>,
         embedding: Option<Vec<f32>>,
     ) -> GraphResult<()> {
         let now = Self::get_timestamp();
 
         let query = r#"
-            ?[id, encrypted_content, content_hmac, embedding, updated_at] <-
-                [[$id, $encrypted_content, $content_hmac, $embedding, $updated_at]]
+            ?[id, content, embedding, updated_at] <-
+                [[$id, $content, $embedding, $updated_at]]
 
             :update nodes {
-                id => encrypted_content, content_hmac, embedding, updated_at
+                id => content, embedding, updated_at
             }
         "#;
 
         let params_json = serde_json::json!({
             "id": node_id.as_str(),
-            "encrypted_content": encrypted_content,
-            "content_hmac": content_hmac,
+            "content": content,
             "embedding": embedding,
             "updated_at": now,
         });
@@ -691,12 +676,12 @@ impl GraphPort for CozoGraphAdapter {
                     etype in [{}],
                     neighbor_id = if(from == $node_id, to, from)
 
-                ?[id, node_type, vault_id, namespace, labels, embedding, encrypted_content,
-                  content_hmac, content_size, version, expires_at, created_at, updated_at,
+                ?[id, node_type, vault_id, namespace, labels, embedding, content,
+                  content_size, version, expires_at, created_at, updated_at,
                   accessed_at, access_count] :=
                     *neighbor_id{{neighbor_id: id}},
-                    *nodes{{id, node_type, vault_id, namespace, labels, embedding, encrypted_content,
-                           content_hmac, content_size, version, expires_at, created_at, updated_at,
+                    *nodes{{id, node_type, vault_id, namespace, labels, embedding, content,
+                           content_size, version, expires_at, created_at, updated_at,
                            accessed_at, access_count}}
             "#,
                 types_list
@@ -710,11 +695,11 @@ impl GraphPort for CozoGraphAdapter {
                     neighbor_id = if(from == $node_id, to, from)
 
                 ?[id, node_type, vault_id, namespace, labels, embedding, encrypted_content,
-                  content_hmac, content_size, version, expires_at, created_at, updated_at,
+                  content_size, version, expires_at, created_at, updated_at,
                   accessed_at, access_count] :=
                     *neighbor_id{neighbor_id: id},
                     *nodes{id, node_type, vault_id, namespace, labels, embedding, encrypted_content,
-                           content_hmac, content_size, version, expires_at, created_at, updated_at,
+                           content_size, version, expires_at, created_at, updated_at,
                            accessed_at, access_count}
             "#
             .to_string()
@@ -789,7 +774,6 @@ mod tests {
                 "test_vault",
                 "memory",
                 content.clone(),
-                "test_hmac_123".to_string(),
                 vec!["test".to_string(), "integration".to_string()],
                 Some(vec![0.1, 0.2, 0.3]),
                 Some("test_namespace".to_string()),
@@ -810,8 +794,7 @@ mod tests {
         assert_eq!(node.vault_id, "test_vault");
         assert_eq!(node.namespace, Some("test_namespace".to_string()));
         assert_eq!(node.labels, vec!["test", "integration"]);
-        assert_eq!(node.encrypted_content, content);
-        assert_eq!(node.content_hmac, "test_hmac_123");
+        assert_eq!(node.content, content);
         assert!(node.embedding.is_some());
     }
 
@@ -824,7 +807,6 @@ mod tests {
                 "test_vault",
                 "memory",
                 vec![1, 2, 3],
-                "hmac1".to_string(),
                 vec!["original".to_string()],
                 None,
                 None,
@@ -838,7 +820,6 @@ mod tests {
                 "test_vault",
                 &node_id,
                 new_content.clone(),
-                "hmac2".to_string(),
                 Some(vec![0.5, 0.6]),
             )
             .await
@@ -850,8 +831,7 @@ mod tests {
             .unwrap()
             .unwrap();
 
-        assert_eq!(node.encrypted_content, new_content);
-        assert_eq!(node.content_hmac, "hmac2");
+        assert_eq!(node.content, new_content);
         assert_eq!(node.embedding, Some(vec![0.5, 0.6]));
     }
 
@@ -864,7 +844,6 @@ mod tests {
                 "test_vault",
                 "memory",
                 vec![1, 2, 3],
-                "hmac".to_string(),
                 vec![],
                 None,
                 None,
@@ -899,7 +878,6 @@ mod tests {
                 "test_vault",
                 "entity",
                 vec![1],
-                "hmac1".to_string(),
                 vec![],
                 None,
                 None,
@@ -912,7 +890,6 @@ mod tests {
                 "test_vault",
                 "entity",
                 vec![2],
-                "hmac2".to_string(),
                 vec![],
                 None,
                 None,
@@ -966,7 +943,6 @@ mod tests {
                 "test_vault",
                 "entity",
                 vec![1],
-                "h1".to_string(),
                 vec![],
                 None,
                 None,
@@ -979,7 +955,6 @@ mod tests {
                 "test_vault",
                 "entity",
                 vec![2],
-                "h2".to_string(),
                 vec![],
                 None,
                 None,
@@ -992,7 +967,6 @@ mod tests {
                 "test_vault",
                 "entity",
                 vec![3],
-                "h3".to_string(),
                 vec![],
                 None,
                 None,
@@ -1042,7 +1016,6 @@ mod tests {
                 "test_vault",
                 "entity",
                 vec![1],
-                "h1".to_string(),
                 vec![],
                 None,
                 None,
@@ -1055,7 +1028,6 @@ mod tests {
                 "test_vault",
                 "entity",
                 vec![2],
-                "h2".to_string(),
                 vec![],
                 None,
                 None,

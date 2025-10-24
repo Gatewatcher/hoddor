@@ -125,8 +125,8 @@ Always cite which parts of the context you used to answer.`;
       let content = '';
 
       try {
-        if (result.encrypted_content && result.encrypted_content.length > 0) {
-          content = decoder.decode(new Uint8Array(result.encrypted_content));
+        if (result.content && result.content.length > 0) {
+          content = decoder.decode(new Uint8Array(result.content));
         } else {
           content = `[${result.labels.join(', ')}]`;
         }

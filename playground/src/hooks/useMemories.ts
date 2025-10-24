@@ -34,8 +34,8 @@ export const useMemories = () => {
         const loadedMemories: Memory[] = nodes.map((node: any) => {
           let content = '';
           try {
-            if (node.encrypted_content && node.encrypted_content.length > 0) {
-              content = decoder.decode(new Uint8Array(node.encrypted_content));
+            if (node.content && node.content.length > 0) {
+              content = decoder.decode(new Uint8Array(node.content));
             }
           } catch (error) {
             console.error('Failed to decode memory:', error);

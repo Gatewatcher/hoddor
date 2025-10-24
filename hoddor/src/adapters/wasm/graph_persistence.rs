@@ -215,8 +215,7 @@ impl<G: GraphPort, S: StoragePort> GraphPersistence<G, S> {
                 .create_node(
                     &node.vault_id,
                     &node.node_type,
-                    node.encrypted_content.clone(),
-                    node.content_hmac.clone(),
+                    node.content.clone(),
                     node.labels.clone(),
                     node.embedding.clone(),
                     node.namespace.clone(),
@@ -321,7 +320,6 @@ mod tests {
                 vault_id,
                 "memory",
                 vec![1, 2, 3],
-                "hmac1".to_string(),
                 vec!["test".to_string()],
                 None,
                 None,
@@ -335,7 +333,6 @@ mod tests {
                 vault_id,
                 "entity",
                 vec![4, 5, 6],
-                "hmac2".to_string(),
                 vec!["test2".to_string()],
                 None,
                 None,
@@ -402,7 +399,6 @@ mod tests {
                 vault_id,
                 "memory",
                 vec![1],
-                "h1".to_string(),
                 vec![],
                 None,
                 None,
@@ -416,7 +412,6 @@ mod tests {
                 vault_id,
                 "memory",
                 vec![2],
-                "h2".to_string(),
                 vec![],
                 None,
                 None,
@@ -430,7 +425,6 @@ mod tests {
                 vault_id,
                 "memory",
                 vec![3],
-                "h3".to_string(),
                 vec![],
                 None,
                 None,
@@ -499,7 +493,6 @@ mod tests {
                 vault_id,
                 "memory",
                 vec![1, 2, 3, 4, 5],
-                "hmac_encrypted_1".to_string(),
                 vec!["encrypted".to_string(), "test".to_string()],
                 None,
                 None,
@@ -513,7 +506,6 @@ mod tests {
                 vault_id,
                 "entity",
                 vec![6, 7, 8, 9, 10],
-                "hmac_encrypted_2".to_string(),
                 vec!["sensitive".to_string()],
                 None,
                 None,
@@ -558,8 +550,7 @@ mod tests {
             .iter()
             .find(|n| n.node_type == "memory")
             .unwrap();
-        assert_eq!(restored_node1.encrypted_content, vec![1, 2, 3, 4, 5]);
-        assert_eq!(restored_node1.content_hmac, "hmac_encrypted_1");
+        assert_eq!(restored_node1.content, vec![1, 2, 3, 4, 5]);
 
         let restored_edge = &restored_backup.edges[0];
         assert_eq!(restored_edge.edge_type, "secure_link");
@@ -591,7 +582,6 @@ mod tests {
                 vault_id,
                 "memory",
                 vec![1, 2, 3],
-                "hmac1".to_string(),
                 vec![],
                 None,
                 None,
@@ -680,7 +670,6 @@ mod tests {
                 vault_id,
                 "memory",
                 vec![1, 2, 3],
-                "hmac".to_string(),
                 vec![],
                 None,
                 None,

@@ -12,15 +12,9 @@ pub fn validate_node(node: &GraphNode) -> GraphResult<()> {
         ));
     }
 
-    if node.encrypted_content.is_empty() {
+    if node.content.is_empty() {
         return Err(GraphError::Other(
-            "encrypted_content cannot be empty".to_string(),
-        ));
-    }
-
-    if node.content_hmac.is_empty() {
-        return Err(GraphError::IntegrityError(
-            "content_hmac cannot be empty".to_string(),
+            "content cannot be empty".to_string(),
         ));
     }
 
@@ -103,8 +97,7 @@ mod tests {
             namespace: None,
             labels: vec![],
             embedding: None,
-            encrypted_content: vec![1, 2, 3],
-            content_hmac: "test_hmac".to_string(),
+            content: vec![1, 2, 3],
             metadata: NodeMetadata {
                 content_size: 3,
                 version: 1,
@@ -128,8 +121,7 @@ mod tests {
             namespace: None,
             labels: vec![],
             embedding: None,
-            encrypted_content: vec![1, 2, 3],
-            content_hmac: "test_hmac".to_string(),
+            content: vec![1, 2, 3],
             metadata: NodeMetadata {
                 content_size: 3,
                 version: 1,
@@ -190,8 +182,7 @@ mod tests {
             namespace: None,
             labels: vec![],
             embedding: None,
-            encrypted_content: vec![1, 2, 3],
-            content_hmac: "test_hmac".to_string(),
+            content: vec![1, 2, 3],
             metadata: NodeMetadata {
                 content_size: 3,
                 version: 1,

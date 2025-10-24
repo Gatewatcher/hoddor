@@ -59,8 +59,7 @@ impl GraphPort for SimpleGraphAdapter {
         &self,
         vault_id: &str,
         node_type: &str,
-        encrypted_content: Vec<u8>,
-        content_hmac: String,
+        content: Vec<u8>,
         labels: Vec<String>,
         embedding: Option<Vec<f32>>,
         namespace: Option<String>,
@@ -75,8 +74,7 @@ impl GraphPort for SimpleGraphAdapter {
             namespace,
             labels,
             embedding,
-            encrypted_content,
-            content_hmac,
+            content,
             metadata: create_node_metadata(0, None),
             created_at: now,
             updated_at: now,
@@ -110,16 +108,14 @@ impl GraphPort for SimpleGraphAdapter {
         &self,
         _vault_id: &str,
         node_id: &NodeId,
-        encrypted_content: Vec<u8>,
-        content_hmac: String,
+        content: Vec<u8>,
         embedding: Option<Vec<f32>>,
     ) -> GraphResult<()> {
         let now = Self::get_timestamp();
         let mut nodes = self.nodes.lock().unwrap();
 
         if let Some(node) = nodes.get_mut(node_id) {
-            node.encrypted_content = encrypted_content;
-            node.content_hmac = content_hmac;
+            node.content = content;
             node.embedding = embedding;
             node.updated_at = now;
             Ok(())
@@ -328,7 +324,6 @@ mod tests {
                 "test_vault",
                 "memory",
                 content.clone(),
-                "test_hmac_123".to_string(),
                 vec!["test".to_string(), "integration".to_string()],
                 Some(vec![0.1, 0.2, 0.3]),
                 Some("test_namespace".to_string()),
@@ -349,8 +344,7 @@ mod tests {
         assert_eq!(node.vault_id, "test_vault");
         assert_eq!(node.namespace, Some("test_namespace".to_string()));
         assert_eq!(node.labels, vec!["test", "integration"]);
-        assert_eq!(node.encrypted_content, content);
-        assert_eq!(node.content_hmac, "test_hmac_123");
+        assert_eq!(node.content, content);
         assert!(node.embedding.is_some());
     }
 
@@ -363,7 +357,6 @@ mod tests {
                 "test_vault",
                 "memory",
                 vec![1, 2, 3],
-                "hmac1".to_string(),
                 vec!["original".to_string()],
                 None,
                 None,
@@ -377,7 +370,6 @@ mod tests {
                 "test_vault",
                 &node_id,
                 new_content.clone(),
-                "hmac2".to_string(),
                 Some(vec![0.5, 0.6]),
             )
             .await
@@ -389,8 +381,7 @@ mod tests {
             .unwrap()
             .unwrap();
 
-        assert_eq!(node.encrypted_content, new_content);
-        assert_eq!(node.content_hmac, "hmac2");
+        assert_eq!(node.content, new_content);
         assert_eq!(node.embedding, Some(vec![0.5, 0.6]));
     }
 
@@ -403,7 +394,6 @@ mod tests {
                 "test_vault",
                 "memory",
                 vec![1, 2, 3],
-                "hmac".to_string(),
                 vec![],
                 None,
                 None,
@@ -438,7 +428,6 @@ mod tests {
                 "test_vault",
                 "entity",
                 vec![1],
-                "hmac1".to_string(),
                 vec![],
                 None,
                 None,
@@ -451,7 +440,6 @@ mod tests {
                 "test_vault",
                 "entity",
                 vec![2],
-                "hmac2".to_string(),
                 vec![],
                 None,
                 None,
@@ -505,7 +493,6 @@ mod tests {
                 "test_vault",
                 "entity",
                 vec![1],
-                "h1".to_string(),
                 vec![],
                 None,
                 None,
@@ -518,7 +505,6 @@ mod tests {
                 "test_vault",
                 "entity",
                 vec![2],
-                "h2".to_string(),
                 vec![],
                 None,
                 None,
@@ -531,7 +517,6 @@ mod tests {
                 "test_vault",
                 "entity",
                 vec![3],
-                "h3".to_string(),
                 vec![],
                 None,
                 None,
@@ -581,7 +566,6 @@ mod tests {
                 "test_vault",
                 "entity",
                 vec![1],
-                "h1".to_string(),
                 vec![],
                 None,
                 None,
@@ -594,7 +578,6 @@ mod tests {
                 "test_vault",
                 "entity",
                 vec![2],
-                "h2".to_string(),
                 vec![],
                 None,
                 None,

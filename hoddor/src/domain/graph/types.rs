@@ -62,9 +62,7 @@ pub struct GraphNode {
 
     pub embedding: Option<Vec<f32>>,
 
-    pub encrypted_content: Vec<u8>,
-
-    pub content_hmac: String,
+    pub content: Vec<u8>,
 
     pub metadata: NodeMetadata,
 
