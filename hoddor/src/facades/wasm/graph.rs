@@ -112,7 +112,7 @@ pub async fn graph_backup_vault(
         identity: identity.to_string(),
     };
 
-    let service = GraphPersistenceService::new_with_encryption(
+    let service = GraphPersistenceService::new(
         platform.graph_owned(),
         platform.storage_owned(),
         "graph_backups".to_string(),
@@ -141,7 +141,7 @@ pub async fn graph_restore_vault(
         identity: identity.to_string(),
     };
 
-    let service = GraphPersistenceService::new_with_encryption(
+    let service = GraphPersistenceService::new(
         platform.graph_owned(),
         platform.storage_owned(),
         "graph_backups".to_string(),

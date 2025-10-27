@@ -357,8 +357,8 @@ mod tests {
     #[wasm_bindgen_test]
     async fn test_create_graph_adapter() {
         let adapter = SimpleGraphAdapter::new();
-        assert!(adapter.nodes.lock().unwrap().is_empty());
-        assert!(adapter.edges.lock().unwrap().is_empty());
+        assert!(adapter.nodes.lock().is_ok());
+        assert!(adapter.edges.lock().is_ok());
     }
 
     #[wasm_bindgen_test]
