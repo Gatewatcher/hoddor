@@ -13,9 +13,7 @@ pub fn validate_node(node: &GraphNode) -> GraphResult<()> {
     }
 
     if node.content.is_empty() {
-        return Err(GraphError::Other(
-            "content cannot be empty".to_string(),
-        ));
+        return Err(GraphError::Other("content cannot be empty".to_string()));
     }
 
     if let Some(ref emb) = node.embedding {

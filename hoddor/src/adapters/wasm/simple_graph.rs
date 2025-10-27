@@ -437,14 +437,7 @@ mod tests {
         let adapter = SimpleGraphAdapter::new();
 
         let node_id = adapter
-            .create_node(
-                "test_vault",
-                "memory",
-                vec![1, 2, 3],
-                vec![],
-                None,
-                None,
-            )
+            .create_node("test_vault", "memory", vec![1, 2, 3], vec![], None, None)
             .await
             .unwrap();
 
@@ -471,26 +464,12 @@ mod tests {
         let adapter = SimpleGraphAdapter::new();
 
         let from_id = adapter
-            .create_node(
-                "test_vault",
-                "entity",
-                vec![1],
-                vec![],
-                None,
-                None,
-            )
+            .create_node("test_vault", "entity", vec![1], vec![], None, None)
             .await
             .unwrap();
 
         let to_id = adapter
-            .create_node(
-                "test_vault",
-                "entity",
-                vec![2],
-                vec![],
-                None,
-                None,
-            )
+            .create_node("test_vault", "entity", vec![2], vec![], None, None)
             .await
             .unwrap();
 
@@ -536,38 +515,17 @@ mod tests {
         let adapter = SimpleGraphAdapter::new();
 
         let node_a = adapter
-            .create_node(
-                "test_vault",
-                "entity",
-                vec![1],
-                vec![],
-                None,
-                None,
-            )
+            .create_node("test_vault", "entity", vec![1], vec![], None, None)
             .await
             .unwrap();
 
         let node_b = adapter
-            .create_node(
-                "test_vault",
-                "entity",
-                vec![2],
-                vec![],
-                None,
-                None,
-            )
+            .create_node("test_vault", "entity", vec![2], vec![], None, None)
             .await
             .unwrap();
 
         let node_c = adapter
-            .create_node(
-                "test_vault",
-                "entity",
-                vec![3],
-                vec![],
-                None,
-                None,
-            )
+            .create_node("test_vault", "entity", vec![3], vec![], None, None)
             .await
             .unwrap();
 
@@ -609,26 +567,12 @@ mod tests {
         let adapter = SimpleGraphAdapter::new();
 
         let node_a = adapter
-            .create_node(
-                "test_vault",
-                "entity",
-                vec![1],
-                vec![],
-                None,
-                None,
-            )
+            .create_node("test_vault", "entity", vec![1], vec![], None, None)
             .await
             .unwrap();
 
         let node_b = adapter
-            .create_node(
-                "test_vault",
-                "entity",
-                vec![2],
-                vec![],
-                None,
-                None,
-            )
+            .create_node("test_vault", "entity", vec![2], vec![], None, None)
             .await
             .unwrap();
 

@@ -382,7 +382,10 @@ mod tests {
         assert_eq!(get_namespace_filename("users"), "users.hoddor");
         assert_eq!(get_namespace_filename("config"), "config.hoddor");
         assert_eq!(get_namespace_filename("data-2024"), "data-2024.hoddor");
-        assert_eq!(get_namespace_filename("my_namespace"), "my_namespace.hoddor");
+        assert_eq!(
+            get_namespace_filename("my_namespace"),
+            "my_namespace.hoddor"
+        );
         assert_eq!(get_namespace_filename("test-123"), "test-123.hoddor");
     }
 
@@ -393,8 +396,14 @@ mod tests {
         assert!("users.ns".ends_with(LEGACY_NAMESPACE_EXTENSION));
 
         // Test stripping both extensions
-        assert_eq!("users.hoddor".strip_suffix(NAMESPACE_EXTENSION), Some("users"));
-        assert_eq!("users.ns".strip_suffix(LEGACY_NAMESPACE_EXTENSION), Some("users"));
+        assert_eq!(
+            "users.hoddor".strip_suffix(NAMESPACE_EXTENSION),
+            Some("users")
+        );
+        assert_eq!(
+            "users.ns".strip_suffix(LEGACY_NAMESPACE_EXTENSION),
+            Some("users")
+        );
 
         // New files should use .hoddor
         assert_eq!(get_namespace_filename("test"), "test.hoddor");
@@ -506,7 +515,10 @@ mod tests {
         let ns_name = "users.ns";
 
         assert_eq!(hoddor_name.strip_suffix(NAMESPACE_EXTENSION), Some("users"));
-        assert_eq!(ns_name.strip_suffix(LEGACY_NAMESPACE_EXTENSION), Some("users"));
+        assert_eq!(
+            ns_name.strip_suffix(LEGACY_NAMESPACE_EXTENSION),
+            Some("users")
+        );
 
         // Verify new files use .hoddor
         assert_eq!(get_namespace_filename("test"), "test.hoddor");
@@ -517,16 +529,16 @@ mod tests {
     fn test_read_vault_accepts_both_extensions() {
         // This test verifies the logic in read_vault that checks both extensions
         let entries = vec![
-            "config.hoddor".to_string(),     // New format
-            "settings.ns".to_string(),       // Old format
-            "metadata.json".to_string(),     // Not a namespace
-            "data.txt".to_string(),          // Not a namespace
+            "config.hoddor".to_string(), // New format
+            "settings.ns".to_string(),   // Old format
+            "metadata.json".to_string(), // Not a namespace
+            "data.txt".to_string(),      // Not a namespace
         ];
 
         let mut namespace_count = 0;
         for entry in &entries {
-            let is_namespace = entry.ends_with(NAMESPACE_EXTENSION)
-                || entry.ends_with(LEGACY_NAMESPACE_EXTENSION);
+            let is_namespace =
+                entry.ends_with(NAMESPACE_EXTENSION) || entry.ends_with(LEGACY_NAMESPACE_EXTENSION);
             if is_namespace {
                 namespace_count += 1;
             }
@@ -566,10 +578,17 @@ mod tests {
 
         for namespace in namespaces {
             let filename = get_namespace_filename(namespace);
-            assert!(filename.ends_with(".hoddor"),
-                "Namespace '{}' should produce .hoddor file, got: {}", namespace, filename);
-            assert!(!filename.ends_with(".ns"),
-                "Namespace '{}' should not produce .ns file", namespace);
+            assert!(
+                filename.ends_with(".hoddor"),
+                "Namespace '{}' should produce .hoddor file, got: {}",
+                namespace,
+                filename
+            );
+            assert!(
+                !filename.ends_with(".ns"),
+                "Namespace '{}' should not produce .ns file",
+                namespace
+            );
         }
     }
 }

@@ -1,5 +1,5 @@
 use crate::domain::crypto;
-use crate::domain::graph::{GraphBackup,  GraphError,  GraphResult};
+use crate::domain::graph::{GraphBackup, GraphError, GraphResult};
 use crate::platform::Platform;
 use crate::ports::graph::GraphPort;
 use crate::ports::StoragePort;
@@ -22,12 +22,7 @@ pub struct GraphPersistenceService<G: GraphPort, S: StoragePort> {
 }
 
 impl<G: GraphPort, S: StoragePort> GraphPersistenceService<G, S> {
-    pub fn new(
-        graph: G,
-        storage: S,
-        backup_path: String,
-        encryption: EncryptionConfig,
-    ) -> Self {
+    pub fn new(graph: G, storage: S, backup_path: String, encryption: EncryptionConfig) -> Self {
         Self {
             graph,
             storage,
@@ -174,12 +169,8 @@ mod tests {
 
         storage.create_directory("graph_backups").await.unwrap();
 
-        let service = GraphPersistenceService::new(
-            graph,
-            storage,
-            "graph_backups".to_string(),
-            encryption,
-        );
+        let service =
+            GraphPersistenceService::new(graph, storage, "graph_backups".to_string(), encryption);
 
         let vault_id = "test_vault_backup";
 
@@ -266,12 +257,8 @@ mod tests {
         let graph = SimpleGraphAdapter::new();
         let storage = OpfsStorage::new();
         storage.create_directory("graph_backups").await.unwrap();
-        let service = GraphPersistenceService::new(
-            graph,
-            storage,
-            "graph_backups".to_string(),
-            encryption,
-        );
+        let service =
+            GraphPersistenceService::new(graph, storage, "graph_backups".to_string(), encryption);
 
         let result = service.backup("nonexistent_vault").await;
         assert!(result.is_ok());
@@ -294,51 +281,26 @@ mod tests {
         let graph = SimpleGraphAdapter::new();
         let storage = OpfsStorage::new();
         storage.create_directory("graph_backups").await.unwrap();
-        let service = GraphPersistenceService::new(
-            graph,
-            storage,
-            "graph_backups".to_string(),
-            encryption,
-        );
+        let service =
+            GraphPersistenceService::new(graph, storage, "graph_backups".to_string(), encryption);
 
         let vault_id = "test_vault_multi_edges";
 
         let node1 = service
             .graph
-            .create_node(
-                vault_id,
-                "memory",
-                vec![1],
-                vec![],
-                None,
-                None,
-            )
+            .create_node(vault_id, "memory", vec![1], vec![], None, None)
             .await
             .unwrap();
 
         let node2 = service
             .graph
-            .create_node(
-                vault_id,
-                "memory",
-                vec![2],
-                vec![],
-                None,
-                None,
-            )
+            .create_node(vault_id, "memory", vec![2], vec![], None, None)
             .await
             .unwrap();
 
         let node3 = service
             .graph
-            .create_node(
-                vault_id,
-                "memory",
-                vec![3],
-                vec![],
-                None,
-                None,
-            )
+            .create_node(vault_id, "memory", vec![3], vec![], None, None)
             .await
             .unwrap();
 
@@ -494,25 +456,14 @@ mod tests {
             identity: identity1,
         };
 
-        let service1 = GraphPersistenceService::new(
-            graph,
-            storage,
-            "wrong_key_test".to_string(),
-            encryption1,
-        );
+        let service1 =
+            GraphPersistenceService::new(graph, storage, "wrong_key_test".to_string(), encryption1);
 
         let vault_id = "test_vault_wrong_key";
 
         service1
             .graph
-            .create_node(
-                vault_id,
-                "memory",
-                vec![1, 2, 3],
-                vec![],
-                None,
-                None,
-            )
+            .create_node(vault_id, "memory", vec![1, 2, 3], vec![], None, None)
             .await
             .unwrap();
 
