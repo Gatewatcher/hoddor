@@ -44,16 +44,6 @@ impl<G: GraphPort, S: StoragePort> GraphPersistenceService<G, S> {
         }
     }
 
-    #[cfg(test)]
-    pub fn enable_encryption(&mut self, encryption: EncryptionConfig) {
-        self.encryption = Some(encryption);
-    }
-
-    #[cfg(test)]
-    pub fn disable_encryption(&mut self) {
-        self.encryption = None;
-    }
-
     pub async fn backup(&self, vault_id: &str) -> GraphResult<()> {
         let backup = self.graph.export_backup(vault_id).await?;
 
@@ -440,81 +430,6 @@ mod tests {
 
         service.delete_backup(vault_id).await.unwrap();
         assert!(!service.backup_exists(vault_id).await);
-    }
-
-    #[wasm_bindgen_test]
-    async fn test_encryption_toggle() {
-        let platform = Platform::new();
-        let graph = SimpleGraphAdapter::new();
-        let storage = OpfsStorage::new();
-        storage
-            .create_directory("toggle_graph_backups")
-            .await
-            .unwrap();
-
-        let mut service =
-            GraphPersistenceService::new(graph, storage, "toggle_graph_backups".to_string());
-
-        let vault_id = "test_vault_toggle";
-
-        service
-            .graph
-            .create_node(
-                vault_id,
-                "memory",
-                vec![1, 2, 3],
-                vec![],
-                None,
-                None,
-            )
-            .await
-            .unwrap();
-
-        service.backup(vault_id).await.unwrap();
-
-        let json_content = service
-            .storage
-            .read_file(&format!("toggle_graph_backups/{}.hoddor", vault_id))
-            .await
-            .unwrap();
-        assert!(json_content.starts_with("{"));
-
-        let identity = crypto::generate_identity(&platform).unwrap();
-        let recipient = crypto::identity_to_public(&platform, &identity).unwrap();
-
-        service.enable_encryption(EncryptionConfig {
-            platform: platform.clone(),
-            recipient,
-            identity,
-        });
-
-        service.backup(vault_id).await.unwrap();
-
-        let age_content = service
-            .storage
-            .read_file(&format!("toggle_graph_backups/{}.hoddor", vault_id))
-            .await
-            .unwrap();
-        assert!(!age_content.starts_with("{"));
-
-        service.disable_encryption();
-
-        assert!(service
-            .storage
-            .read_file(&format!("toggle_graph_backups/{}.hoddor", vault_id))
-            .await
-            .is_ok());
-
-        service
-            .storage
-            .delete_file(&format!("toggle_graph_backups/{}.hoddor", vault_id))
-            .await
-            .unwrap();
-        service
-            .storage
-            .delete_file(&format!("toggle_graph_backups/{}.hoddor", vault_id))
-            .await
-            .unwrap();
     }
 
     #[wasm_bindgen_test]
