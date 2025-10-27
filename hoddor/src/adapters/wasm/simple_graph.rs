@@ -4,8 +4,15 @@ use crate::domain::graph::{
 };
 use crate::ports::graph::GraphPort;
 use async_trait::async_trait;
+use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+
+// Global shared storage for all graph data
+static NODES: Lazy<Arc<Mutex<HashMap<NodeId, GraphNode>>>> =
+    Lazy::new(|| Arc::new(Mutex::new(HashMap::new())));
+static EDGES: Lazy<Arc<Mutex<HashMap<EdgeId, GraphEdge>>>> =
+    Lazy::new(|| Arc::new(Mutex::new(HashMap::new())));
 
 #[derive(Clone)]
 pub struct SimpleGraphAdapter {
@@ -16,8 +23,8 @@ pub struct SimpleGraphAdapter {
 impl SimpleGraphAdapter {
     pub fn new() -> Self {
         Self {
-            nodes: Arc::new(Mutex::new(HashMap::new())),
-            edges: Arc::new(Mutex::new(HashMap::new())),
+            nodes: NODES.clone(),
+            edges: EDGES.clone(),
         }
     }
 
