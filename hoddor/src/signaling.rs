@@ -98,7 +98,7 @@ impl SignalingClient {
 
     pub fn set_message_handler(&mut self, sender: UnboundedSender<SignalingMessage>) {
         let peer_id = self.peer_id.clone();
-        let platform = self.platform; // Platform is Copy
+        let platform = self.platform.clone();
 
         let onmessage_callback = Closure::wrap(Box::new(move |e: MessageEvent| {
             if let Ok(text) = e.data().dyn_into::<js_sys::JsString>() {
@@ -183,13 +183,14 @@ impl SignalingClient {
         let ws = WebSocket::new(server_url)?;
 
         // Set up error handler with more detailed logging
+        let platform_for_error = platform.clone();
         let onerror_callback = Closure::wrap(Box::new(move |e: ErrorEvent| {
-            platform
+            platform_for_error
                 .logger()
                 .error(&format!("WebSocket error: {:?}", e));
             // Try to log more error details if available
             if let Ok(err_details) = js_sys::Reflect::get(&e, &"error".into()) {
-                platform
+                platform_for_error
                     .logger()
                     .error(&format!("Error details: {:?}", err_details));
             }

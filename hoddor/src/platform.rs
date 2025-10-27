@@ -74,6 +74,11 @@ impl Platform {
     }
 
     #[inline]
+    pub fn storage_owned(&self) -> Storage {
+        self.storage.clone()
+    }
+
+    #[inline]
     pub fn notifier(&self) -> &dyn NotifierPort {
         &self.notifier
     }
@@ -102,6 +107,12 @@ impl Platform {
     #[inline]
     pub fn graph(&self) -> &dyn GraphPort {
         &self.graph
+    }
+
+    #[cfg(feature = "graph")]
+    #[inline]
+    pub fn graph_owned(&self) -> Graph {
+        self.graph.clone()
     }
 }
 

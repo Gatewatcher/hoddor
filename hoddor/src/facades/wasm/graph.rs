@@ -1,6 +1,5 @@
 use super::converters;
 use crate::platform::Platform;
-use crate::ports::graph::GraphPort;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
@@ -114,8 +113,8 @@ pub async fn graph_backup_vault(
     };
 
     let service = GraphPersistenceService::new_with_encryption(
-        platform.graph(),
-        platform.storage(),
+        platform.graph_owned(),
+        platform.storage_owned(),
         "graph_backups".to_string(),
         encryption,
     );
@@ -143,8 +142,8 @@ pub async fn graph_restore_vault(
     };
 
     let service = GraphPersistenceService::new_with_encryption(
-        platform.graph(),
-        platform.storage(),
+        platform.graph_owned(),
+        platform.storage_owned(),
         "graph_backups".to_string(),
         encryption,
     );
