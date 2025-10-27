@@ -8,7 +8,13 @@ use crate::ports::{
     PersistencePort, PrfPort, StoragePort,
 };
 
-#[derive(Clone, Copy)]
+#[cfg(feature = "graph")]
+use crate::adapters::Graph;
+#[cfg(feature = "graph")]
+use crate::ports::GraphPort;
+
+#[cfg_attr(not(feature = "graph"), derive(Clone, Copy))]
+#[cfg_attr(feature = "graph", derive(Clone))]
 pub struct Platform {
     clock: Clock,
     logger: ConsoleLogger,
@@ -20,6 +26,8 @@ pub struct Platform {
     identity: AgeIdentity,
     kdf: Argon2Kdf,
     prf: Prf,
+    #[cfg(feature = "graph")]
+    graph: Graph,
 }
 
 impl Platform {
@@ -35,6 +43,8 @@ impl Platform {
             identity: AgeIdentity::new(),
             kdf: Argon2Kdf::new(),
             prf: Prf::new(),
+            #[cfg(feature = "graph")]
+            graph: Graph::new(),
         }
     }
 
@@ -86,6 +96,12 @@ impl Platform {
     #[inline]
     pub fn prf(&self) -> &dyn PrfPort {
         &self.prf
+    }
+
+    #[cfg(feature = "graph")]
+    #[inline]
+    pub fn graph(&self) -> &dyn GraphPort {
+        &self.graph
     }
 }
 

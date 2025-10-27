@@ -1,14 +1,8 @@
 use super::converters;
-use crate::adapters::wasm::SimpleGraphAdapter;
 use crate::platform::Platform;
 use crate::ports::graph::GraphPort;
-use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
-
-static GRAPH: Lazy<SimpleGraphAdapter> = Lazy::new(|| SimpleGraphAdapter::new());
-
-static PLATFORM: Lazy<Platform> = Lazy::new(|| Platform::new());
 
 #[derive(Serialize, Deserialize)]
 pub struct GraphNodeResult {
@@ -26,9 +20,11 @@ pub async fn graph_create_memory_node(
     embedding: Vec<f32>,
     labels: Vec<String>,
 ) -> Result<String, JsValue> {
+    let platform = Platform::new();
     let vault_id = vault_name;
 
-    let node_id = GRAPH
+    let node_id = platform
+        .graph()
         .create_node(
             vault_id,
             "memory",
@@ -50,9 +46,11 @@ pub async fn graph_vector_search(
     limit: usize,
     min_similarity: Option<f32>,
 ) -> Result<JsValue, JsValue> {
+    let platform = Platform::new();
     let vault_id = vault_name;
 
-    let results = GRAPH
+    let results = platform
+        .graph()
         .vector_search(vault_id, query_embedding, limit, min_similarity)
         .await
         .map_err(converters::to_js_error)?;
@@ -76,9 +74,11 @@ pub async fn graph_list_memory_nodes(
     vault_name: &str,
     limit: Option<usize>,
 ) -> Result<JsValue, JsValue> {
+    let platform = Platform::new();
     let vault_id = vault_name;
 
-    let nodes = GRAPH
+    let nodes = platform
+        .graph()
         .list_nodes_by_type(vault_id, "memory", limit)
         .await
         .map_err(converters::to_js_error)?;
@@ -103,18 +103,19 @@ pub async fn graph_backup_vault(
     recipient: &str,
     identity: &str,
 ) -> Result<(), JsValue> {
-    use crate::adapters::wasm::OpfsStorage;
     use crate::domain::graph::{EncryptionConfig, GraphPersistenceService};
 
+    let platform = Platform::new();
+
     let encryption = EncryptionConfig {
-        platform: PLATFORM.clone(),
+        platform: platform.clone(),
         recipient: recipient.to_string(),
         identity: identity.to_string(),
     };
 
     let service = GraphPersistenceService::new_with_encryption(
-        &*GRAPH,
-        OpfsStorage::new(),
+        platform.graph(),
+        platform.storage(),
         "graph_backups".to_string(),
         encryption,
     );
@@ -131,18 +132,19 @@ pub async fn graph_restore_vault(
     recipient: &str,
     identity: &str,
 ) -> Result<bool, JsValue> {
-    use crate::adapters::wasm::OpfsStorage;
     use crate::domain::graph::{EncryptionConfig, GraphPersistenceService};
 
+    let platform = Platform::new();
+
     let encryption = EncryptionConfig {
-        platform: PLATFORM.clone(),
+        platform: platform.clone(),
         recipient: recipient.to_string(),
         identity: identity.to_string(),
     };
 
     let service = GraphPersistenceService::new_with_encryption(
-        &*GRAPH,
-        OpfsStorage::new(),
+        platform.graph(),
+        platform.storage(),
         "graph_backups".to_string(),
         encryption,
     );
@@ -150,7 +152,7 @@ pub async fn graph_restore_vault(
     if !service.backup_exists(vault_name).await {
         return Ok(false);
     }
-    
+
     service
         .restore(vault_name)
         .await

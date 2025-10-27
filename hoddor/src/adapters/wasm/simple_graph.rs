@@ -7,6 +7,7 @@ use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
+#[derive(Clone)]
 pub struct SimpleGraphAdapter {
     nodes: Arc<Mutex<HashMap<NodeId, GraphNode>>>,
     edges: Arc<Mutex<HashMap<EdgeId, GraphEdge>>>,
@@ -337,7 +338,7 @@ impl GraphPort for SimpleGraphAdapter {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 mod tests {
     use super::SimpleGraphAdapter;
     use crate::domain::graph::{EdgeDirection, EdgeProperties, EdgeType, NodeId};
