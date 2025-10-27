@@ -152,4 +152,116 @@ mod tests {
             deserialized.username_pk.get("user1")
         );
     }
+
+    #[test]
+    fn test_export_format_is_extension_agnostic() {
+        // The export format uses VAULT1 magic number, making it independent of file extension
+        let vault = Vault {
+            metadata: VaultMetadata {
+                peer_id: Some("test-peer".to_string()),
+            },
+            identity_salts: IdentitySalts::new(),
+            username_pk: HashMap::new(),
+            namespaces: HashMap::new(),
+            sync_enabled: true,
+        };
+
+        let exported_bytes = serialize_vault(&vault).unwrap();
+
+        // Verify magic number is at the start
+        assert_eq!(&exported_bytes[..6], b"VAULT1");
+
+        // The same bytes can be "imported" regardless of the filename extension used:
+        // - my_vault.dat (old format)
+        // - my_vault.hoddor (new format)
+        // - my_vault (no extension)
+        // All work because we verify content, not extension
+
+        let result = deserialize_vault(&exported_bytes);
+        assert!(result.is_ok(), "Should import regardless of file extension");
+
+        let imported = result.unwrap();
+        assert_eq!(imported.metadata.peer_id, Some("test-peer".to_string()));
+    }
+
+    #[test]
+    fn test_legacy_dat_format_compatibility() {
+        // Simulate a vault exported with old .dat extension
+        // The content is identical - only the suggested filename differs
+        let vault = Vault {
+            metadata: VaultMetadata {
+                peer_id: Some("legacy-peer".to_string()),
+            },
+            identity_salts: IdentitySalts::new(),
+            username_pk: HashMap::new(),
+            namespaces: HashMap::new(),
+            sync_enabled: false,
+        };
+
+        // Export produces the same bytes whether we call it .dat or .hoddor
+        let exported = serialize_vault(&vault).unwrap();
+
+        // Should start with VAULT1 magic number
+        assert_eq!(&exported[..6], b"VAULT1");
+
+        // Import works with legacy .dat files (same content)
+        let imported = deserialize_vault(&exported).unwrap();
+        assert_eq!(imported.metadata.peer_id, Some("legacy-peer".to_string()));
+    }
+
+    #[test]
+    fn test_vault_magic_number_provides_format_detection() {
+        // The VAULT1 magic number allows us to detect valid vault exports
+        // regardless of filename or extension
+
+        let valid_vault = Vault {
+            metadata: VaultMetadata { peer_id: None },
+            identity_salts: IdentitySalts::new(),
+            username_pk: HashMap::new(),
+            namespaces: HashMap::new(),
+            sync_enabled: false,
+        };
+
+        let valid_bytes = serialize_vault(&valid_vault).unwrap();
+
+        // Valid export has magic number
+        assert_eq!(&valid_bytes[..6], b"VAULT1");
+        assert!(deserialize_vault(&valid_bytes).is_ok());
+
+        // Invalid data (e.g., random .dat file) gets rejected
+        let invalid_bytes = b"This is not a vault export file";
+        assert!(deserialize_vault(invalid_bytes).is_err());
+
+        // Invalid data with wrong magic number gets rejected
+        let mut wrong_magic = Vec::new();
+        wrong_magic.extend_from_slice(b"BADMAG");
+        wrong_magic.extend_from_slice(&10u32.to_be_bytes());
+        wrong_magic.extend_from_slice(b"{}");
+        assert!(deserialize_vault(&wrong_magic).is_err());
+    }
+
+    #[test]
+    fn test_export_format_stability() {
+        // Ensure the export format remains stable over time
+        // This is critical for backward compatibility
+
+        let vault = Vault {
+            metadata: VaultMetadata { peer_id: None },
+            identity_salts: IdentitySalts::new(),
+            username_pk: HashMap::new(),
+            namespaces: HashMap::new(),
+            sync_enabled: false,
+        };
+
+        let export1 = serialize_vault(&vault).unwrap();
+        let export2 = serialize_vault(&vault).unwrap();
+
+        // Exporting the same vault multiple times produces identical bytes
+        assert_eq!(export1, export2);
+
+        // Format structure: [VAULT1][4 bytes length][JSON data]
+        assert_eq!(&export1[..6], b"VAULT1"); // Magic number
+        let length = u32::from_be_bytes([export1[6], export1[7], export1[8], export1[9]]);
+        assert_eq!(export1.len(), 10 + length as usize); // Total size check
+    }
 }

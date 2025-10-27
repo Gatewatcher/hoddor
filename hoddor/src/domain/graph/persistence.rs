@@ -5,6 +5,8 @@ use crate::ports::graph::GraphPort;
 use crate::ports::StoragePort;
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 
+const NAMESPACE_EXTENSION: &str = "hoddor";
+
 pub struct EncryptionConfig {
     pub platform: Platform,
     pub recipient: String,
@@ -80,14 +82,9 @@ impl<G: GraphPort, S: StoragePort> GraphPersistenceService<G, S> {
             })?;
         }
 
-        let file_extension = if self.encryption.is_some() {
-            "age"
-        } else {
-            "json"
-        };
         self.storage
             .write_file(
-                &format!("{}/{}.{}", self.backup_path, vault_id, file_extension),
+                &format!("{}/{}.{}", self.backup_path, vault_id, NAMESPACE_EXTENSION),
                 &data_to_save,
             )
             .await
@@ -97,17 +94,12 @@ impl<G: GraphPort, S: StoragePort> GraphPersistenceService<G, S> {
     }
 
     pub async fn restore(&self, vault_id: &str) -> GraphResult<GraphBackup> {
-        let file_extension = if self.encryption.is_some() {
-            "age"
-        } else {
-            "json"
-        };
 
         let file_content = self
             .storage
             .read_file(&format!(
                 "{}/{}.{}",
-                self.backup_path, vault_id, file_extension
+                self.backup_path, vault_id, NAMESPACE_EXTENSION
             ))
             .await
             .map_err(|e| GraphError::DatabaseError(format!("Failed to read backup: {}", e)))?;
@@ -142,15 +134,10 @@ impl<G: GraphPort, S: StoragePort> GraphPersistenceService<G, S> {
     }
 
     pub async fn backup_exists(&self, vault_id: &str) -> bool {
-        let file_extension = if self.encryption.is_some() {
-            "age"
-        } else {
-            "json"
-        };
         self.storage
             .read_file(&format!(
                 "{}/{}.{}",
-                self.backup_path, vault_id, file_extension
+                self.backup_path, vault_id, NAMESPACE_EXTENSION
             ))
             .await
             .is_ok()
@@ -158,15 +145,10 @@ impl<G: GraphPort, S: StoragePort> GraphPersistenceService<G, S> {
 
     #[cfg(test)]
     pub async fn delete_backup(&self, vault_id: &str) -> GraphResult<()> {
-        let file_extension = if self.encryption.is_some() {
-            "age"
-        } else {
-            "json"
-        };
         self.storage
             .delete_file(&format!(
                 "{}/{}.{}",
-                self.backup_path, vault_id, file_extension
+                self.backup_path, vault_id, NAMESPACE_EXTENSION
             ))
             .await
             .map_err(|e| GraphError::DatabaseError(format!("Failed to delete backup: {}", e)))?;
@@ -431,7 +413,7 @@ mod tests {
 
         let encrypted_content = service
             .storage
-            .read_file(&format!("encrypted_graph_backups/{}.age", vault_id))
+            .read_file(&format!("encrypted_graph_backups/{}.hoddor", vault_id))
             .await
             .unwrap();
 
@@ -492,7 +474,7 @@ mod tests {
 
         let json_content = service
             .storage
-            .read_file(&format!("toggle_graph_backups/{}.json", vault_id))
+            .read_file(&format!("toggle_graph_backups/{}.hoddor", vault_id))
             .await
             .unwrap();
         assert!(json_content.starts_with("{"));
@@ -510,7 +492,7 @@ mod tests {
 
         let age_content = service
             .storage
-            .read_file(&format!("toggle_graph_backups/{}.age", vault_id))
+            .read_file(&format!("toggle_graph_backups/{}.hoddor", vault_id))
             .await
             .unwrap();
         assert!(!age_content.starts_with("{"));
@@ -519,18 +501,18 @@ mod tests {
 
         assert!(service
             .storage
-            .read_file(&format!("toggle_graph_backups/{}.json", vault_id))
+            .read_file(&format!("toggle_graph_backups/{}.hoddor", vault_id))
             .await
             .is_ok());
 
         service
             .storage
-            .delete_file(&format!("toggle_graph_backups/{}.json", vault_id))
+            .delete_file(&format!("toggle_graph_backups/{}.hoddor", vault_id))
             .await
             .unwrap();
         service
             .storage
-            .delete_file(&format!("toggle_graph_backups/{}.age", vault_id))
+            .delete_file(&format!("toggle_graph_backups/{}.hoddor", vault_id))
             .await
             .unwrap();
     }
