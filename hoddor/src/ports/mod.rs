@@ -6,6 +6,9 @@ pub mod notifier;
 pub mod persistence;
 pub mod storage;
 
+#[cfg(feature = "graph")]
+pub mod graph;
+
 pub use clock::ClockPort;
 pub use crypto::{EncryptionPort, IdentityPort, KeyDerivationPort, PrfPort};
 pub use lock::{LockGuard, LockPort};
@@ -13,3 +16,6 @@ pub use logger::LoggerPort;
 pub use notifier::NotifierPort;
 pub use persistence::PersistencePort;
 pub use storage::StoragePort;
+
+#[cfg(feature = "graph")]
+pub use graph::GraphPort;

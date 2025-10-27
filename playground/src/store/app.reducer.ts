@@ -14,6 +14,11 @@ export type AppState = {
   markdown: string | null;
   text: string | null;
   audio: string | null;
+  // RAG/LLM state
+  selectedModel: string;
+  useRAG: boolean;
+  servicesReady: boolean;
+  memoryRefreshTrigger: number;
 };
 
 const initialState: AppState = {
@@ -22,6 +27,10 @@ const initialState: AppState = {
   markdown: null,
   text: null,
   audio: null,
+  selectedModel: 'Phi-3.5-mini-instruct-q4f16_1-MLC',
+  useRAG: true,
+  servicesReady: false,
+  memoryRefreshTrigger: 0,
 };
 
 export const appReducer: Reducer<AppState, UnknownAction> = (
@@ -142,6 +151,34 @@ export const appReducer: Reducer<AppState, UnknownAction> = (
       json: initialState.json,
       text: initialState.text,
       markdown: initialState.markdown,
+    };
+  }
+
+  if (actions.setSelectedModel.match(action)) {
+    return {
+      ...state,
+      selectedModel: action.payload,
+    };
+  }
+
+  if (actions.setUseRAG.match(action)) {
+    return {
+      ...state,
+      useRAG: action.payload,
+    };
+  }
+
+  if (actions.setServicesReady.match(action)) {
+    return {
+      ...state,
+      servicesReady: action.payload,
+    };
+  }
+
+  if (actions.triggerMemoryRefresh.match(action)) {
+    return {
+      ...state,
+      memoryRefreshTrigger: state.memoryRefreshTrigger + 1,
     };
   }
 

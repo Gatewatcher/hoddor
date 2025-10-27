@@ -15,6 +15,11 @@ enum Types {
   SET_AUDIO = 'app/SET_AUDIO',
   DELETE_VAULT = 'app/DELETE_VAULT',
   FLUSH_IDENTITY = 'app/FLUSH_IDENTITY',
+  // RAG/LLM actions
+  SET_SELECTED_MODEL = 'app/SET_SELECTED_MODEL',
+  SET_USE_RAG = 'app/SET_USE_RAG',
+  SET_SERVICES_READY = 'app/SET_SERVICES_READY',
+  TRIGGER_MEMORY_REFRESH = 'app/TRIGGER_MEMORY_REFRESH',
 }
 
 export const actions = {
@@ -30,4 +35,9 @@ export const actions = {
   setAudio: createAction<string | null>(Types.SET_AUDIO),
   deleteVault: createAction(Types.DELETE_VAULT),
   flushIdentity: createAction(Types.FLUSH_IDENTITY),
+  // RAG/LLM actions
+  setSelectedModel: createAction<string>(Types.SET_SELECTED_MODEL),
+  setUseRAG: createAction<boolean>(Types.SET_USE_RAG),
+  setServicesReady: createAction<boolean>(Types.SET_SERVICES_READY),
+  triggerMemoryRefresh: createAction(Types.TRIGGER_MEMORY_REFRESH),
 };

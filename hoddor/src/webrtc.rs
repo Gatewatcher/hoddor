@@ -199,7 +199,7 @@ impl WebRtcPeer {
     }
 
     async fn setup_connection(&mut self) -> Result<(), JsValue> {
-        let platform = self.platform;
+        let platform = self.platform.clone();
         platform
             .logger()
             .log("Setting up WebRTC connection handlers...");
@@ -211,78 +211,82 @@ impl WebRtcPeer {
         let connection_ref3 = self.connection.clone();
         let state_sender = self.connection_state_sender.clone();
 
-        let onicegatheringstatechange_callback = Closure::wrap(Box::new(move |_: web_sys::Event| {
-            let state = connection_ref.ice_gathering_state();
-            platform
-                .logger()
-                .log(&format!("ICE gathering state changed to: {:?}", state));
+        let onicegatheringstatechange_callback = {
+            let platform = platform.clone();
+            Closure::wrap(Box::new(move |_: web_sys::Event| {
+                let state = connection_ref.ice_gathering_state();
+                platform
+                    .logger()
+                    .log(&format!("ICE gathering state changed to: {:?}", state));
 
-            match state {
-                web_sys::RtcIceGatheringState::New => {
-                    platform.logger().log("ICE gathering starting...");
+                match state {
+                    web_sys::RtcIceGatheringState::New => {
+                        platform.logger().log("ICE gathering starting...");
+                    }
+                    web_sys::RtcIceGatheringState::Gathering => {
+                        platform.logger().log("ICE gathering in progress...");
+                    }
+                    web_sys::RtcIceGatheringState::Complete => {
+                        platform.logger().log("ICE gathering complete");
+                    }
+                    _ => {
+                        platform.logger().warn("Unknown ICE gathering state");
+                    }
                 }
-                web_sys::RtcIceGatheringState::Gathering => {
-                    platform.logger().log("ICE gathering in progress...");
-                }
-                web_sys::RtcIceGatheringState::Complete => {
-                    platform.logger().log("ICE gathering complete");
-                }
-                _ => {
-                    platform.logger().warn("Unknown ICE gathering state");
-                }
-            }
-        })
-            as Box<dyn FnMut(web_sys::Event)>);
+            }) as Box<dyn FnMut(web_sys::Event)>)
+        };
 
         self.connection.set_onicegatheringstatechange(Some(
             onicegatheringstatechange_callback.as_ref().unchecked_ref(),
         ));
         onicegatheringstatechange_callback.forget();
 
-        let onconnectionstatechange_callback = Closure::wrap(Box::new(move |_: web_sys::Event| {
-            let state = connection_ref2.connection_state();
-            let is_connected = state == web_sys::RtcPeerConnectionState::Connected;
-            *connected_flag_clone.borrow_mut() = is_connected;
-            let _ = state_sender.unbounded_send(is_connected);
+        let onconnectionstatechange_callback = {
+            let platform = platform.clone();
+            Closure::wrap(Box::new(move |_: web_sys::Event| {
+                let state = connection_ref2.connection_state();
+                let is_connected = state == web_sys::RtcPeerConnectionState::Connected;
+                *connected_flag_clone.borrow_mut() = is_connected;
+                let _ = state_sender.unbounded_send(is_connected);
 
-            platform.logger().log(&format!(
-                "Connection state changed to: {:?}, connected={}",
-                state, is_connected
-            ));
+                platform.logger().log(&format!(
+                    "Connection state changed to: {:?}, connected={}",
+                    state, is_connected
+                ));
 
-            match state {
-                web_sys::RtcPeerConnectionState::New => {
-                    platform.logger().log("Connection is new");
+                match state {
+                    web_sys::RtcPeerConnectionState::New => {
+                        platform.logger().log("Connection is new");
+                    }
+                    web_sys::RtcPeerConnectionState::Connecting => {
+                        platform.logger().log("Connection is establishing...");
+                    }
+                    web_sys::RtcPeerConnectionState::Connected => {
+                        platform.logger().log("Connection established!");
+                        *connected_flag_clone.borrow_mut() = true;
+                        let _ = state_sender.unbounded_send(true);
+                    }
+                    web_sys::RtcPeerConnectionState::Disconnected => {
+                        platform.logger().log("Connection disconnected");
+                        *connected_flag_clone.borrow_mut() = false;
+                        let _ = state_sender.unbounded_send(false);
+                    }
+                    web_sys::RtcPeerConnectionState::Failed => {
+                        platform.logger().log("Connection failed");
+                        *connected_flag_clone.borrow_mut() = false;
+                        let _ = state_sender.unbounded_send(false);
+                    }
+                    web_sys::RtcPeerConnectionState::Closed => {
+                        platform.logger().log("Connection closed");
+                        *connected_flag_clone.borrow_mut() = false;
+                        let _ = state_sender.unbounded_send(false);
+                    }
+                    _ => {
+                        platform.logger().warn("Unknown connection state");
+                    }
                 }
-                web_sys::RtcPeerConnectionState::Connecting => {
-                    platform.logger().log("Connection is establishing...");
-                }
-                web_sys::RtcPeerConnectionState::Connected => {
-                    platform.logger().log("Connection established!");
-                    *connected_flag_clone.borrow_mut() = true;
-                    let _ = state_sender.unbounded_send(true);
-                }
-                web_sys::RtcPeerConnectionState::Disconnected => {
-                    platform.logger().log("Connection disconnected");
-                    *connected_flag_clone.borrow_mut() = false;
-                    let _ = state_sender.unbounded_send(false);
-                }
-                web_sys::RtcPeerConnectionState::Failed => {
-                    platform.logger().log("Connection failed");
-                    *connected_flag_clone.borrow_mut() = false;
-                    let _ = state_sender.unbounded_send(false);
-                }
-                web_sys::RtcPeerConnectionState::Closed => {
-                    platform.logger().log("Connection closed");
-                    *connected_flag_clone.borrow_mut() = false;
-                    let _ = state_sender.unbounded_send(false);
-                }
-                _ => {
-                    platform.logger().warn("Unknown connection state");
-                }
-            }
-        })
-            as Box<dyn FnMut(web_sys::Event)>);
+            }) as Box<dyn FnMut(web_sys::Event)>)
+        };
 
         self.connection.set_onconnectionstatechange(Some(
             onconnectionstatechange_callback.as_ref().unchecked_ref(),
@@ -291,46 +295,49 @@ impl WebRtcPeer {
         *self.connected.borrow_mut() = *connected_flag.borrow();
 
         let ice_connected = self.ice_connected.clone();
-        let onicestatechange_callback = Closure::wrap(Box::new(move |_: web_sys::Event| {
-            let state = connection_ref3.ice_connection_state();
-            let is_connected = state == web_sys::RtcIceConnectionState::Connected
-                || state == web_sys::RtcIceConnectionState::Completed;
-            *ice_connected.borrow_mut() = is_connected;
+        let onicestatechange_callback = {
+            let platform = platform.clone();
+            Closure::wrap(Box::new(move |_: web_sys::Event| {
+                let state = connection_ref3.ice_connection_state();
+                let is_connected = state == web_sys::RtcIceConnectionState::Connected
+                    || state == web_sys::RtcIceConnectionState::Completed;
+                *ice_connected.borrow_mut() = is_connected;
 
-            platform.logger().log(&format!(
-                "ICE connection state changed to: {:?}, is_connected: {}",
-                state, is_connected
-            ));
+                platform.logger().log(&format!(
+                    "ICE connection state changed to: {:?}, is_connected: {}",
+                    state, is_connected
+                ));
 
-            match state {
-                web_sys::RtcIceConnectionState::New => {
-                    platform.logger().log("ICE connection is new");
+                match state {
+                    web_sys::RtcIceConnectionState::New => {
+                        platform.logger().log("ICE connection is new");
+                    }
+                    web_sys::RtcIceConnectionState::Checking => {
+                        platform
+                            .logger()
+                            .log("ICE connection is checking candidates...");
+                    }
+                    web_sys::RtcIceConnectionState::Connected => {
+                        platform.logger().log("ICE connection established!");
+                    }
+                    web_sys::RtcIceConnectionState::Completed => {
+                        platform.logger().log("ICE connection completed!");
+                    }
+                    web_sys::RtcIceConnectionState::Failed => {
+                        platform.logger().log("ICE connection failed");
+                    }
+                    web_sys::RtcIceConnectionState::Disconnected => {
+                        platform.logger().log("ICE connection disconnected");
+                    }
+                    web_sys::RtcIceConnectionState::Closed => {
+                        platform.logger().log("ICE connection closed");
+                    }
+                    _ => {
+                        platform.logger().warn("Unknown ICE connection state");
+                    }
                 }
-                web_sys::RtcIceConnectionState::Checking => {
-                    platform
-                        .logger()
-                        .log("ICE connection is checking candidates...");
-                }
-                web_sys::RtcIceConnectionState::Connected => {
-                    platform.logger().log("ICE connection established!");
-                }
-                web_sys::RtcIceConnectionState::Completed => {
-                    platform.logger().log("ICE connection completed!");
-                }
-                web_sys::RtcIceConnectionState::Failed => {
-                    platform.logger().log("ICE connection failed");
-                }
-                web_sys::RtcIceConnectionState::Disconnected => {
-                    platform.logger().log("ICE connection disconnected");
-                }
-                web_sys::RtcIceConnectionState::Closed => {
-                    platform.logger().log("ICE connection closed");
-                }
-                _ => {
-                    platform.logger().warn("Unknown ICE connection state");
-                }
-            }
-        }) as Box<dyn FnMut(web_sys::Event)>);
+            }) as Box<dyn FnMut(web_sys::Event)>)
+        };
 
         self.connection.set_oniceconnectionstatechange(Some(
             onicestatechange_callback.as_ref().unchecked_ref(),
@@ -340,6 +347,7 @@ impl WebRtcPeer {
         let onicecandidate = {
             let peer_id = self.metadata.peer_id.clone();
             let remote_id_ref = Rc::new(RefCell::new(self.remote_peer_id.clone()));
+            let platform = platform.clone();
             Closure::wrap(Box::new(move |ev: web_sys::RtcPeerConnectionIceEvent| {
                 platform.logger().log(&format!(
                     "ICE candidate event triggered. Has candidate: {}",
@@ -431,6 +439,7 @@ impl WebRtcPeer {
             let channel_open_clone = channel_open.clone();
             let message_sender_clone = message_sender.clone();
             let data_channel_ref = Rc::new(RefCell::new(self.data_channel.clone()));
+            let platform = platform.clone();
 
             Closure::wrap(Box::new(move |ev: web_sys::RtcDataChannelEvent| {
                 platform
@@ -440,21 +449,28 @@ impl WebRtcPeer {
                 *data_channel_ref.borrow_mut() = Some(channel.clone());
 
                 let channel_open_clone = channel_open_clone.clone();
+                let platform_onopen = platform.clone();
                 let onopen = Closure::wrap(Box::new(move |_: web_sys::Event| {
-                    platform.logger().log("Data channel opened (answerer)");
+                    platform_onopen
+                        .logger()
+                        .log("Data channel opened (answerer)");
                     *channel_open_clone.borrow_mut() = true;
                 }) as Box<dyn FnMut(web_sys::Event)>);
                 channel.set_onopen(Some(onopen.as_ref().unchecked_ref()));
                 onopen.forget();
 
+                let platform_onclose = platform.clone();
                 let onclose = Closure::wrap(Box::new(move |_: web_sys::Event| {
-                    platform.logger().log("Data channel closed (answerer)");
+                    platform_onclose
+                        .logger()
+                        .log("Data channel closed (answerer)");
                 }) as Box<dyn FnMut(web_sys::Event)>);
                 channel.set_onclose(Some(onclose.as_ref().unchecked_ref()));
                 onclose.forget();
 
+                let platform_onerror = platform.clone();
                 let onerror = Closure::wrap(Box::new(move |e: web_sys::Event| {
-                    platform
+                    platform_onerror
                         .logger()
                         .error(&format!("Data channel error: {:?}", e));
                 }) as Box<dyn FnMut(web_sys::Event)>);
@@ -462,36 +478,40 @@ impl WebRtcPeer {
                 onerror.forget();
 
                 let message_sender_clone = message_sender_clone.clone();
+                let platform_onmessage = platform.clone();
                 let onmessage = Closure::wrap(Box::new(move |ev: MessageEvent| {
-                    platform.logger().log("Message received on data channel");
+                    platform_onmessage
+                        .logger()
+                        .log("Message received on data channel");
                     if let Ok(data) = ev.data().dyn_into::<js_sys::ArrayBuffer>() {
                         let array = js_sys::Uint8Array::new(&data);
                         let mut vec = vec![0; array.length() as usize];
                         array.copy_to(&mut vec[..]);
-                        platform
+                        platform_onmessage
                             .logger()
                             .log(&format!("Received message of {} bytes", vec.len()));
 
                         match serde_json::from_slice::<SyncMessage>(&vec) {
                             Ok(sync_msg) => {
-                                platform.logger().log(&format!(
+                                platform_onmessage.logger().log(&format!(
                                     "Received sync message for vault: {}, namespace: {}",
                                     sync_msg.vault_name, sync_msg.operation.namespace
                                 ));
 
                                 let vault_name = sync_msg.vault_name.clone();
                                 let vec_clone = vec.clone();
+                                let platform_spawn = platform_onmessage.clone();
 
                                 wasm_bindgen_futures::spawn_local(async move {
                                     if let Err(e) =
                                         update_vault_from_sync(&vault_name, &vec_clone).await
                                     {
-                                        platform.logger().error(&format!(
+                                        platform_spawn.logger().error(&format!(
                                             "Failed to update vault {}: {:?}",
                                             vault_name, e
                                         ));
                                     } else {
-                                        platform.logger().log(&format!(
+                                        platform_spawn.logger().log(&format!(
                                             "Successfully updated vault {} from sync message",
                                             vault_name
                                         ));
@@ -499,7 +519,7 @@ impl WebRtcPeer {
                                 });
                             }
                             Err(e) => {
-                                platform
+                                platform_onmessage
                                     .logger()
                                     .error(&format!("Failed to parse sync message: {}", e));
                             }
@@ -531,12 +551,15 @@ impl WebRtcPeer {
             let channel_open_clone = self.channel_open.clone();
             let connected_flag = self.connected.clone();
             let state_sender = self.connection_state_sender.clone();
+            let platform_onopen = platform.clone();
             let onopen = Closure::wrap(Box::new(move |_: web_sys::Event| {
-                platform.logger().log("Data channel opened (offerer)");
+                platform_onopen
+                    .logger()
+                    .log("Data channel opened (offerer)");
                 *channel_open_clone.borrow_mut() = true;
                 *connected_flag.borrow_mut() = true;
                 let _ = state_sender.unbounded_send(true);
-                platform
+                platform_onopen
                     .logger()
                     .log("channel_open and connected flags set to true");
             }) as Box<dyn FnMut(web_sys::Event)>);
@@ -545,8 +568,11 @@ impl WebRtcPeer {
 
             let connected_flag = self.connected.clone();
             let state_sender = self.connection_state_sender.clone();
+            let platform_onclose = platform.clone();
             let onclose = Closure::wrap(Box::new(move |_: web_sys::Event| {
-                platform.logger().log("Data channel closed (offerer)");
+                platform_onclose
+                    .logger()
+                    .log("Data channel closed (offerer)");
                 *connected_flag.borrow_mut() = false;
                 let _ = state_sender.unbounded_send(false);
             }) as Box<dyn FnMut(web_sys::Event)>);
@@ -555,8 +581,9 @@ impl WebRtcPeer {
 
             let connected_flag = self.connected.clone();
             let state_sender = self.connection_state_sender.clone();
+            let platform_onerror = platform.clone();
             let onerror = Closure::wrap(Box::new(move |e: web_sys::Event| {
-                platform
+                platform_onerror
                     .logger()
                     .error(&format!("Data channel error: {:?}", e));
                 *connected_flag.borrow_mut() = false;
@@ -566,25 +593,28 @@ impl WebRtcPeer {
             onerror.forget();
 
             let message_sender_clone = self.message_sender.clone();
+            let platform_onmessage = platform.clone();
             let onmessage = Closure::wrap(Box::new(move |ev: MessageEvent| {
-                platform.logger().log("Message received on data channel");
+                platform_onmessage
+                    .logger()
+                    .log("Message received on data channel");
                 if let Ok(data) = ev.data().dyn_into::<js_sys::ArrayBuffer>() {
                     let array = js_sys::Uint8Array::new(&data);
                     let mut vec = vec![0; array.length() as usize];
                     array.copy_to(&mut vec[..]);
-                    platform
+                    platform_onmessage
                         .logger()
                         .log(&format!("Received message of {} bytes", vec.len()));
 
                     match serde_json::from_slice::<SyncMessage>(&vec) {
                         Ok(sync_msg) => {
-                            platform.logger().log(&format!(
+                            platform_onmessage.logger().log(&format!(
                                 "Received sync message for vault: {}, namespace: {}",
                                 sync_msg.vault_name, sync_msg.operation.namespace
                             ));
                         }
                         Err(e) => {
-                            platform
+                            platform_onmessage
                                 .logger()
                                 .error(&format!("Failed to parse sync message: {}", e));
                         }
@@ -751,7 +781,7 @@ impl WebRtcPeer {
         signaling_url: &str,
         target_peer_id: Option<&str>,
     ) -> Result<(), JsValue> {
-        let platform = self.platform;
+        let platform = self.platform.clone();
 
         if *self.connected.borrow() {
             platform
@@ -791,14 +821,16 @@ impl WebRtcPeer {
 
         wasm_bindgen_futures::spawn_local({
             let peer = peer.clone();
+            let platform_for_spawn = platform.clone();
             async move {
                 while let Some(msg) = signaling_receiver.next().await {
-                    platform.logger().log(&format!(
+                    platform_for_spawn.clone().logger().log(&format!(
                         "Received signaling message for {}: {:?}",
                         peer_id, msg
                     ));
                     let cloned_msg = msg.clone();
                     let peer_clone = Rc::clone(&peer);
+                    let platform_for_handler = platform_for_spawn.clone();
                     let handle_message = async move {
                         match cloned_msg {
                             SignalingMessage::Offer { from, sdp, .. } => {
@@ -830,7 +862,7 @@ impl WebRtcPeer {
                                         let websocket = client_ref.get_websocket();
 
                                         if websocket.ready_state() != web_sys::WebSocket::OPEN {
-                                            platform
+                                            platform_for_handler
                                                 .logger()
                                                 .warn("WebSocket not ready, cannot send answer");
                                             return Err(JsValue::from_str(
@@ -865,7 +897,7 @@ impl WebRtcPeer {
                     };
 
                     if let Err(e) = handle_message.await {
-                        platform
+                        platform_for_spawn
                             .logger()
                             .error(&format!("Error handling signaling message: {:?}", e));
                     }
@@ -881,7 +913,7 @@ impl WebRtcPeer {
             if let Some(client) = with_signaling_manager(|mgr| mgr.get_client(&peer_id)) {
                 let client_ref = client.borrow();
                 if client_ref.get_websocket().ready_state() == web_sys::WebSocket::OPEN {
-                    platform.logger().log("WebSocket already connected");
+                    platform.clone().logger().log("WebSocket already connected");
                     resolve.call0(&JsValue::NULL).unwrap_or_default();
                     return;
                 }
@@ -890,6 +922,7 @@ impl WebRtcPeer {
             let onopen = {
                 let peer_id = peer_id.clone();
                 let reject = reject_clone.clone();
+                let platform = platform.clone();
                 Closure::wrap(Box::new(move || {
                     platform.logger().log("WebSocket connection opened");
 
@@ -919,6 +952,7 @@ impl WebRtcPeer {
 
             let onerror = {
                 let reject = reject_clone;
+                let platform = platform.clone();
                 Closure::wrap(Box::new(move |e: ErrorEvent| {
                     platform
                         .logger()
@@ -1022,7 +1056,7 @@ impl WebRtcPeer {
     }
 
     pub async fn handle_connection_state_update(&mut self) {
-        let platform = self.platform;
+        let platform = self.platform.clone();
         let (state_sender, mut state_receiver) = mpsc::unbounded();
         self.connection_state_sender = state_sender;
 

@@ -8,6 +8,9 @@ pub mod opfs_storage;
 pub mod persistence;
 pub mod webauthn_prf;
 
+#[cfg(feature = "graph")]
+pub mod simple_graph;
+
 pub use clock::Clock;
 pub use console_logger::ConsoleLogger;
 pub use locks::Locks;
@@ -15,3 +18,6 @@ pub use notifier::Notifier;
 pub use opfs_storage::OpfsStorage;
 pub use persistence::Persistence;
 pub use webauthn_prf::WebAuthnPrf;
+
+#[cfg(feature = "graph")]
+pub use simple_graph::SimpleGraphAdapter;

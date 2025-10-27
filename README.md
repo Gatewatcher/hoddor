@@ -49,6 +49,16 @@ This solution provides encrypted storage capabilities with robust support for mu
 ### Built for Privacy-First Applications
 This solution is ideal for building **zero-knowledge systems** where user privacy is paramount. The backend serves solely as a storage and synchronization medium, with all sensitive encryption and decryption logic confined to the client side. This ensures that sensitive information never leaves the user's control, empowering developers to build **compliant, privacy-focused, and performant web applications.**
 
+## ⚠️ Experimental Features
+
+> **Warning**: The following features are currently under active development and should **NOT** be used in production environments.
+
+- 🔬 **Graph Database Integration**: Embedded CozoDB graph database with encrypted persistence for knowledge graph and RAG (Retrieval-Augmented Generation) applications.
+  - **Status**: Work in Progress (WIP)
+  - **Known Limitations**: API may change, potential data migration issues between versions
+  - **Use Case**: Experimental RAG workspaces and memory management features
+
+These experimental features are being developed to explore advanced use cases. They are subject to breaking changes and may not provide the same stability guarantees as the core vault functionality. Use at your own risk and avoid storing critical data.
 
 ## Prerequisites
 

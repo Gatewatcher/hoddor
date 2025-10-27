@@ -152,4 +152,92 @@ mod tests {
             deserialized.username_pk.get("user1")
         );
     }
+
+    #[test]
+    fn test_export_format_is_extension_agnostic() {
+        let vault = Vault {
+            metadata: VaultMetadata {
+                peer_id: Some("test-peer".to_string()),
+            },
+            identity_salts: IdentitySalts::new(),
+            username_pk: HashMap::new(),
+            namespaces: HashMap::new(),
+            sync_enabled: true,
+        };
+
+        let exported_bytes = serialize_vault(&vault).unwrap();
+
+        assert_eq!(&exported_bytes[..6], b"VAULT1");
+
+        let result = deserialize_vault(&exported_bytes);
+        assert!(result.is_ok(), "Should import regardless of file extension");
+
+        let imported = result.unwrap();
+        assert_eq!(imported.metadata.peer_id, Some("test-peer".to_string()));
+    }
+
+    #[test]
+    fn test_legacy_dat_format_compatibility() {
+        let vault = Vault {
+            metadata: VaultMetadata {
+                peer_id: Some("legacy-peer".to_string()),
+            },
+            identity_salts: IdentitySalts::new(),
+            username_pk: HashMap::new(),
+            namespaces: HashMap::new(),
+            sync_enabled: false,
+        };
+
+        let exported = serialize_vault(&vault).unwrap();
+
+        assert_eq!(&exported[..6], b"VAULT1");
+
+        let imported = deserialize_vault(&exported).unwrap();
+        assert_eq!(imported.metadata.peer_id, Some("legacy-peer".to_string()));
+    }
+
+    #[test]
+    fn test_vault_magic_number_provides_format_detection() {
+        let valid_vault = Vault {
+            metadata: VaultMetadata { peer_id: None },
+            identity_salts: IdentitySalts::new(),
+            username_pk: HashMap::new(),
+            namespaces: HashMap::new(),
+            sync_enabled: false,
+        };
+
+        let valid_bytes = serialize_vault(&valid_vault).unwrap();
+
+        assert_eq!(&valid_bytes[..6], b"VAULT1");
+        assert!(deserialize_vault(&valid_bytes).is_ok());
+
+        let invalid_bytes = b"This is not a vault export file";
+        assert!(deserialize_vault(invalid_bytes).is_err());
+
+        let mut wrong_magic = Vec::new();
+        wrong_magic.extend_from_slice(b"BADMAG");
+        wrong_magic.extend_from_slice(&10u32.to_be_bytes());
+        wrong_magic.extend_from_slice(b"{}");
+        assert!(deserialize_vault(&wrong_magic).is_err());
+    }
+
+    #[test]
+    fn test_export_format_stability() {
+        let vault = Vault {
+            metadata: VaultMetadata { peer_id: None },
+            identity_salts: IdentitySalts::new(),
+            username_pk: HashMap::new(),
+            namespaces: HashMap::new(),
+            sync_enabled: false,
+        };
+
+        let export1 = serialize_vault(&vault).unwrap();
+        let export2 = serialize_vault(&vault).unwrap();
+
+        assert_eq!(export1, export2);
+
+        assert_eq!(&export1[..6], b"VAULT1");
+        let length = u32::from_be_bytes([export1[6], export1[7], export1[8], export1[9]]);
+        assert_eq!(export1.len(), 10 + length as usize);
+    }
 }
