@@ -1,18 +1,9 @@
 use crate::domain::crypto;
-use crate::domain::graph::{GraphEdge, GraphError, GraphNode, GraphResult};
+use crate::domain::graph::{GraphBackup,  GraphError,  GraphResult};
 use crate::platform::Platform;
 use crate::ports::graph::GraphPort;
 use crate::ports::StoragePort;
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
-use serde::{Deserialize, Serialize};
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct GraphBackup {
-    pub version: u32,
-    pub nodes: Vec<GraphNode>,
-    pub edges: Vec<GraphEdge>,
-    pub created_at: u64,
-}
 
 pub struct EncryptionConfig {
     pub platform: Platform,
@@ -20,14 +11,14 @@ pub struct EncryptionConfig {
     pub identity: String,
 }
 
-pub struct GraphPersistence<G: GraphPort, S: StoragePort> {
+pub struct GraphPersistenceService<G: GraphPort, S: StoragePort> {
     graph: G,
     storage: S,
     backup_path: String,
     encryption: Option<EncryptionConfig>,
 }
 
-impl<G: GraphPort, S: StoragePort> GraphPersistence<G, S> {
+impl<G: GraphPort, S: StoragePort> GraphPersistenceService<G, S> {
     pub fn new(graph: G, storage: S, backup_path: String) -> Self {
         Self {
             graph,
@@ -61,74 +52,8 @@ impl<G: GraphPort, S: StoragePort> GraphPersistence<G, S> {
         self.encryption = None;
     }
 
-    async fn export_nodes(&self, vault_id: &str) -> GraphResult<Vec<GraphNode>> {
-        let mut all_nodes = Vec::new();
-
-        let node_types = vec![
-            "memory",
-            "entity",
-            "event",
-            "concept",
-            "conversation",
-            "document",
-            "preference",
-        ];
-
-        for node_type in node_types {
-            match self
-                .graph
-                .list_nodes_by_type(vault_id, node_type, None)
-                .await
-            {
-                Ok(nodes) => all_nodes.extend(nodes),
-                Err(_) => continue,
-            }
-        }
-
-        Ok(all_nodes)
-    }
-
-    async fn export_edges(
-        &self,
-        vault_id: &str,
-        nodes: &[GraphNode],
-    ) -> GraphResult<Vec<GraphEdge>> {
-        let mut all_edges = Vec::new();
-        let mut seen_edge_ids = std::collections::HashSet::new();
-
-        for node in nodes {
-            match self
-                .graph
-                .get_edges(
-                    vault_id,
-                    &node.id,
-                    crate::domain::graph::EdgeDirection::Both,
-                )
-                .await
-            {
-                Ok(edges) => {
-                    for edge in edges {
-                        if seen_edge_ids.insert(edge.id.clone()) {
-                            all_edges.push(edge);
-                        }
-                    }
-                }
-                Err(_) => continue,
-            }
-        }
-
-        Ok(all_edges)
-    }
-
     pub async fn backup(&self, vault_id: &str) -> GraphResult<()> {
-        let nodes = self.export_nodes(vault_id).await?;
-        let edges = self.export_edges(vault_id, &nodes).await?;
-        let backup = GraphBackup {
-            version: 1,
-            nodes,
-            edges,
-            created_at: Self::get_timestamp(),
-        };
+        let backup = self.graph.export_backup(vault_id).await?;
 
         let json = serde_json::to_string(&backup).map_err(|e| {
             GraphError::SerializationError(format!("Failed to serialize backup: {}", e))
@@ -211,32 +136,7 @@ impl<G: GraphPort, S: StoragePort> GraphPersistence<G, S> {
             GraphError::SerializationError(format!("Failed to deserialize backup: {}", e))
         })?;
 
-        for node in &backup.nodes {
-            let _ = self
-                .graph
-                .create_node(
-                    &node.vault_id,
-                    &node.node_type,
-                    node.content.clone(),
-                    node.labels.clone(),
-                    node.embedding.clone(),
-                    node.namespace.clone(),
-                )
-                .await;
-        }
-
-        for edge in &backup.edges {
-            let _ = self
-                .graph
-                .create_edge(
-                    &edge.vault_id,
-                    &edge.from_node,
-                    &edge.to_node,
-                    &edge.edge_type,
-                    edge.properties.clone(),
-                )
-                .await;
-        }
+        self.graph.import_backup(&backup).await?;
 
         Ok(backup)
     }
@@ -273,13 +173,9 @@ impl<G: GraphPort, S: StoragePort> GraphPersistence<G, S> {
 
         Ok(())
     }
-
-    fn get_timestamp() -> u64 {
-        js_sys::Date::now() as u64
-    }
 }
 
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32"))]
 mod tests {
     use super::*;
     use crate::adapters::wasm::{OpfsStorage, SimpleGraphAdapter};
@@ -313,11 +209,11 @@ mod tests {
 
         storage.create_directory("graph_backups").await.unwrap();
 
-        let persistence = GraphPersistence::new(graph, storage, "graph_backups".to_string());
+        let service = GraphPersistenceService::new(graph, storage, "graph_backups".to_string());
 
         let vault_id = "test_vault_backup";
 
-        let node1_id = persistence
+        let node1_id = service
             .graph
             .create_node(
                 vault_id,
@@ -330,7 +226,7 @@ mod tests {
             .await
             .unwrap();
 
-        let node2_id = persistence
+        let node2_id = service
             .graph
             .create_node(
                 vault_id,
@@ -350,28 +246,28 @@ mod tests {
             metadata: Default::default(),
         };
 
-        persistence
+        service
             .graph
             .create_edge(vault_id, &node1_id, &node2_id, "relates_to", edge_props)
             .await
             .unwrap();
 
-        persistence.backup(vault_id).await.unwrap();
+        service.backup(vault_id).await.unwrap();
 
-        assert!(persistence.backup_exists(vault_id).await);
+        assert!(service.backup_exists(vault_id).await);
 
         let graph2 = SimpleGraphAdapter::new();
         let storage2 = OpfsStorage::new();
-        let persistence2 = GraphPersistence::new(graph2, storage2, "graph_backups".to_string());
+        let service2 = GraphPersistenceService::new(graph2, storage2, "graph_backups".to_string());
 
-        let restored_backup = persistence2.restore(vault_id).await.unwrap();
+        let restored_backup = service2.restore(vault_id).await.unwrap();
 
         assert_eq!(restored_backup.version, 1);
         assert_eq!(restored_backup.nodes.len(), 2);
         assert_eq!(restored_backup.edges.len(), 1);
 
-        persistence.delete_backup(vault_id).await.unwrap();
-        assert!(!persistence.backup_exists(vault_id).await);
+        service.delete_backup(vault_id).await.unwrap();
+        assert!(!service.backup_exists(vault_id).await);
     }
 
     #[wasm_bindgen_test]
@@ -379,12 +275,12 @@ mod tests {
         let graph = SimpleGraphAdapter::new();
         let storage = OpfsStorage::new();
         storage.create_directory("graph_backups").await.unwrap();
-        let persistence = GraphPersistence::new(graph, storage, "graph_backups".to_string());
+        let service = GraphPersistenceService::new(graph, storage, "graph_backups".to_string());
 
-        let result = persistence.backup("nonexistent_vault").await;
+        let result = service.backup("nonexistent_vault").await;
         assert!(result.is_ok());
 
-        let _ = persistence.delete_backup("nonexistent_vault").await;
+        let _ = service.delete_backup("nonexistent_vault").await;
     }
 
     #[wasm_bindgen_test]
@@ -392,11 +288,11 @@ mod tests {
         let graph = SimpleGraphAdapter::new();
         let storage = OpfsStorage::new();
         storage.create_directory("graph_backups").await.unwrap();
-        let persistence = GraphPersistence::new(graph, storage, "graph_backups".to_string());
+        let service = GraphPersistenceService::new(graph, storage, "graph_backups".to_string());
 
         let vault_id = "test_vault_multi_edges";
 
-        let node1 = persistence
+        let node1 = service
             .graph
             .create_node(
                 vault_id,
@@ -409,7 +305,7 @@ mod tests {
             .await
             .unwrap();
 
-        let node2 = persistence
+        let node2 = service
             .graph
             .create_node(
                 vault_id,
@@ -422,7 +318,7 @@ mod tests {
             .await
             .unwrap();
 
-        let node3 = persistence
+        let node3 = service
             .graph
             .create_node(
                 vault_id,
@@ -436,30 +332,30 @@ mod tests {
             .unwrap();
 
         let props = EdgeProperties::default();
-        persistence
+        service
             .graph
             .create_edge(vault_id, &node1, &node2, "relates_to", props.clone())
             .await
             .unwrap();
-        persistence
+        service
             .graph
             .create_edge(vault_id, &node2, &node3, "relates_to", props.clone())
             .await
             .unwrap();
-        persistence
+        service
             .graph
             .create_edge(vault_id, &node1, &node3, "relates_to", props)
             .await
             .unwrap();
 
-        persistence.backup(vault_id).await.unwrap();
+        service.backup(vault_id).await.unwrap();
 
-        let backup = persistence.restore(vault_id).await.unwrap();
+        let backup = service.restore(vault_id).await.unwrap();
 
         assert_eq!(backup.nodes.len(), 3);
         assert_eq!(backup.edges.len(), 3);
 
-        persistence.delete_backup(vault_id).await.unwrap();
+        service.delete_backup(vault_id).await.unwrap();
     }
 
     #[wasm_bindgen_test]
@@ -481,7 +377,7 @@ mod tests {
             identity: identity.clone(),
         };
 
-        let persistence = GraphPersistence::new_with_encryption(
+        let service = GraphPersistenceService::new_with_encryption(
             graph,
             storage,
             "encrypted_graph_backups".to_string(),
@@ -490,7 +386,7 @@ mod tests {
 
         let vault_id = "test_vault_encrypted";
 
-        let node1_id = persistence
+        let node1_id = service
             .graph
             .create_node(
                 vault_id,
@@ -503,7 +399,7 @@ mod tests {
             .await
             .unwrap();
 
-        let node2_id = persistence
+        let node2_id = service
             .graph
             .create_node(
                 vault_id,
@@ -523,17 +419,17 @@ mod tests {
             metadata: Default::default(),
         };
 
-        persistence
+        service
             .graph
             .create_edge(vault_id, &node1_id, &node2_id, "secure_link", edge_props)
             .await
             .unwrap();
 
-        persistence.backup(vault_id).await.unwrap();
+        service.backup(vault_id).await.unwrap();
 
-        assert!(persistence.backup_exists(vault_id).await);
+        assert!(service.backup_exists(vault_id).await);
 
-        let encrypted_content = persistence
+        let encrypted_content = service
             .storage
             .read_file(&format!("encrypted_graph_backups/{}.age", vault_id))
             .await
@@ -542,7 +438,7 @@ mod tests {
         assert!(!encrypted_content.starts_with("{"));
         assert!(!encrypted_content.contains("\"version\""));
 
-        let restored_backup = persistence.restore(vault_id).await.unwrap();
+        let restored_backup = service.restore(vault_id).await.unwrap();
 
         assert_eq!(restored_backup.version, 1);
         assert_eq!(restored_backup.nodes.len(), 2);
@@ -560,8 +456,8 @@ mod tests {
         assert_eq!(restored_edge.properties.weight, 0.95);
         assert_eq!(restored_edge.properties.bidirectional, true);
 
-        persistence.delete_backup(vault_id).await.unwrap();
-        assert!(!persistence.backup_exists(vault_id).await);
+        service.delete_backup(vault_id).await.unwrap();
+        assert!(!service.backup_exists(vault_id).await);
     }
 
     #[wasm_bindgen_test]
@@ -574,12 +470,12 @@ mod tests {
             .await
             .unwrap();
 
-        let mut persistence =
-            GraphPersistence::new(graph, storage, "toggle_graph_backups".to_string());
+        let mut service =
+            GraphPersistenceService::new(graph, storage, "toggle_graph_backups".to_string());
 
         let vault_id = "test_vault_toggle";
 
-        persistence
+        service
             .graph
             .create_node(
                 vault_id,
@@ -592,9 +488,9 @@ mod tests {
             .await
             .unwrap();
 
-        persistence.backup(vault_id).await.unwrap();
+        service.backup(vault_id).await.unwrap();
 
-        let json_content = persistence
+        let json_content = service
             .storage
             .read_file(&format!("toggle_graph_backups/{}.json", vault_id))
             .await
@@ -604,35 +500,35 @@ mod tests {
         let identity = crypto::generate_identity(&platform).unwrap();
         let recipient = crypto::identity_to_public(&platform, &identity).unwrap();
 
-        persistence.enable_encryption(EncryptionConfig {
+        service.enable_encryption(EncryptionConfig {
             platform: platform.clone(),
             recipient,
             identity,
         });
 
-        persistence.backup(vault_id).await.unwrap();
+        service.backup(vault_id).await.unwrap();
 
-        let age_content = persistence
+        let age_content = service
             .storage
             .read_file(&format!("toggle_graph_backups/{}.age", vault_id))
             .await
             .unwrap();
         assert!(!age_content.starts_with("{"));
 
-        persistence.disable_encryption();
+        service.disable_encryption();
 
-        assert!(persistence
+        assert!(service
             .storage
             .read_file(&format!("toggle_graph_backups/{}.json", vault_id))
             .await
             .is_ok());
 
-        persistence
+        service
             .storage
             .delete_file(&format!("toggle_graph_backups/{}.json", vault_id))
             .await
             .unwrap();
-        persistence
+        service
             .storage
             .delete_file(&format!("toggle_graph_backups/{}.age", vault_id))
             .await
@@ -658,7 +554,7 @@ mod tests {
             identity: identity1,
         };
 
-        let persistence1 = GraphPersistence::new_with_encryption(
+        let service1 = GraphPersistenceService::new_with_encryption(
             graph,
             storage,
             "wrong_key_test".to_string(),
@@ -667,7 +563,7 @@ mod tests {
 
         let vault_id = "test_vault_wrong_key";
 
-        persistence1
+        service1
             .graph
             .create_node(
                 vault_id,
@@ -680,7 +576,7 @@ mod tests {
             .await
             .unwrap();
 
-        persistence1.backup(vault_id).await.unwrap();
+        service1.backup(vault_id).await.unwrap();
 
         let graph2 = SimpleGraphAdapter::new();
         let storage2 = OpfsStorage::new();
@@ -691,16 +587,16 @@ mod tests {
             identity: identity2,
         };
 
-        let persistence2 = GraphPersistence::new_with_encryption(
+        let service2 = GraphPersistenceService::new_with_encryption(
             graph2,
             storage2,
             "wrong_key_test".to_string(),
             encryption2,
         );
 
-        let result = persistence2.restore(vault_id).await;
+        let result = service2.restore(vault_id).await;
         assert!(result.is_err());
 
-        persistence1.delete_backup(vault_id).await.unwrap();
+        service1.delete_backup(vault_id).await.unwrap();
     }
 }

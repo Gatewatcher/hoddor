@@ -217,3 +217,11 @@ impl From<String> for EdgeType {
         }
     }
 }
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct GraphBackup {
+    pub version: u32,
+    pub nodes: Vec<GraphNode>,
+    pub edges: Vec<GraphEdge>,
+    pub created_at: u64,
+}

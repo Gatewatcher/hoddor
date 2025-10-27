@@ -1,6 +1,6 @@
 use crate::domain::graph::{
     create_node_metadata, validate_edge, validate_node, EdgeDirection, EdgeId, EdgeProperties,
-    GraphEdge, GraphError, GraphNode, GraphResult, NodeId,
+    GraphBackup, GraphEdge, GraphError, GraphNode, GraphResult, NodeId,
 };
 use crate::ports::graph::GraphPort;
 use async_trait::async_trait;
@@ -295,6 +295,45 @@ impl GraphPort for SimpleGraphAdapter {
         results.truncate(limit);
 
         Ok(results)
+    }
+
+    async fn export_backup(&self, vault_id: &str) -> GraphResult<GraphBackup> {
+        let nodes = self.nodes.lock().unwrap();
+        let edges = self.edges.lock().unwrap();
+
+        let vault_nodes: Vec<GraphNode> = nodes
+            .values()
+            .filter(|node| node.vault_id == vault_id)
+            .cloned()
+            .collect();
+
+        let vault_edges: Vec<GraphEdge> = edges
+            .values()
+            .filter(|edge| edge.vault_id == vault_id)
+            .cloned()
+            .collect();
+
+        Ok(GraphBackup {
+            version: 1,
+            nodes: vault_nodes,
+            edges: vault_edges,
+            created_at: js_sys::Date::now() as u64,
+        })
+    }
+
+    async fn import_backup(&self, backup: &GraphBackup) -> GraphResult<()> {
+        let mut nodes = self.nodes.lock().unwrap();
+        let mut edges = self.edges.lock().unwrap();
+
+        for node in &backup.nodes {
+            nodes.insert(node.id.clone(), node.clone());
+        }
+
+        for edge in &backup.edges {
+            edges.insert(edge.id.clone(), edge.clone());
+        }
+
+        Ok(())
     }
 }
 

@@ -103,8 +103,8 @@ pub async fn graph_backup_vault(
     recipient: &str,
     identity: &str,
 ) -> Result<(), JsValue> {
-    use crate::adapters::wasm::graph_persistence::{EncryptionConfig, GraphPersistence};
     use crate::adapters::wasm::OpfsStorage;
+    use crate::domain::graph::{EncryptionConfig, GraphPersistenceService};
 
     let encryption = EncryptionConfig {
         platform: PLATFORM.clone(),
@@ -112,14 +112,14 @@ pub async fn graph_backup_vault(
         identity: identity.to_string(),
     };
 
-    let persistence = GraphPersistence::new_with_encryption(
+    let service = GraphPersistenceService::new_with_encryption(
         &*GRAPH,
         OpfsStorage::new(),
         "graph_backups".to_string(),
         encryption,
     );
 
-    persistence
+    service
         .backup(vault_name)
         .await
         .map_err(converters::to_js_error)
@@ -131,8 +131,8 @@ pub async fn graph_restore_vault(
     recipient: &str,
     identity: &str,
 ) -> Result<bool, JsValue> {
-    use crate::adapters::wasm::graph_persistence::{EncryptionConfig, GraphPersistence};
     use crate::adapters::wasm::OpfsStorage;
+    use crate::domain::graph::{EncryptionConfig, GraphPersistenceService};
 
     let encryption = EncryptionConfig {
         platform: PLATFORM.clone(),
@@ -140,20 +140,18 @@ pub async fn graph_restore_vault(
         identity: identity.to_string(),
     };
 
-    let persistence = GraphPersistence::new_with_encryption(
+    let service = GraphPersistenceService::new_with_encryption(
         &*GRAPH,
         OpfsStorage::new(),
         "graph_backups".to_string(),
         encryption,
     );
 
-    // Check if backup exists first
-    if !persistence.backup_exists(vault_name).await {
+    if !service.backup_exists(vault_name).await {
         return Ok(false);
     }
-
-    // Restore the backup
-    persistence
+    
+    service
         .restore(vault_name)
         .await
         .map_err(converters::to_js_error)?;
