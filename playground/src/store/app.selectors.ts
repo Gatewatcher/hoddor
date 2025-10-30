@@ -48,6 +48,10 @@ const getUseRAG = (state: States) => {
   return state.appState.useRAG;
 };
 
+const getUseGraphRAG = (state: States) => {
+  return state.appState.useGraphRAG;
+};
+
 const getServicesReady = (state: States) => {
   return state.appState.servicesReady;
 };
@@ -69,6 +73,7 @@ export const appSelectors = {
   getAudio,
   getSelectedModel,
   getUseRAG,
+  getUseGraphRAG,
   getServicesReady,
   getMemoryRefreshTrigger,
 };

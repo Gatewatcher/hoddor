@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
 
-import { graph_list_memory_nodes } from '../../../hoddor/pkg/hoddor';
+import {
+  graph_get_neighbors,
+  graph_list_memory_nodes,
+} from '../../../hoddor/pkg/hoddor';
 import { appSelectors } from '../store/app.selectors';
 
 interface Memory {
@@ -28,6 +31,14 @@ export const useMemories = () => {
       setIsLoading(true);
       try {
         const nodes = await graph_list_memory_nodes(vaultName, 100);
+
+        console.log('Node 0:', nodes[0].id);
+        const neighbors = await graph_get_neighbors('my-vault', nodes[0].id, [
+          'next_chunk',
+        ]);
+        console.log('Neighbors of node 0:', neighbors);
+
+        console.log(nodes);
 
         const decoder = new TextDecoder();
         // eslint-disable-next-line @typescript-eslint/no-explicit-any

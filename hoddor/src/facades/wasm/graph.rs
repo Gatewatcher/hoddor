@@ -12,6 +12,16 @@ pub struct GraphNodeResult {
     pub similarity: Option<f32>,
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct GraphNodeWithNeighborsResult {
+    pub id: String,
+    pub node_type: String,
+    pub content: Vec<u8>,
+    pub labels: Vec<String>,
+    pub similarity: f32,
+    pub neighbors: Vec<GraphNodeResult>,
+}
+
 #[wasm_bindgen]
 pub async fn graph_create_memory_node(
     vault_name: &str,
@@ -90,6 +100,117 @@ pub async fn graph_list_memory_nodes(
             content: node.content,
             labels: node.labels,
             similarity: None,
+        })
+        .collect();
+
+    serde_wasm_bindgen::to_value(&js_results).map_err(converters::to_js_error)
+}
+
+#[wasm_bindgen]
+pub async fn graph_get_neighbors(
+    vault_name: &str,
+    node_id: &str,
+    edge_types: Option<Vec<String>>,
+) -> Result<JsValue, JsValue> {
+    use crate::domain::graph::NodeId;
+
+    let platform = Platform::new();
+    let vault_id = vault_name;
+
+    let node_id = NodeId::from_string(node_id)
+        .map_err(|e| JsValue::from_str(&format!("Invalid node ID: {}", e)))?;
+
+    let neighbors = platform
+        .graph()
+        .get_neighbors(vault_id, &node_id, edge_types)
+        .await
+        .map_err(converters::to_js_error)?;
+
+    let js_results: Vec<GraphNodeResult> = neighbors
+        .into_iter()
+        .map(|node| GraphNodeResult {
+            id: node.id.as_str().to_string(),
+            node_type: node.node_type,
+            content: node.content,
+            labels: node.labels,
+            similarity: None,
+        })
+        .collect();
+
+    serde_wasm_bindgen::to_value(&js_results).map_err(converters::to_js_error)
+}
+
+#[wasm_bindgen]
+pub async fn graph_create_edge(
+    vault_name: &str,
+    from_node_id: &str,
+    to_node_id: &str,
+    edge_type: &str,
+    weight: Option<f64>,
+    bidirectional: Option<bool>,
+) -> Result<String, JsValue> {
+    use crate::domain::graph::{EdgeProperties, NodeId};
+
+    let platform = Platform::new();
+    let vault_id = vault_name;
+
+    let from_node = NodeId::from_string(from_node_id)
+        .map_err(|e| JsValue::from_str(&format!("Invalid from_node_id: {}", e)))?;
+
+    let to_node = NodeId::from_string(to_node_id)
+        .map_err(|e| JsValue::from_str(&format!("Invalid to_node_id: {}", e)))?;
+
+    let properties = EdgeProperties {
+        weight: weight.unwrap_or(1.0),
+        bidirectional: bidirectional.unwrap_or(false),
+        encrypted_context: None,
+        metadata: Default::default(),
+    };
+
+    let edge_id = platform
+        .graph()
+        .create_edge(vault_id, &from_node, &to_node, edge_type, properties)
+        .await
+        .map_err(converters::to_js_error)?;
+
+    Ok(edge_id.as_str().to_string())
+}
+
+#[wasm_bindgen]
+pub async fn graph_vector_search_with_neighbors(
+    vault_name: &str,
+    query_embedding: Vec<f32>,
+    limit: usize,
+    min_similarity: Option<f32>,
+    edge_types: Option<Vec<String>>,
+) -> Result<JsValue, JsValue> {
+    let platform = Platform::new();
+    let vault_id = vault_name;
+
+    let results = platform
+        .graph()
+        .vector_search_with_neighbors(vault_id, query_embedding, limit, min_similarity, edge_types)
+        .await
+        .map_err(converters::to_js_error)?;
+
+    let js_results: Vec<GraphNodeWithNeighborsResult> = results
+        .into_iter()
+        .map(|(node, similarity, neighbors)| GraphNodeWithNeighborsResult {
+            id: node.id.as_str().to_string(),
+            node_type: node.node_type,
+            content: node.content,
+            labels: node.labels,
+            similarity,
+            neighbors: neighbors
+                .into_iter()
+                .map(|n| GraphNodeResult {
+                    id: n.id.as_str().to_string(),
+                    node_type: n.node_type,
+                    content: n.content,
+                    labels: n.labels,
+                    similarity: None,
+                })
+                .collect(),
         })
         .collect();
 

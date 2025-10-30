@@ -1,5 +1,5 @@
 use crate::domain::graph::{
-    EdgeDirection, EdgeId, EdgeProperties, GraphBackup, GraphEdge, GraphNode, GraphResult, NodeId,
+    EdgeProperties, GraphBackup, GraphNode, GraphResult, NodeId, EdgeId,
 };
 use async_trait::async_trait;
 
@@ -14,8 +14,6 @@ pub trait GraphPort {
         embedding: Option<Vec<f32>>,
         namespace: Option<String>,
     ) -> GraphResult<NodeId>;
-
-    async fn get_node(&self, vault_id: &str, node_id: &NodeId) -> GraphResult<Option<GraphNode>>;
 
     async fn update_node(
         &self,
@@ -43,15 +41,6 @@ pub trait GraphPort {
         properties: EdgeProperties,
     ) -> GraphResult<EdgeId>;
 
-    async fn get_edges(
-        &self,
-        vault_id: &str,
-        node_id: &NodeId,
-        direction: EdgeDirection,
-    ) -> GraphResult<Vec<GraphEdge>>;
-
-    async fn delete_edge(&self, vault_id: &str, edge_id: &EdgeId) -> GraphResult<()>;
-
     async fn get_neighbors(
         &self,
         vault_id: &str,
@@ -67,7 +56,15 @@ pub trait GraphPort {
         min_similarity: Option<f32>,
     ) -> GraphResult<Vec<(GraphNode, f32)>>;
 
-    async fn export_backup(&self, vault_id: &str) -> GraphResult<GraphBackup>;
+    async fn vector_search_with_neighbors(
+        &self,
+        vault_id: &str,
+        query_embedding: Vec<f32>,
+        limit: usize,
+        min_similarity: Option<f32>,
+        edge_types: Option<Vec<String>>,
+    ) -> GraphResult<Vec<(GraphNode, f32, Vec<GraphNode>)>>;
 
+    async fn export_backup(&self, vault_id: &str) -> GraphResult<GraphBackup>;
     async fn import_backup(&self, backup: &GraphBackup) -> GraphResult<()>;
 }

@@ -22,6 +22,7 @@ export const useChatMessages = (options: UseChatMessagesOptions = {}) => {
   const { ragOrchestrator } = useServices();
   const selectedVault = useSelector(appSelectors.getSelectedVault);
   const useRAG = useSelector(appSelectors.getUseRAG);
+  const useGraphRAG = useSelector(appSelectors.getUseGraphRAG);
 
   const sendMessage = async () => {
     if (!input.trim() || !ragOrchestrator) return;
@@ -48,7 +49,7 @@ export const useChatMessages = (options: UseChatMessagesOptions = {}) => {
       // Pass vault name if RAG is enabled and vault is selected
       const ragOptions =
         options.enableRAG && useRAG && selectedVault
-          ? { vaultName: selectedVault }
+          ? { vaultName: selectedVault, useGraphRAG }
           : {};
 
       let fullResponse = '';

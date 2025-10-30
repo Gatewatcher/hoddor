@@ -3,17 +3,25 @@ import {
   LockOutlined,
   SaveOutlined,
   UnlockOutlined,
+  ExperimentOutlined,
 } from '@ant-design/icons';
-import { Button, Checkbox, Divider, Input, Space, Tag, Typography } from 'antd';
+import { Button, Checkbox, Divider, Input, Space, Tag, Typography, message } from 'antd';
+import { useState } from 'react';
+import { createTestNodes } from '../../utils/createTestNodes';
 
 const { Text } = Typography;
+
+import { EmbeddingService } from '../../services/embedding';
 
 interface RAGControlsProps {
   selectedVault: string;
   onVaultChange: (vault: string) => void;
   useRAG: boolean;
   onRAGChange: (useRAG: boolean) => void;
+  useGraphRAG: boolean;
+  onGraphRAGChange: (useGraphRAG: boolean) => void;
   canUseRAG: boolean;
+  embeddingService?: EmbeddingService;
   isAuthenticated: boolean;
   onAuthPassphrase: () => void;
   onAuthMFARegister: () => void;
@@ -29,7 +37,10 @@ export const RAGControls = ({
   onVaultChange,
   useRAG,
   onRAGChange,
+  useGraphRAG,
+  onGraphRAGChange,
   canUseRAG,
+  embeddingService,
   isAuthenticated,
   onAuthPassphrase,
   onAuthMFARegister,
@@ -39,8 +50,40 @@ export const RAGControls = ({
   isSaving,
   isRestoring,
 }: RAGControlsProps) => {
+  const [isCreatingTestNodes, setIsCreatingTestNodes] = useState(false);
+  const [messageApi, contextHolder] = message.useMessage();
+
+  const handleCreateTestNodes = async () => {
+    if (!selectedVault) {
+      messageApi.error('Please select a vault first');
+      return;
+    }
+
+    if (!embeddingService || !embeddingService.isReady()) {
+      messageApi.error('Embedding service not ready. Please wait for initialization.');
+      return;
+    }
+
+    setIsCreatingTestNodes(true);
+    const hideLoading = messageApi.loading('Creating 3 test nodes with real embeddings...', 0);
+
+    try {
+      const nodeIds = await createTestNodes(selectedVault, embeddingService);
+      hideLoading();
+      messageApi.success(`✅ 3 test nodes created and connected!`);
+      console.log('Created node IDs:', nodeIds);
+    } catch (error) {
+      hideLoading();
+      messageApi.error(`Failed to create test nodes: ${error}`);
+      console.error(error);
+    } finally {
+      setIsCreatingTestNodes(false);
+    }
+  };
+
   return (
     <>
+      {contextHolder}
       <Space style={{ marginBottom: 16 }} wrap>
         <Text>Vault:</Text>
         <Input
@@ -60,6 +103,13 @@ export const RAGControls = ({
             (Embeddings unavailable)
           </Text>
         )}
+        <Checkbox
+          checked={useGraphRAG}
+          onChange={e => onGraphRAGChange(e.target.checked)}
+          disabled={!useRAG || !canUseRAG}
+        >
+          Graph RAG
+        </Checkbox>
 
         <Divider type="vertical" />
         {isAuthenticated ? (
@@ -108,6 +158,15 @@ export const RAGControls = ({
           disabled={!selectedVault || !isAuthenticated}
         >
           Load Graph
+        </Button>
+        <Button
+          icon={<ExperimentOutlined />}
+          onClick={handleCreateTestNodes}
+          loading={isCreatingTestNodes}
+          disabled={!selectedVault}
+          type="dashed"
+        >
+          Add Test Nodes
         </Button>
       </Space>
       <Divider style={{ margin: '8px 0' }} />

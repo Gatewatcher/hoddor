@@ -1,4 +1,7 @@
-import { graph_vector_search } from '../../../hoddor/pkg/hoddor';
+import {
+  graph_vector_search,
+  graph_vector_search_with_neighbors,
+} from '../../../hoddor/pkg/hoddor';
 import { EmbeddingService } from './embedding';
 import { ChatMessage, WebLLMService } from './webllm';
 
@@ -6,6 +9,7 @@ export interface RAGContext {
   content: string;
   relevance: number;
   nodeId?: string;
+  isNeighbor?: boolean;
 }
 
 export interface RAGQueryOptions {
@@ -14,6 +18,8 @@ export interface RAGQueryOptions {
   temperature?: number;
   useStreaming?: boolean;
   vaultName?: string;
+  useGraphRAG?: boolean;
+  neighborEdgeTypes?: string[];
 }
 
 export class RAGOrchestrator {
@@ -105,9 +111,70 @@ Always cite which parts of the context you used to answer.`;
 
     const { embedding } = await this.embeddingService.embed(query);
 
-    const limit = options.maxContextItems ?? 5;
+    const limit = options.maxContextItems ?? 1; // Changed from 5 to 1 for Graph RAG demo
     const minSimilarity = options.minRelevance ?? 0.5;
+    const decoder = new TextDecoder();
 
+    // Helper to decode node content
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const decodeNode = (node: any): string => {
+      try {
+        if (node.content && node.content.length > 0) {
+          return decoder.decode(new Uint8Array(node.content));
+        }
+        return `[${node.labels.join(', ')}]`;
+      } catch (error) {
+        console.warn(`Failed to decode node ${node.id}:`, error);
+        return `[${node.labels.join(', ')}]`;
+      }
+    };
+
+    // Use Graph RAG if enabled
+    if (options.useGraphRAG) {
+      const edgeTypes = options.neighborEdgeTypes ?? null;
+      const results = await graph_vector_search_with_neighbors(
+        options.vaultName,
+        new Float32Array(embedding),
+        limit,
+        minSimilarity,
+        edgeTypes,
+      );
+
+      console.log(
+        `🔍 Graph RAG found ${results.length} relevant memories with neighbors for: "${query}"`,
+      );
+
+      const contexts: RAGContext[] = [];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      results.forEach((result: any, idx: number) => {
+        const content = decodeNode(result);
+        console.log(
+          `  [${idx + 1}] (${result.similarity.toFixed(2)}): ${content.substring(0, 60)}... + ${result.neighbors.length} neighbors`,
+        );
+
+        contexts.push({
+          content,
+          relevance: result.similarity,
+          nodeId: result.id,
+          isNeighbor: false,
+        });
+
+        // Add neighbors
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        result.neighbors.forEach((neighbor: any) => {
+          contexts.push({
+            content: decodeNode(neighbor),
+            relevance: result.similarity * 0.8,
+            nodeId: neighbor.id,
+            isNeighbor: true,
+          });
+        });
+      });
+
+      return contexts;
+    }
+
+    // Classic RAG
     const results = await graph_vector_search(
       options.vaultName,
       new Float32Array(embedding),
@@ -119,33 +186,18 @@ Always cite which parts of the context you used to answer.`;
       `🔍 RAG found ${results.length} relevant memories for: "${query}"`,
     );
 
-    const decoder = new TextDecoder();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return results.map((result: any, idx: number) => {
-      let content = '';
-
-      try {
-        if (result.content && result.content.length > 0) {
-          content = decoder.decode(new Uint8Array(result.content));
-        } else {
-          content = `[${result.labels.join(', ')}]`;
-        }
-      } catch (error) {
-        console.warn(`Failed to decode memory ${result.id}:`, error);
-        content = `[${result.labels.join(', ')}]`;
-      }
-
+      const content = decodeNode(result);
       console.log(
-        `  [${idx + 1}] (${result.similarity.toFixed(2)}): ${content.substring(
-          0,
-          60,
-        )}...`,
+        `  [${idx + 1}] (${result.similarity.toFixed(2)}): ${content.substring(0, 60)}...`,
       );
 
       return {
         content,
         relevance: result.similarity,
         nodeId: result.id,
+        isNeighbor: false,
       };
     });
   }

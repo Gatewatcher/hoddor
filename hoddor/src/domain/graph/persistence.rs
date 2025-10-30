@@ -128,7 +128,11 @@ impl<G: GraphPort, S: StoragePort> GraphPersistenceService<G, S> {
 #[cfg(all(test, target_arch = "wasm32"))]
 mod tests {
     use super::*;
-    use crate::adapters::wasm::{OpfsStorage, SimpleGraphAdapter};
+    use crate::adapters::wasm::OpfsStorage;
+
+    #[cfg(feature = "graph")]
+    use crate::adapters::wasm::CozoGraphAdapter;
+
     use crate::domain::crypto;
     use crate::domain::graph::EdgeProperties;
     use crate::platform::Platform;
@@ -164,7 +168,7 @@ mod tests {
             identity: identity.clone(),
         };
 
-        let graph = SimpleGraphAdapter::new();
+        let graph = CozoGraphAdapter::new();
         let storage = OpfsStorage::new();
 
         storage.create_directory("graph_backups").await.unwrap();
@@ -223,7 +227,7 @@ mod tests {
             identity,
         };
 
-        let graph2 = SimpleGraphAdapter::new();
+        let graph2 = CozoGraphAdapter::new();
         let storage2 = OpfsStorage::new();
         let service2 = GraphPersistenceService::new(
             graph2,
@@ -254,7 +258,7 @@ mod tests {
             identity,
         };
 
-        let graph = SimpleGraphAdapter::new();
+        let graph = CozoGraphAdapter::new();
         let storage = OpfsStorage::new();
         storage.create_directory("graph_backups").await.unwrap();
         let service =
@@ -278,7 +282,7 @@ mod tests {
             identity,
         };
 
-        let graph = SimpleGraphAdapter::new();
+        let graph = CozoGraphAdapter::new();
         let storage = OpfsStorage::new();
         storage.create_directory("graph_backups").await.unwrap();
         let service =
@@ -337,7 +341,7 @@ mod tests {
         let identity = crypto::generate_identity(&platform).unwrap();
         let recipient = crypto::identity_to_public(&platform, &identity).unwrap();
 
-        let graph = SimpleGraphAdapter::new();
+        let graph = CozoGraphAdapter::new();
         let storage = OpfsStorage::new();
         storage
             .create_directory("encrypted_graph_backups")
@@ -446,7 +450,7 @@ mod tests {
 
         let identity2 = crypto::generate_identity(&platform).unwrap();
 
-        let graph = SimpleGraphAdapter::new();
+        let graph = CozoGraphAdapter::new();
         let storage = OpfsStorage::new();
         storage.create_directory("wrong_key_test").await.unwrap();
 
@@ -469,7 +473,7 @@ mod tests {
 
         service1.backup(vault_id).await.unwrap();
 
-        let graph2 = SimpleGraphAdapter::new();
+        let graph2 = CozoGraphAdapter::new();
         let storage2 = OpfsStorage::new();
 
         let encryption2 = EncryptionConfig {

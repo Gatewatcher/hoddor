@@ -65,6 +65,7 @@ export const RAGWorkspace = () => {
   const selectedVault = useSelector(appSelectors.getSelectedVault);
   const selectedModel = useSelector(appSelectors.getSelectedModel);
   const useRAG = useSelector(appSelectors.getUseRAG);
+  const useGraphRAG = useSelector(appSelectors.getUseGraphRAG);
   const servicesReady = useSelector(appSelectors.getServicesReady);
   const identity = useSelector(appSelectors.getIdentity);
 
@@ -190,7 +191,10 @@ export const RAGWorkspace = () => {
                   onVaultChange={vault => dispatch(actions.selectVault(vault))}
                   useRAG={useRAG}
                   onRAGChange={use => dispatch(actions.setUseRAG(use))}
+                  useGraphRAG={useGraphRAG}
+                  onGraphRAGChange={use => dispatch(actions.setUseGraphRAG(use))}
                   canUseRAG={canUseRAG}
+                  embeddingService={embeddingService}
                   isAuthenticated={!!identity}
                   onAuthPassphrase={() => openAuthModal('passphrase')}
                   onAuthMFARegister={() => openAuthModal('mfa-register')}

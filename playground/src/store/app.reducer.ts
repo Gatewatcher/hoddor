@@ -17,6 +17,7 @@ export type AppState = {
   // RAG/LLM state
   selectedModel: string;
   useRAG: boolean;
+  useGraphRAG: boolean;
   servicesReady: boolean;
   memoryRefreshTrigger: number;
 };
@@ -29,6 +30,7 @@ const initialState: AppState = {
   audio: null,
   selectedModel: 'Phi-3.5-mini-instruct-q4f16_1-MLC',
   useRAG: true,
+  useGraphRAG: false,
   servicesReady: false,
   memoryRefreshTrigger: 0,
 };
@@ -165,6 +167,13 @@ export const appReducer: Reducer<AppState, UnknownAction> = (
     return {
       ...state,
       useRAG: action.payload,
+    };
+  }
+
+  if (actions.setUseGraphRAG.match(action)) {
+    return {
+      ...state,
+      useGraphRAG: action.payload,
     };
   }
 
