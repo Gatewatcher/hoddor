@@ -15,9 +15,16 @@ pub use native::{
 pub mod shared;
 pub use shared::{AgeEncryption, AgeIdentity, Argon2Kdf};
 
-#[cfg(feature = "graph")]
+#[cfg(all(feature = "graph-simple", not(feature = "graph-cozo")))]
 #[path = "wasm/simple_graph.rs"]
 mod simple_graph;
 
-#[cfg(feature = "graph")]
+#[cfg(all(feature = "graph-simple", not(feature = "graph-cozo")))]
 pub use simple_graph::SimpleGraphAdapter as Graph;
+
+#[cfg(all(feature = "graph-cozo", not(feature = "graph-simple")))]
+#[path = "wasm/cozo_graph.rs"]
+mod cozo_graph;
+
+#[cfg(all(feature = "graph-cozo", not(feature = "graph-simple")))]
+pub use cozo_graph::CozoGraphAdapter as Graph;
