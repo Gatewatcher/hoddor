@@ -41,6 +41,7 @@ pub async fn graph_create_memory_node(
             labels,
             Some(embedding),
             Some("user_memories".to_string()),
+            None
         )
         .await
         .map_err(converters::to_js_error)?;

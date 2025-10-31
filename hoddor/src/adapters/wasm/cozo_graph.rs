@@ -270,8 +270,9 @@ impl GraphPort for CozoGraphAdapter {
         labels: Vec<String>,
         embedding: Option<Vec<f32>>,
         namespace: Option<String>,
+        node_id: Option<&NodeId>
     ) -> GraphResult<NodeId> {
-        let node_id = NodeId::new();
+        let node_id = node_id.unwrap_or(&NodeId::new()).clone();
         let now = Self::get_timestamp();
 
         let node = GraphNode {
@@ -850,6 +851,7 @@ impl GraphPort for CozoGraphAdapter {
                 node.labels.clone(),
                 node.embedding.clone(),
                 node.namespace.clone(),
+                Some(&node.id.clone())
             )
             .await?;
         }
@@ -897,6 +899,7 @@ mod tests {
                 vec![],
                 Some(emb1.clone()),
                 None,
+                None,
             )
             .await
             .unwrap();
@@ -909,6 +912,7 @@ mod tests {
                 vec![],
                 Some(emb2),
                 None,
+                None
             )
             .await
             .unwrap();
@@ -921,6 +925,7 @@ mod tests {
                 vec![],
                 Some(emb3),
                 None,
+                None
             )
             .await
             .unwrap();
@@ -948,6 +953,7 @@ mod tests {
                 vec![],
                 None,
                 None,
+                None
             )
             .await
             .unwrap();
@@ -981,6 +987,7 @@ mod tests {
                 vec![],
                 Some(emb1),
                 None,
+                None
             )
             .await
             .unwrap();
@@ -993,6 +1000,7 @@ mod tests {
                 vec![],
                 Some(emb2),
                 None,
+                None
             )
             .await
             .unwrap();
@@ -1005,6 +1013,7 @@ mod tests {
                 vec![],
                 Some(emb3),
                 None,
+                None
             )
             .await
             .unwrap();
@@ -1033,6 +1042,7 @@ mod tests {
                     vec![],
                     None,
                     None,
+                    None
                 )
                 .await
                 .unwrap();

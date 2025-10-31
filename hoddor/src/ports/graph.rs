@@ -11,6 +11,7 @@ pub trait GraphPort {
         labels: Vec<String>,
         embedding: Option<Vec<f32>>,
         namespace: Option<String>,
+        node_id: Option<&NodeId>
     ) -> GraphResult<NodeId>;
 
     async fn update_node(
