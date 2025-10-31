@@ -1,6 +1,6 @@
 use crate::domain::graph::{
-    create_node_metadata, validate_edge, validate_node, EdgeId, EdgeProperties,
-    GraphBackup, GraphEdge, GraphError, GraphNode, GraphResult, NodeId,
+    create_node_metadata, validate_edge, validate_node, EdgeId, EdgeProperties, GraphBackup,
+    GraphEdge, GraphError, GraphNode, GraphResult, NodeId,
 };
 use crate::ports::graph::GraphPort;
 use async_trait::async_trait;
@@ -72,7 +72,9 @@ impl CozoGraphAdapter {
         );
 
         db.run_script(&schema_nodes, Default::default(), ScriptMutability::Mutable)
-            .map_err(|e| GraphError::DatabaseError(format!("Failed to create nodes relation: {}", e)))?;
+            .map_err(|e| {
+                GraphError::DatabaseError(format!("Failed to create nodes relation: {}", e))
+            })?;
 
         let schema_edges = r#"
             :create edges {
@@ -88,7 +90,9 @@ impl CozoGraphAdapter {
         "#;
 
         db.run_script(schema_edges, Default::default(), ScriptMutability::Mutable)
-            .map_err(|e| GraphError::DatabaseError(format!("Failed to create edges relation: {}", e)))?;
+            .map_err(|e| {
+                GraphError::DatabaseError(format!("Failed to create edges relation: {}", e))
+            })?;
 
         let create_hnsw_index = format!(
             r#"
@@ -106,8 +110,12 @@ impl CozoGraphAdapter {
             DEFAULT_EMBEDDING_DIM, HNSW_M, HNSW_EF_CONSTRUCTION
         );
 
-        db.run_script(&create_hnsw_index, Default::default(), ScriptMutability::Mutable)
-            .map_err(|e| GraphError::DatabaseError(format!("Failed to create HNSW index: {}", e)))?;
+        db.run_script(
+            &create_hnsw_index,
+            Default::default(),
+            ScriptMutability::Mutable,
+        )
+        .map_err(|e| GraphError::DatabaseError(format!("Failed to create HNSW index: {}", e)))?;
 
         Ok(())
     }
@@ -121,61 +129,54 @@ impl CozoGraphAdapter {
     }
 
     fn parse_node_from_row_offset(row: &[DataValue], offset: usize) -> GraphResult<GraphNode> {
-        let id = row.get(offset)
+        let id = row
+            .get(offset)
             .and_then(|v| v.get_str())
             .ok_or_else(|| GraphError::DatabaseError("Missing node id".to_string()))?;
 
         let node_id = NodeId::from_string(id)
             .map_err(|e| GraphError::DatabaseError(format!("Invalid node id: {}", e)))?;
 
-        let node_type = row.get(offset + 1)
+        let node_type = row
+            .get(offset + 1)
             .and_then(|v| v.get_str())
             .unwrap_or("unknown")
             .to_string();
 
-        let vault_id = row.get(offset + 2)
+        let vault_id = row
+            .get(offset + 2)
             .and_then(|v| v.get_str())
             .unwrap_or("")
             .to_string();
 
-        let namespace = row.get(offset + 3)
+        let namespace = row
+            .get(offset + 3)
             .and_then(|v| v.get_str())
             .map(|s| s.to_string());
 
-        let content_b64 = row.get(offset + 4)
-            .and_then(|v| v.get_str())
-            .unwrap_or("");
+        let content_b64 = row.get(offset + 4).and_then(|v| v.get_str()).unwrap_or("");
 
-        let content = BASE64.decode(content_b64)
-            .unwrap_or_default();
+        let content = BASE64.decode(content_b64).unwrap_or_default();
 
-        let labels_json = row.get(offset + 5)
+        let labels_json = row
+            .get(offset + 5)
             .and_then(|v| v.get_str())
             .unwrap_or("[]");
 
         let labels: Vec<String> = serde_json::from_str(labels_json).unwrap_or_default();
 
-        let embedding: Option<Vec<f32>> = row.get(offset + 6)
-            .and_then(|v| match v {
-                DataValue::Vec(Vector::F32(arr)) => Some(arr.to_vec()),
-                _ => None,
-            });
+        let embedding: Option<Vec<f32>> = row.get(offset + 6).and_then(|v| match v {
+            DataValue::Vec(Vector::F32(arr)) => Some(arr.to_vec()),
+            _ => None,
+        });
 
-        let created_at = row.get(offset + 7)
-            .and_then(|v| v.get_int())
-            .unwrap_or(0) as u64;
+        let created_at = row.get(offset + 7).and_then(|v| v.get_int()).unwrap_or(0) as u64;
 
-        let updated_at = row.get(offset + 8)
-            .and_then(|v| v.get_int())
-            .unwrap_or(0) as u64;
+        let updated_at = row.get(offset + 8).and_then(|v| v.get_int()).unwrap_or(0) as u64;
 
-        let accessed_at = row.get(offset + 9)
-            .and_then(|v| v.get_int())
-            .unwrap_or(0) as u64;
+        let accessed_at = row.get(offset + 9).and_then(|v| v.get_int()).unwrap_or(0) as u64;
 
-        let access_count = row.get(offset + 10)
-            .and_then(|v| v.get_int())
-            .unwrap_or(0) as u32;
+        let access_count = row.get(offset + 10).and_then(|v| v.get_int()).unwrap_or(0) as u32;
 
         Ok(GraphNode {
             id: node_id,
@@ -194,48 +195,47 @@ impl CozoGraphAdapter {
     }
 
     fn parse_edge_from_row(row: &[DataValue]) -> GraphResult<GraphEdge> {
-        let id = row.get(0)
+        let id = row
+            .get(0)
             .and_then(|v| v.get_str())
             .ok_or_else(|| GraphError::DatabaseError("Missing edge id".to_string()))?;
 
         let edge_id = EdgeId::from_string(id)
             .map_err(|e| GraphError::DatabaseError(format!("Invalid edge id: {}", e)))?;
 
-        let from_node_str = row.get(1)
+        let from_node_str = row
+            .get(1)
             .and_then(|v| v.get_str())
             .ok_or_else(|| GraphError::DatabaseError("Missing from_node".to_string()))?;
 
         let from_node = NodeId::from_string(from_node_str)
             .map_err(|e| GraphError::DatabaseError(format!("Invalid from_node: {}", e)))?;
 
-        let to_node_str = row.get(2)
+        let to_node_str = row
+            .get(2)
             .and_then(|v| v.get_str())
             .ok_or_else(|| GraphError::DatabaseError("Missing to_node".to_string()))?;
 
         let to_node = NodeId::from_string(to_node_str)
             .map_err(|e| GraphError::DatabaseError(format!("Invalid to_node: {}", e)))?;
 
-        let edge_type = row.get(3)
+        let edge_type = row
+            .get(3)
             .and_then(|v| v.get_str())
             .unwrap_or("unknown")
             .to_string();
 
-        let vault_id = row.get(4)
+        let vault_id = row
+            .get(4)
             .and_then(|v| v.get_str())
             .unwrap_or("")
             .to_string();
 
-        let weight = row.get(5)
-            .and_then(|v| v.get_float())
-            .unwrap_or(0.5);
+        let weight = row.get(5).and_then(|v| v.get_float()).unwrap_or(0.5);
 
-        let bidirectional = row.get(6)
-            .and_then(|v| v.get_bool())
-            .unwrap_or(false);
+        let bidirectional = row.get(6).and_then(|v| v.get_bool()).unwrap_or(false);
 
-        let created_at = row.get(7)
-            .and_then(|v| v.get_int())
-            .unwrap_or(0) as u64;
+        let created_at = row.get(7).and_then(|v| v.get_int()).unwrap_or(0) as u64;
 
         Ok(GraphEdge {
             id: edge_id,
@@ -252,7 +252,6 @@ impl CozoGraphAdapter {
             created_at,
         })
     }
-
 }
 
 impl Default for CozoGraphAdapter {
@@ -308,8 +307,14 @@ impl GraphPort for CozoGraphAdapter {
             params.insert("namespace".to_string(), DataValue::Null);
         }
 
-        params.insert("content".to_string(), DataValue::Str(content_b64.as_str().into()));
-        params.insert("labels".to_string(), DataValue::Str(labels_json.as_str().into()));
+        params.insert(
+            "content".to_string(),
+            DataValue::Str(content_b64.as_str().into()),
+        );
+        params.insert(
+            "labels".to_string(),
+            DataValue::Str(labels_json.as_str().into()),
+        );
 
         if let Some(ref emb) = embedding {
             let vec_data = DataValue::Vec(Vector::F32(Array1::from_vec(emb.clone())));
@@ -383,7 +388,8 @@ impl GraphPort for CozoGraphAdapter {
             :put nodes { id => node_type, vault_id, namespace, content, labels, embedding, created_at, updated_at, accessed_at, access_count }
         "#;
 
-        let result = db.run_script(query, params, ScriptMutability::Mutable)
+        let result = db
+            .run_script(query, params, ScriptMutability::Mutable)
             .map_err(|e| GraphError::DatabaseError(format!("Failed to update node: {}", e)))?;
 
         if result.rows.is_empty() {
@@ -398,7 +404,10 @@ impl GraphPort for CozoGraphAdapter {
 
         let mut params = BTreeMap::new();
         params.insert("vault_id".to_string(), DataValue::Str(vault_id.into()));
-        params.insert("node_id".to_string(), DataValue::Str(node_id.as_str().into()));
+        params.insert(
+            "node_id".to_string(),
+            DataValue::Str(node_id.as_str().into()),
+        );
 
         let delete_edges_query = r#"
             ?[id] :=
@@ -413,8 +422,12 @@ impl GraphPort for CozoGraphAdapter {
             :rm edges { id }
         "#;
 
-        db.run_script(delete_edges_query, params.clone(), ScriptMutability::Mutable)
-            .map_err(|e| GraphError::DatabaseError(format!("Failed to delete edges: {}", e)))?;
+        db.run_script(
+            delete_edges_query,
+            params.clone(),
+            ScriptMutability::Mutable,
+        )
+        .map_err(|e| GraphError::DatabaseError(format!("Failed to delete edges: {}", e)))?;
 
         let delete_node_query = r#"
             ?[id] :=
@@ -470,10 +483,13 @@ impl GraphPort for CozoGraphAdapter {
             limit_clause
         );
 
-        let result = db.run_script(&query, params, ScriptMutability::Immutable)
+        let result = db
+            .run_script(&query, params, ScriptMutability::Immutable)
             .map_err(|e| GraphError::DatabaseError(format!("Failed to list nodes: {}", e)))?;
 
-        let nodes: Vec<GraphNode> = result.rows.iter()
+        let nodes: Vec<GraphNode> = result
+            .rows
+            .iter()
             .filter_map(|row| Self::parse_node_from_row(row).ok())
             .collect();
 
@@ -572,10 +588,18 @@ impl GraphPort for CozoGraphAdapter {
             HNSW_EF_SEARCH
         );
 
-        let result = db.run_script(&hnsw_query, params, ScriptMutability::Immutable)
-            .map_err(|e| GraphError::DatabaseError(format!("HNSW vector search failed: {}. Ensure embeddings have {} dimensions.", e, DEFAULT_EMBEDDING_DIM)))?;
+        let result = db
+            .run_script(&hnsw_query, params, ScriptMutability::Immutable)
+            .map_err(|e| {
+                GraphError::DatabaseError(format!(
+                    "HNSW vector search failed: {}. Ensure embeddings have {} dimensions.",
+                    e, DEFAULT_EMBEDDING_DIM
+                ))
+            })?;
 
-        let results: Vec<(GraphNode, f32)> = result.rows.iter()
+        let results: Vec<(GraphNode, f32)> = result
+            .rows
+            .iter()
             .filter_map(|row| {
                 let node = Self::parse_node_from_row(row).ok()?;
 
@@ -613,7 +637,8 @@ impl GraphPort for CozoGraphAdapter {
         params.insert("k".to_string(), DataValue::from(limit as i64));
 
         let query = if let Some(ref types) = edge_types {
-            let edge_types_list = types.iter()
+            let edge_types_list = types
+                .iter()
                 .map(|t| format!("\"{}\"", t))
                 .collect::<Vec<_>>()
                 .join(", ");
@@ -714,8 +739,11 @@ impl GraphPort for CozoGraphAdapter {
             )
         };
 
-        let result = db.run_script(&query, params, ScriptMutability::Immutable)
-            .map_err(|e| GraphError::DatabaseError(format!("Vector search with neighbors failed: {}", e)))?;
+        let result = db
+            .run_script(&query, params, ScriptMutability::Immutable)
+            .map_err(|e| {
+                GraphError::DatabaseError(format!("Vector search with neighbors failed: {}", e))
+            })?;
 
         use std::collections::HashMap;
         let mut nodes_map: HashMap<String, (GraphNode, f32, Vec<GraphNode>)> = HashMap::new();
@@ -734,9 +762,11 @@ impl GraphPort for CozoGraphAdapter {
             let neighbor = Self::parse_node_from_row_offset(row, 12)?;
 
             let node_id = node.id.as_str();
-            nodes_map.entry(node_id.clone())
+            nodes_map
+                .entry(node_id.clone())
                 .or_insert_with(|| (node.clone(), similarity, Vec::new()))
-                .2.push(neighbor);
+                .2
+                .push(neighbor);
         }
 
         let results: Vec<(GraphNode, f32, Vec<GraphNode>)> = nodes_map.into_values().collect();
@@ -768,10 +798,13 @@ impl GraphPort for CozoGraphAdapter {
                 vault_id == $vault_id
         "#;
 
-        let nodes_result = db.run_script(nodes_query, params.clone(), ScriptMutability::Immutable)
+        let nodes_result = db
+            .run_script(nodes_query, params.clone(), ScriptMutability::Immutable)
             .map_err(|e| GraphError::DatabaseError(format!("Failed to export nodes: {}", e)))?;
 
-        let nodes: Vec<GraphNode> = nodes_result.rows.iter()
+        let nodes: Vec<GraphNode> = nodes_result
+            .rows
+            .iter()
             .filter_map(|row| Self::parse_node_from_row(row).ok())
             .collect();
 
@@ -790,10 +823,13 @@ impl GraphPort for CozoGraphAdapter {
                 vault_id == $vault_id
         "#;
 
-        let edges_result = db.run_script(edges_query, params, ScriptMutability::Immutable)
+        let edges_result = db
+            .run_script(edges_query, params, ScriptMutability::Immutable)
             .map_err(|e| GraphError::DatabaseError(format!("Failed to export edges: {}", e)))?;
 
-        let edges: Vec<GraphEdge> = edges_result.rows.iter()
+        let edges: Vec<GraphEdge> = edges_result
+            .rows
+            .iter()
             .filter_map(|row| Self::parse_edge_from_row(row).ok())
             .collect();
 
@@ -814,7 +850,8 @@ impl GraphPort for CozoGraphAdapter {
                 node.labels.clone(),
                 node.embedding.clone(),
                 node.namespace.clone(),
-            ).await?;
+            )
+            .await?;
         }
 
         for edge in &backup.edges {
@@ -824,7 +861,8 @@ impl GraphPort for CozoGraphAdapter {
                 &edge.to_node,
                 &edge.edge_type,
                 edge.properties.clone(),
-            ).await?;
+            )
+            .await?;
         }
 
         Ok(())
@@ -851,35 +889,47 @@ mod tests {
         let emb2 = vec![0.9, 0.1, 0.0];
         let emb3 = vec![0.0, 1.0, 0.0];
 
-        adapter.create_node(
-            "test_vault",
-            "document",
-            b"Doc 1".to_vec(),
-            vec![],
-            Some(emb1.clone()),
-            None,
-        ).await.unwrap();
+        adapter
+            .create_node(
+                "test_vault",
+                "document",
+                b"Doc 1".to_vec(),
+                vec![],
+                Some(emb1.clone()),
+                None,
+            )
+            .await
+            .unwrap();
 
-        adapter.create_node(
-            "test_vault",
-            "document",
-            b"Doc 2".to_vec(),
-            vec![],
-            Some(emb2),
-            None,
-        ).await.unwrap();
+        adapter
+            .create_node(
+                "test_vault",
+                "document",
+                b"Doc 2".to_vec(),
+                vec![],
+                Some(emb2),
+                None,
+            )
+            .await
+            .unwrap();
 
-        adapter.create_node(
-            "test_vault",
-            "document",
-            b"Doc 3".to_vec(),
-            vec![],
-            Some(emb3),
-            None,
-        ).await.unwrap();
+        adapter
+            .create_node(
+                "test_vault",
+                "document",
+                b"Doc 3".to_vec(),
+                vec![],
+                Some(emb3),
+                None,
+            )
+            .await
+            .unwrap();
 
         let query = vec![1.0, 0.0, 0.0];
-        let results = adapter.vector_search("test_vault", query, 2, None).await.unwrap();
+        let results = adapter
+            .vector_search("test_vault", query, 2, None)
+            .await
+            .unwrap();
 
         assert_eq!(results.len(), 2);
         assert_eq!(results[0].0.content, b"Doc 1");
@@ -890,14 +940,17 @@ mod tests {
     async fn test_export_import_backup() {
         let adapter1 = CozoGraphAdapter::new();
 
-        adapter1.create_node(
-            "test_vault",
-            "document",
-            b"Test".to_vec(),
-            vec![],
-            None,
-            None,
-        ).await.unwrap();
+        adapter1
+            .create_node(
+                "test_vault",
+                "document",
+                b"Test".to_vec(),
+                vec![],
+                None,
+                None,
+            )
+            .await
+            .unwrap();
 
         let backup = adapter1.export_backup("test_vault").await.unwrap();
         assert_eq!(backup.nodes.len(), 1);
@@ -905,7 +958,10 @@ mod tests {
         let adapter2 = CozoGraphAdapter::new();
         adapter2.import_backup(&backup).await.unwrap();
 
-        let nodes = adapter2.list_nodes_by_type("test_vault", "document", None).await.unwrap();
+        let nodes = adapter2
+            .list_nodes_by_type("test_vault", "document", None)
+            .await
+            .unwrap();
         assert_eq!(nodes.len(), 1);
     }
 
@@ -917,35 +973,47 @@ mod tests {
         let emb2 = vec![0.5, 0.5, 0.0];
         let emb3 = vec![0.0, 1.0, 0.0];
 
-        adapter.create_node(
-            "test_vault",
-            "document",
-            b"Similar".to_vec(),
-            vec![],
-            Some(emb1),
-            None,
-        ).await.unwrap();
+        adapter
+            .create_node(
+                "test_vault",
+                "document",
+                b"Similar".to_vec(),
+                vec![],
+                Some(emb1),
+                None,
+            )
+            .await
+            .unwrap();
 
-        adapter.create_node(
-            "test_vault",
-            "document",
-            b"Somewhat similar".to_vec(),
-            vec![],
-            Some(emb2),
-            None,
-        ).await.unwrap();
+        adapter
+            .create_node(
+                "test_vault",
+                "document",
+                b"Somewhat similar".to_vec(),
+                vec![],
+                Some(emb2),
+                None,
+            )
+            .await
+            .unwrap();
 
-        adapter.create_node(
-            "test_vault",
-            "document",
-            b"Different".to_vec(),
-            vec![],
-            Some(emb3),
-            None,
-        ).await.unwrap();
+        adapter
+            .create_node(
+                "test_vault",
+                "document",
+                b"Different".to_vec(),
+                vec![],
+                Some(emb3),
+                None,
+            )
+            .await
+            .unwrap();
 
         let query = vec![1.0, 0.0, 0.0];
-        let results = adapter.vector_search("test_vault", query, 10, Some(0.7)).await.unwrap();
+        let results = adapter
+            .vector_search("test_vault", query, 10, Some(0.7))
+            .await
+            .unwrap();
 
         assert_eq!(results.len(), 2);
         assert!(results[0].1 >= 0.7);
@@ -957,21 +1025,29 @@ mod tests {
         let adapter = CozoGraphAdapter::new();
 
         for i in 0..5 {
-            adapter.create_node(
-                "test_vault",
-                "document",
-                format!("Doc {}", i).into_bytes(),
-                vec![],
-                None,
-                None,
-            ).await.unwrap();
+            adapter
+                .create_node(
+                    "test_vault",
+                    "document",
+                    format!("Doc {}", i).into_bytes(),
+                    vec![],
+                    None,
+                    None,
+                )
+                .await
+                .unwrap();
         }
 
-        let all = adapter.list_nodes_by_type("test_vault", "document", None).await.unwrap();
+        let all = adapter
+            .list_nodes_by_type("test_vault", "document", None)
+            .await
+            .unwrap();
         assert_eq!(all.len(), 5);
 
-        let limited = adapter.list_nodes_by_type("test_vault", "document", Some(3)).await.unwrap();
+        let limited = adapter
+            .list_nodes_by_type("test_vault", "document", Some(3))
+            .await
+            .unwrap();
         assert_eq!(limited.len(), 3);
     }
-
 }

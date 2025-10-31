@@ -1,6 +1,4 @@
-use crate::domain::graph::{
-    EdgeProperties, GraphBackup, GraphNode, GraphResult, NodeId, EdgeId,
-};
+use crate::domain::graph::{EdgeId, EdgeProperties, GraphBackup, GraphNode, GraphResult, NodeId};
 use async_trait::async_trait;
 
 #[async_trait(?Send)]

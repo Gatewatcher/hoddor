@@ -161,23 +161,25 @@ pub async fn graph_vector_search_with_neighbors(
 
     let js_results: Vec<GraphNodeWithNeighborsResult> = results
         .into_iter()
-        .map(|(node, similarity, neighbors)| GraphNodeWithNeighborsResult {
-            id: node.id.as_str().to_string(),
-            node_type: node.node_type,
-            content: node.content,
-            labels: node.labels,
-            similarity,
-            neighbors: neighbors
-                .into_iter()
-                .map(|n| GraphNodeResult {
-                    id: n.id.as_str().to_string(),
-                    node_type: n.node_type,
-                    content: n.content,
-                    labels: n.labels,
-                    similarity: None,
-                })
-                .collect(),
-        })
+        .map(
+            |(node, similarity, neighbors)| GraphNodeWithNeighborsResult {
+                id: node.id.as_str().to_string(),
+                node_type: node.node_type,
+                content: node.content,
+                labels: node.labels,
+                similarity,
+                neighbors: neighbors
+                    .into_iter()
+                    .map(|n| GraphNodeResult {
+                        id: n.id.as_str().to_string(),
+                        node_type: n.node_type,
+                        content: n.content,
+                        labels: n.labels,
+                        similarity: None,
+                    })
+                    .collect(),
+            },
+        )
         .collect();
 
     serde_wasm_bindgen::to_value(&js_results).map_err(converters::to_js_error)
