@@ -1,3 +1,5 @@
+import { GraphNodeResult, GraphNodeWithNeighborsResult } from 'types/graph';
+
 import {
   graph_vector_search,
   graph_vector_search_with_neighbors,
@@ -114,8 +116,9 @@ Always cite which parts of the context you used to answer.`;
     const limit = options.maxContextItems ?? 5;
     const searchQuality = options.searchQuality ?? 100;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const decodeNode = (node: any): string => {
+    const extractContent = (
+      node: GraphNodeWithNeighborsResult | GraphNodeResult,
+    ): string => {
       if (node.content && node.content.length > 0) {
         return node.content;
       }
@@ -123,17 +126,17 @@ Always cite which parts of the context you used to answer.`;
     };
 
     if (options.useGraphRAG) {
-      const results = await graph_vector_search_with_neighbors(
-        options.vaultName,
-        new Float32Array(embedding),
-        limit,
-        searchQuality,
-      );
+      const results: GraphNodeWithNeighborsResult[] =
+        await graph_vector_search_with_neighbors(
+          options.vaultName,
+          new Float32Array(embedding),
+          limit,
+          searchQuality,
+        );
 
       const contexts: RAGContext[] = [];
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      results.forEach((result: any) => {
-        const content = decodeNode(result);
+      results.forEach((result: GraphNodeWithNeighborsResult) => {
+        const content = extractContent(result);
 
         contexts.push({
           content,
@@ -142,10 +145,9 @@ Always cite which parts of the context you used to answer.`;
           isNeighbor: false,
         });
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        result.neighbors.forEach((neighbor: any) => {
+        result.neighbors.forEach((neighbor: GraphNodeResult) => {
           contexts.push({
-            content: decodeNode(neighbor),
+            content: extractContent(neighbor),
             relevance: result.similarity * 0.8,
             nodeId: neighbor.id,
             isNeighbor: true,
@@ -156,16 +158,15 @@ Always cite which parts of the context you used to answer.`;
       return contexts;
     }
 
-    const results = await graph_vector_search(
+    const results: GraphNodeResult[] = await graph_vector_search(
       options.vaultName,
       new Float32Array(embedding),
       limit,
       searchQuality,
     );
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return results.map((result: any) => {
-      const content = decodeNode(result);
+    return results.map(result => {
+      const content = extractContent(result);
 
       return {
         content,
@@ -173,7 +174,7 @@ Always cite which parts of the context you used to answer.`;
         nodeId: result.id,
         isNeighbor: false,
       };
-    });
+    }) as RAGContext[];
   }
 
   private buildPromptWithContext(

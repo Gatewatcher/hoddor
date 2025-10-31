@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
+import { GraphNodeResult } from 'types/graph';
 
 import { graph_list_memory_nodes } from '../../../hoddor/pkg/hoddor';
 import { appSelectors } from '../store/app.selectors';
@@ -27,10 +28,12 @@ export const useMemories = () => {
 
       setIsLoading(true);
       try {
-        const nodes = await graph_list_memory_nodes(vaultName, 100);
+        const nodes: GraphNodeResult[] = await graph_list_memory_nodes(
+          vaultName,
+          100,
+        );
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const loadedMemories: Memory[] = nodes.map((node: any) => {
+        const loadedMemories: Memory[] = nodes.map((node: GraphNodeResult) => {
           return {
             id: node.id,
             content: node.content || '',
