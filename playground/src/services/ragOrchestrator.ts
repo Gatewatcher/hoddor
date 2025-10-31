@@ -14,7 +14,7 @@ export interface RAGContext {
 
 export interface RAGQueryOptions {
   maxContextItems?: number;
-  minRelevance?: number;
+  searchQuality?: number;
   temperature?: number;
   useStreaming?: boolean;
   vaultName?: string;
@@ -112,30 +112,22 @@ Always cite which parts of the context you used to answer.`;
     const { embedding } = await this.embeddingService.embed(query);
 
     const limit = options.maxContextItems ?? 5;
-    const minSimilarity = options.minRelevance ?? 0.5;
-    const decoder = new TextDecoder();
+    const searchQuality = options.searchQuality ?? 100;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const decodeNode = (node: any): string => {
-      try {
-        if (node.content && node.content.length > 0) {
-          return decoder.decode(new Uint8Array(node.content));
-        }
-        return `[${node.labels.join(', ')}]`;
-      } catch (error) {
-        console.warn(`Failed to decode node ${node.id}:`, error);
-        return `[${node.labels.join(', ')}]`;
+      if (node.content && node.content.length > 0) {
+        return node.content;
       }
+      return `[${node.labels.join(', ')}]`;
     };
 
     if (options.useGraphRAG) {
-      const edgeTypes = options.neighborEdgeTypes ?? null;
       const results = await graph_vector_search_with_neighbors(
         options.vaultName,
         new Float32Array(embedding),
         limit,
-        minSimilarity,
-        edgeTypes,
+        searchQuality,
       );
 
       const contexts: RAGContext[] = [];
@@ -168,7 +160,7 @@ Always cite which parts of the context you used to answer.`;
       options.vaultName,
       new Float32Array(embedding),
       limit,
-      minSimilarity,
+      searchQuality,
     );
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

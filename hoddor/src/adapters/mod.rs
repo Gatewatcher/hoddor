@@ -15,9 +15,5 @@ pub use native::{
 pub mod shared;
 pub use shared::{AgeEncryption, AgeIdentity, Argon2Kdf};
 
-#[cfg(feature = "graph")]
-#[path = "wasm/cozo_graph.rs"]
-mod cozo_graph;
-
-#[cfg(feature = "graph")]
-pub use cozo_graph::CozoGraphAdapter as Graph;
+#[cfg(all(feature = "graph", target_arch = "wasm32"))]
+pub use wasm::CozoGraphAdapter as Graph;

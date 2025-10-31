@@ -29,22 +29,11 @@ export const useMemories = () => {
       try {
         const nodes = await graph_list_memory_nodes(vaultName, 100);
 
-        const decoder = new TextDecoder();
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const loadedMemories: Memory[] = nodes.map((node: any) => {
-          let content = '';
-          try {
-            if (node.content && node.content.length > 0) {
-              content = decoder.decode(new Uint8Array(node.content));
-            }
-          } catch (error) {
-            console.error('Failed to decode memory:', error);
-            content = '[Unable to decode content]';
-          }
-
           return {
             id: node.id,
-            content,
+            content: node.content || '',
             labels: node.labels || [],
             timestamp: new Date(),
           };

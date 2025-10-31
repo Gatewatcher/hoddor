@@ -1,4 +1,4 @@
-use crate::domain::graph::{EdgeId, EdgeProperties, GraphBackup, GraphNode, GraphResult, NodeId};
+use crate::domain::graph::{GraphBackup, GraphNode, GraphResult, Id, SearchResult};
 use async_trait::async_trait;
 
 #[async_trait(?Send)]
@@ -7,22 +7,11 @@ pub trait GraphPort {
         &self,
         vault_id: &str,
         node_type: &str,
-        content: Vec<u8>,
+        content: String,
         labels: Vec<String>,
         embedding: Option<Vec<f32>>,
-        namespace: Option<String>,
-        node_id: Option<&NodeId>,
-    ) -> GraphResult<NodeId>;
-
-    async fn update_node(
-        &self,
-        vault_id: &str,
-        node_id: &NodeId,
-        content: Vec<u8>,
-        embedding: Option<Vec<f32>>,
-    ) -> GraphResult<()>;
-
-    async fn delete_node(&self, vault_id: &str, node_id: &NodeId) -> GraphResult<()>;
+        node_id: Option<&Id>,
+    ) -> GraphResult<Id>;
 
     async fn list_nodes_by_type(
         &self,
@@ -34,28 +23,21 @@ pub trait GraphPort {
     async fn create_edge(
         &self,
         vault_id: &str,
-        from_node: &NodeId,
-        to_node: &NodeId,
+        from_node: &Id,
+        to_node: &Id,
         edge_type: &str,
-        properties: EdgeProperties,
-    ) -> GraphResult<EdgeId>;
-
-    async fn vector_search(
-        &self,
-        vault_id: &str,
-        query_embedding: Vec<f32>,
-        limit: usize,
-        min_similarity: Option<f32>,
-    ) -> GraphResult<Vec<(GraphNode, f32)>>;
+        weight: Option<f32>,
+        edge_id: Option<&Id>,
+    ) -> GraphResult<Id>;
 
     async fn vector_search_with_neighbors(
         &self,
         vault_id: &str,
         query_embedding: Vec<f32>,
-        limit: usize,
-        min_similarity: Option<f32>,
-        edge_types: Option<Vec<String>>,
-    ) -> GraphResult<Vec<(GraphNode, f32, Vec<GraphNode>)>>;
+        max_results: usize,
+        search_quality: usize,
+        include_neighbors: bool,
+    ) -> GraphResult<Vec<SearchResult>>;
 
     async fn export_backup(&self, vault_id: &str) -> GraphResult<GraphBackup>;
     async fn import_backup(&self, backup: &GraphBackup) -> GraphResult<()>;
