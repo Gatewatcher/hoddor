@@ -8,7 +8,6 @@ import { useServices } from '../../contexts/ServicesContext';
 import { appSelectors } from '../../store/app.selectors';
 import {
   createMemory,
-  encodeContent,
   parseLabels,
 } from '../../utils/memoryUtils';
 
@@ -53,12 +52,11 @@ export const MemoryForm = ({ onMemoryAdded }: MemoryFormProps) => {
     try {
       const { embedding } = await embeddingService.embed(newMemory);
 
-      const contentBytes = encodeContent(newMemory);
       const labelList = parseLabels(labels);
 
       const nodeId = await graph_create_memory_node(
         vaultName,
-        contentBytes,
+        newMemory,
         new Float32Array(embedding),
         labelList,
       );

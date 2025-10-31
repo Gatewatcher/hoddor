@@ -9,7 +9,7 @@ pub mod persistence;
 pub mod webauthn_prf;
 
 #[cfg(feature = "graph")]
-pub mod simple_graph;
+pub mod cozo_graph;
 
 pub use clock::Clock;
 pub use console_logger::ConsoleLogger;
@@ -20,4 +20,4 @@ pub use persistence::Persistence;
 pub use webauthn_prf::WebAuthnPrf;
 
 #[cfg(feature = "graph")]
-pub use simple_graph::SimpleGraphAdapter;
+pub use cozo_graph::CozoGraphAdapter;

@@ -1,4 +1,9 @@
-import { graph_vector_search } from '../../../hoddor/pkg/hoddor';
+import { GraphNodeResult, GraphNodeWithNeighborsResult } from 'types/graph';
+
+import {
+  graph_vector_search,
+  graph_vector_search_with_neighbors,
+} from '../../../hoddor/pkg/hoddor';
 import { EmbeddingService } from './embedding';
 import { ChatMessage, WebLLMService } from './webllm';
 
@@ -6,14 +11,17 @@ export interface RAGContext {
   content: string;
   relevance: number;
   nodeId?: string;
+  isNeighbor?: boolean;
 }
 
 export interface RAGQueryOptions {
   maxContextItems?: number;
-  minRelevance?: number;
+  searchQuality?: number;
   temperature?: number;
-  useStreaming?: boolean;
+  withStreaming?: boolean;
   vaultName?: string;
+  withGraphRAG?: boolean;
+  neighborEdgeTypes?: string[];
 }
 
 export class RAGOrchestrator {
@@ -106,48 +114,67 @@ Always cite which parts of the context you used to answer.`;
     const { embedding } = await this.embeddingService.embed(query);
 
     const limit = options.maxContextItems ?? 5;
-    const minSimilarity = options.minRelevance ?? 0.5;
+    const searchQuality = options.searchQuality ?? 100;
 
-    const results = await graph_vector_search(
+    const extractContent = (
+      node: GraphNodeWithNeighborsResult | GraphNodeResult,
+    ): string => {
+      if (node.content && node.content.length > 0) {
+        return node.content;
+      }
+      return `[${node.labels.join(', ')}]`;
+    };
+
+    if (options.withGraphRAG) {
+      const results: GraphNodeWithNeighborsResult[] =
+        await graph_vector_search_with_neighbors(
+          options.vaultName,
+          new Float32Array(embedding),
+          limit,
+          searchQuality,
+        );
+
+      const contexts: RAGContext[] = [];
+      results.forEach((result: GraphNodeWithNeighborsResult) => {
+        const content = extractContent(result);
+
+        contexts.push({
+          content,
+          relevance: result.similarity,
+          nodeId: result.id,
+          isNeighbor: false,
+        });
+
+        result.neighbors.forEach((neighbor: GraphNodeResult) => {
+          contexts.push({
+            content: extractContent(neighbor),
+            relevance: result.similarity * 0.8,
+            nodeId: neighbor.id,
+            isNeighbor: true,
+          });
+        });
+      });
+
+      return contexts;
+    }
+
+    const results: GraphNodeResult[] = await graph_vector_search(
       options.vaultName,
       new Float32Array(embedding),
       limit,
-      minSimilarity,
+      searchQuality,
     );
 
-    console.log(
-      `🔍 RAG found ${results.length} relevant memories for: "${query}"`,
-    );
-
-    const decoder = new TextDecoder();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return results.map((result: any, idx: number) => {
-      let content = '';
-
-      try {
-        if (result.content && result.content.length > 0) {
-          content = decoder.decode(new Uint8Array(result.content));
-        } else {
-          content = `[${result.labels.join(', ')}]`;
-        }
-      } catch (error) {
-        console.warn(`Failed to decode memory ${result.id}:`, error);
-        content = `[${result.labels.join(', ')}]`;
-      }
-
-      console.log(
-        `  [${idx + 1}] (${result.similarity.toFixed(2)}): ${content.substring(
-          0,
-          60,
-        )}...`,
-      );
+    return results.map(result => {
+      const content = extractContent(result);
 
       return {
         content,
         relevance: result.similarity,
         nodeId: result.id,
+        isNeighbor: false,
       };
-    });
+    }) as RAGContext[];
   }
 
   private buildPromptWithContext(
@@ -172,7 +199,7 @@ ${contextText}
 
 Question: ${question}
 
-Please answer the question using the context above. Cite the context numbers [1], [2], etc. when relevant.`;
+Please answer the question using the context above.`;
   }
 
   setSystemPrompt(prompt: string): void {

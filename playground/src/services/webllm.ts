@@ -119,8 +119,7 @@ export class WebLLMService {
     }
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async getRuntimeStats(): Promise<any | null> {
+  async getRuntimeStats(): Promise<unknown | null> {
     if (!this.isReady()) {
       return null;
     }

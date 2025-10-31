@@ -18,6 +18,7 @@ enum Types {
   // RAG/LLM actions
   SET_SELECTED_MODEL = 'app/SET_SELECTED_MODEL',
   SET_USE_RAG = 'app/SET_USE_RAG',
+  SET_USE_GRAPH_RAG = 'app/SET_USE_GRAPH_RAG',
   SET_SERVICES_READY = 'app/SET_SERVICES_READY',
   TRIGGER_MEMORY_REFRESH = 'app/TRIGGER_MEMORY_REFRESH',
 }
@@ -38,6 +39,7 @@ export const actions = {
   // RAG/LLM actions
   setSelectedModel: createAction<string>(Types.SET_SELECTED_MODEL),
   setUseRAG: createAction<boolean>(Types.SET_USE_RAG),
+  setUseGraphRAG: createAction<boolean>(Types.SET_USE_GRAPH_RAG),
   setServicesReady: createAction<boolean>(Types.SET_SERVICES_READY),
   triggerMemoryRefresh: createAction(Types.TRIGGER_MEMORY_REFRESH),
 };

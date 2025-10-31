@@ -1,13 +1,3 @@
-export const encodeContent = (content: string): Uint8Array => {
-  const encoder = new TextEncoder();
-  return encoder.encode(content);
-};
-
-export const decodeContent = (contentBytes: Uint8Array): string => {
-  const decoder = new TextDecoder();
-  return decoder.decode(contentBytes);
-};
-
 export const parseLabels = (labelsString: string): string[] => {
   return labelsString
     .split(',')
