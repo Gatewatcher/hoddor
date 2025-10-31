@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{fmt, sync::PoisonError};
 
 #[derive(Debug)]
 pub enum GraphError {
@@ -13,6 +13,7 @@ pub enum GraphError {
     DatabaseError(String),
     IntegrityError(String),
     InvalidEmbedding(String),
+    LockPoisoned,
     VaultMismatch { expected: String, found: String },
     Other(String),
 }
@@ -31,6 +32,7 @@ impl fmt::Display for GraphError {
             GraphError::DatabaseError(e) => write!(f, "Database error: {}", e),
             GraphError::IntegrityError(e) => write!(f, "Integrity verification failed: {}", e),
             GraphError::InvalidEmbedding(e) => write!(f, "Invalid embedding: {}", e),
+            GraphError::LockPoisoned => write!(f, "Lock was poisoned by a panicked thread"),
             GraphError::VaultMismatch { expected, found } => {
                 write!(
                     f,
@@ -40,6 +42,12 @@ impl fmt::Display for GraphError {
             }
             GraphError::Other(e) => write!(f, "{}", e),
         }
+    }
+}
+
+impl<T> From<PoisonError<T>> for GraphError {
+    fn from(_: PoisonError<T>) -> Self {
+        GraphError::LockPoisoned
     }
 }
 

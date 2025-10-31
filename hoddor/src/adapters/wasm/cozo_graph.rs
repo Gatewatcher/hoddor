@@ -40,7 +40,7 @@ impl CozoGraphAdapter {
             db: GLOBAL_COZO_DB.clone(),
         };
 
-        let mut initialized = SCHEMA_INITIALIZED.lock().unwrap();
+        let mut initialized = SCHEMA_INITIALIZED.lock()?;
         if !*initialized {
             adapter.init_schema()?;
             *initialized = true;
@@ -50,7 +50,7 @@ impl CozoGraphAdapter {
     }
 
     fn init_schema(&self) -> GraphResult<()> {
-        let db = self.db.lock().unwrap();
+        let db = self.db.lock()?;
 
         let schema_nodes = format!(
             r#"
@@ -270,7 +270,7 @@ impl GraphPort for CozoGraphAdapter {
         labels: Vec<String>,
         embedding: Option<Vec<f32>>,
         namespace: Option<String>,
-        node_id: Option<&NodeId>
+        node_id: Option<&NodeId>,
     ) -> GraphResult<NodeId> {
         let node_id = node_id.unwrap_or(&NodeId::new()).clone();
         let now = Self::get_timestamp();
@@ -292,7 +292,7 @@ impl GraphPort for CozoGraphAdapter {
 
         validate_node(&node)?;
 
-        let db = self.db.lock().unwrap();
+        let db = self.db.lock()?;
 
         let content_b64 = BASE64.encode(&content);
         let labels_json = serde_json::to_string(&labels).unwrap_or_else(|_| "[]".to_string());
@@ -350,7 +350,7 @@ impl GraphPort for CozoGraphAdapter {
         embedding: Option<Vec<f32>>,
     ) -> GraphResult<()> {
         let now = Self::get_timestamp();
-        let db = self.db.lock().unwrap();
+        let db = self.db.lock()?;
 
         let content_b64 = BASE64.encode(&content);
 
@@ -401,7 +401,7 @@ impl GraphPort for CozoGraphAdapter {
     }
 
     async fn delete_node(&self, vault_id: &str, node_id: &NodeId) -> GraphResult<()> {
-        let db = self.db.lock().unwrap();
+        let db = self.db.lock()?;
 
         let mut params = BTreeMap::new();
         params.insert("vault_id".to_string(), DataValue::Str(vault_id.into()));
@@ -453,7 +453,7 @@ impl GraphPort for CozoGraphAdapter {
         node_type: &str,
         limit: Option<usize>,
     ) -> GraphResult<Vec<GraphNode>> {
-        let db = self.db.lock().unwrap();
+        let db = self.db.lock()?;
 
         let mut params = BTreeMap::new();
         params.insert("vault_id".to_string(), DataValue::Str(vault_id.into()));
@@ -520,7 +520,7 @@ impl GraphPort for CozoGraphAdapter {
 
         validate_edge(&edge)?;
 
-        let db = self.db.lock().unwrap();
+        let db = self.db.lock()?;
 
         let query = format!(
             r#"
@@ -552,7 +552,7 @@ impl GraphPort for CozoGraphAdapter {
         limit: usize,
         min_similarity: Option<f32>,
     ) -> GraphResult<Vec<(GraphNode, f32)>> {
-        let db = self.db.lock().unwrap();
+        let db = self.db.lock()?;
 
         let query_vec = DataValue::Vec(Vector::F32(Array1::from_vec(query_embedding.clone())));
 
@@ -628,7 +628,7 @@ impl GraphPort for CozoGraphAdapter {
         min_similarity: Option<f32>,
         edge_types: Option<Vec<String>>,
     ) -> GraphResult<Vec<(GraphNode, f32, Vec<GraphNode>)>> {
-        let db = self.db.lock().unwrap();
+        let db = self.db.lock()?;
 
         let query_vec = DataValue::Vec(Vector::F32(Array1::from_vec(query_embedding.clone())));
 
@@ -776,7 +776,7 @@ impl GraphPort for CozoGraphAdapter {
     }
 
     async fn export_backup(&self, vault_id: &str) -> GraphResult<GraphBackup> {
-        let db = self.db.lock().unwrap();
+        let db = self.db.lock()?;
 
         let mut params = BTreeMap::new();
         params.insert("vault_id".to_string(), DataValue::Str(vault_id.into()));
@@ -851,7 +851,7 @@ impl GraphPort for CozoGraphAdapter {
                 node.labels.clone(),
                 node.embedding.clone(),
                 node.namespace.clone(),
-                Some(&node.id.clone())
+                Some(&node.id.clone()),
             )
             .await?;
         }
@@ -912,7 +912,7 @@ mod tests {
                 vec![],
                 Some(emb2),
                 None,
-                None
+                None,
             )
             .await
             .unwrap();
@@ -925,7 +925,7 @@ mod tests {
                 vec![],
                 Some(emb3),
                 None,
-                None
+                None,
             )
             .await
             .unwrap();
@@ -953,7 +953,7 @@ mod tests {
                 vec![],
                 None,
                 None,
-                None
+                None,
             )
             .await
             .unwrap();
@@ -987,7 +987,7 @@ mod tests {
                 vec![],
                 Some(emb1),
                 None,
-                None
+                None,
             )
             .await
             .unwrap();
@@ -1000,7 +1000,7 @@ mod tests {
                 vec![],
                 Some(emb2),
                 None,
-                None
+                None,
             )
             .await
             .unwrap();
@@ -1013,7 +1013,7 @@ mod tests {
                 vec![],
                 Some(emb3),
                 None,
-                None
+                None,
             )
             .await
             .unwrap();
@@ -1042,7 +1042,7 @@ mod tests {
                     vec![],
                     None,
                     None,
-                    None
+                    None,
                 )
                 .await
                 .unwrap();
