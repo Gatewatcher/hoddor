@@ -40,25 +40,16 @@ export async function createTestNodes(
   }
 
   // Connect with edges
-  console.log('🔗 Creating edges between nodes...');
   for (let i = 0; i < nodeIds.length - 1; i++) {
-    console.log(`Creating edge ${i + 1}: ${nodeIds[i]} -> ${nodeIds[i + 1]}`);
-    try {
-      const edgeId = await graph_create_edge(
-        vaultName,
-        nodeIds[i],
-        nodeIds[i + 1],
-        'next_chunk',
-        1.0,
-        true,
-      );
-      console.log(`✅ Edge created: ${edgeId}`);
-    } catch (error) {
-      console.error(`❌ Failed to create edge ${i + 1}:`, error);
-      throw error;
-    }
+    await graph_create_edge(
+      vaultName,
+      nodeIds[i],
+      nodeIds[i + 1],
+      'next_chunk',
+      1.0,
+      true,
+    );
   }
 
-  console.log('✅ All edges created successfully!');
   return nodeIds;
 }

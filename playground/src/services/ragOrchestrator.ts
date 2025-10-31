@@ -111,11 +111,10 @@ Always cite which parts of the context you used to answer.`;
 
     const { embedding } = await this.embeddingService.embed(query);
 
-    const limit = options.maxContextItems ?? 1; // Changed from 5 to 1 for Graph RAG demo
+    const limit = options.maxContextItems ?? 5;
     const minSimilarity = options.minRelevance ?? 0.5;
     const decoder = new TextDecoder();
 
-    // Helper to decode node content
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const decodeNode = (node: any): string => {
       try {
@@ -129,7 +128,6 @@ Always cite which parts of the context you used to answer.`;
       }
     };
 
-    // Use Graph RAG if enabled
     if (options.useGraphRAG) {
       const edgeTypes = options.neighborEdgeTypes ?? null;
       const results = await graph_vector_search_with_neighbors(
@@ -140,17 +138,10 @@ Always cite which parts of the context you used to answer.`;
         edgeTypes,
       );
 
-      console.log(
-        `🔍 Graph RAG found ${results.length} relevant memories with neighbors for: "${query}"`,
-      );
-
       const contexts: RAGContext[] = [];
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      results.forEach((result: any, idx: number) => {
+      results.forEach((result: any) => {
         const content = decodeNode(result);
-        console.log(
-          `  [${idx + 1}] (${result.similarity.toFixed(2)}): ${content.substring(0, 60)}... + ${result.neighbors.length} neighbors`,
-        );
 
         contexts.push({
           content,
@@ -159,7 +150,6 @@ Always cite which parts of the context you used to answer.`;
           isNeighbor: false,
         });
 
-        // Add neighbors
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         result.neighbors.forEach((neighbor: any) => {
           contexts.push({
@@ -174,7 +164,6 @@ Always cite which parts of the context you used to answer.`;
       return contexts;
     }
 
-    // Classic RAG
     const results = await graph_vector_search(
       options.vaultName,
       new Float32Array(embedding),
@@ -182,16 +171,9 @@ Always cite which parts of the context you used to answer.`;
       minSimilarity,
     );
 
-    console.log(
-      `🔍 RAG found ${results.length} relevant memories for: "${query}"`,
-    );
-
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return results.map((result: any, idx: number) => {
+    return results.map((result: any) => {
       const content = decodeNode(result);
-      console.log(
-        `  [${idx + 1}] (${result.similarity.toFixed(2)}): ${content.substring(0, 60)}...`,
-      );
 
       return {
         content,
@@ -224,7 +206,7 @@ ${contextText}
 
 Question: ${question}
 
-Please answer the question using the context above. Cite the context numbers [1], [2], etc. when relevant.`;
+Please answer the question using the context above.`;
   }
 
   setSystemPrompt(prompt: string): void {

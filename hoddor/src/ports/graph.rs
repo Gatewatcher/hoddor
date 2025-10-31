@@ -41,13 +41,6 @@ pub trait GraphPort {
         properties: EdgeProperties,
     ) -> GraphResult<EdgeId>;
 
-    async fn get_neighbors(
-        &self,
-        vault_id: &str,
-        node_id: &NodeId,
-        edge_types: Option<Vec<String>>,
-    ) -> GraphResult<Vec<GraphNode>>;
-
     async fn vector_search(
         &self,
         vault_id: &str,

@@ -68,10 +68,9 @@ export const RAGControls = ({
     const hideLoading = messageApi.loading('Creating 3 test nodes with real embeddings...', 0);
 
     try {
-      const nodeIds = await createTestNodes(selectedVault, embeddingService);
+      await createTestNodes(selectedVault, embeddingService);
       hideLoading();
       messageApi.success(`✅ 3 test nodes created and connected!`);
-      console.log('Created node IDs:', nodeIds);
     } catch (error) {
       hideLoading();
       messageApi.error(`Failed to create test nodes: ${error}`);

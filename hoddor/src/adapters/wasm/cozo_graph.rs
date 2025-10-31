@@ -13,6 +13,10 @@ use std::sync::{Arc, Mutex};
 
 const DEFAULT_EMBEDDING_DIM: usize = 384;
 
+const HNSW_M: i64 = 50;
+const HNSW_EF_CONSTRUCTION: i64 = 200;
+const HNSW_EF_SEARCH: i64 = 100;
+
 static GLOBAL_COZO_DB: Lazy<Arc<Mutex<DbInstance>>> = Lazy::new(|| {
     let db = DbInstance::new("mem", "", Default::default())
         .expect("Failed to create global CozoDB instance");
@@ -90,16 +94,16 @@ impl CozoGraphAdapter {
             r#"
             ::hnsw create nodes:embedding_idx {{
                 dim: {},
-                m: 50,
+                m: {},
                 dtype: F32,
                 fields: [embedding],
                 distance: Cosine,
-                ef_construction: 200,
+                ef_construction: {},
                 extend_candidates: true,
                 keep_pruned_connections: false,
             }}
             "#,
-            DEFAULT_EMBEDDING_DIM
+            DEFAULT_EMBEDDING_DIM, HNSW_M, HNSW_EF_CONSTRUCTION
         );
 
         db.run_script(&create_hnsw_index, Default::default(), ScriptMutability::Mutable)
@@ -524,89 +528,6 @@ impl GraphPort for CozoGraphAdapter {
         Ok(edge_id)
     }
 
-    async fn get_neighbors(
-        &self,
-        vault_id: &str,
-        node_id: &NodeId,
-        edge_types: Option<Vec<String>>,
-    ) -> GraphResult<Vec<GraphNode>> {
-        let db = self.db.lock().unwrap();
-
-        let mut params = BTreeMap::new();
-        params.insert("vault_id".to_string(), DataValue::Str(vault_id.into()));
-        params.insert("node_id".to_string(), DataValue::Str(node_id.as_str().into()));
-
-        // Native CozoDB query with single join - no N+1 problem!
-        let query = if let Some(ref types) = edge_types {
-            // With edge type filtering
-            let types_json = serde_json::to_string(types).unwrap_or_else(|_| "[]".to_string());
-            params.insert("edge_types".to_string(), DataValue::Str(types_json.into()));
-
-            r#"
-                ?[id, node_type, vault_id, namespace, content, labels, embedding, created_at, updated_at, accessed_at, access_count] :=
-                    *edges{
-                        from_node,
-                        to_node,
-                        edge_type,
-                        vault_id: edge_vault_id
-                    },
-                    *nodes{
-                        id,
-                        node_type,
-                        vault_id,
-                        namespace,
-                        content,
-                        labels,
-                        embedding,
-                        created_at,
-                        updated_at,
-                        accessed_at,
-                        access_count
-                    },
-                    edge_vault_id == $vault_id,
-                    (from_node == $node_id || to_node == $node_id),
-                    (id == to_node || id == from_node),
-                    id != $node_id
-            "#
-        } else {
-            // Without filtering - all edge types
-            r#"
-                ?[id, node_type, vault_id, namespace, content, labels, embedding, created_at, updated_at, accessed_at, access_count] :=
-                    *edges{
-                        from_node,
-                        to_node,
-                        vault_id: edge_vault_id
-                    },
-                    *nodes{
-                        id,
-                        node_type,
-                        vault_id,
-                        namespace,
-                        content,
-                        labels,
-                        embedding,
-                        created_at,
-                        updated_at,
-                        accessed_at,
-                        access_count
-                    },
-                    edge_vault_id == $vault_id,
-                    (from_node == $node_id || to_node == $node_id),
-                    (id == to_node || id == from_node),
-                    id != $node_id
-            "#
-        };
-
-        let result = db.run_script(query, params, ScriptMutability::Immutable)
-            .map_err(|e| GraphError::DatabaseError(format!("Failed to get neighbors: {}", e)))?;
-
-        let neighbors: Vec<GraphNode> = result.rows.iter()
-            .filter_map(|row| Self::parse_node_from_row(row).ok())
-            .collect();
-
-        Ok(neighbors)
-    }
-
     async fn vector_search(
         &self,
         vault_id: &str,
@@ -616,7 +537,6 @@ impl GraphPort for CozoGraphAdapter {
     ) -> GraphResult<Vec<(GraphNode, f32)>> {
         let db = self.db.lock().unwrap();
 
-        // Use HNSW index for efficient vector search
         let query_vec = DataValue::Vec(Vector::F32(Array1::from_vec(query_embedding.clone())));
 
         let mut params = BTreeMap::new();
@@ -624,18 +544,17 @@ impl GraphPort for CozoGraphAdapter {
         params.insert("query_vec".to_string(), query_vec);
         params.insert("k".to_string(), DataValue::from(limit as i64));
 
-        // HNSW query using cosine distance
-        // The ~ operator performs proximity search using the HNSW index
-        let hnsw_query = r#"
+        let hnsw_query = format!(
+            r#"
             ?[id, node_type, vault_id, namespace, content, labels, embedding, created_at, updated_at, accessed_at, access_count, dist] :=
-                ~nodes:embedding_idx{
+                ~nodes:embedding_idx{{
                     id, embedding |
                     query: $query_vec,
                     k: $k,
-                    ef: 100,
+                    ef: {},
                     bind_distance: dist
-                },
-                *nodes{
+                }},
+                *nodes{{
                     id,
                     node_type,
                     vault_id,
@@ -647,19 +566,19 @@ impl GraphPort for CozoGraphAdapter {
                     updated_at,
                     accessed_at,
                     access_count
-                },
+                }},
                 vault_id == $vault_id
-        "#;
+        "#,
+            HNSW_EF_SEARCH
+        );
 
-        let result = db.run_script(hnsw_query, params, ScriptMutability::Immutable)
+        let result = db.run_script(&hnsw_query, params, ScriptMutability::Immutable)
             .map_err(|e| GraphError::DatabaseError(format!("HNSW vector search failed: {}. Ensure embeddings have {} dimensions.", e, DEFAULT_EMBEDDING_DIM)))?;
 
         let results: Vec<(GraphNode, f32)> = result.rows.iter()
             .filter_map(|row| {
                 let node = Self::parse_node_from_row(row).ok()?;
 
-                // Distance from HNSW (cosine distance: 0 = identical, 2 = opposite)
-                // Convert to similarity: similarity = 1 - (distance / 2)
                 let distance = row.get(11).and_then(|v| v.get_float()).unwrap_or(2.0);
                 let similarity = 1.0 - (distance as f32 / 2.0);
 
@@ -693,7 +612,6 @@ impl GraphPort for CozoGraphAdapter {
         params.insert("query_vec".to_string(), query_vec);
         params.insert("k".to_string(), DataValue::from(limit as i64));
 
-        // Single native CozoDB query: HNSW + edges + neighbor nodes
         let query = if let Some(ref types) = edge_types {
             let edge_types_list = types.iter()
                 .map(|t| format!("\"{}\"", t))
@@ -702,19 +620,17 @@ impl GraphPort for CozoGraphAdapter {
 
             format!(
                 r#"
-                # Step 1: HNSW vector search for relevant nodes
                 found_nodes[id, dist] :=
                     ~nodes:embedding_idx{{
                         id, embedding |
                         query: $query_vec,
                         k: $k,
-                        ef: 100,
+                        ef: {},
                         bind_distance: dist
                     }},
                     *nodes{{ id, vault_id }},
                     vault_id == $vault_id
 
-                # Step 2: Join with edges and neighbor nodes in single query
                 ?[
                     id, node_type, vault_id, namespace, content, labels, embedding,
                     created_at, updated_at, accessed_at, access_count, dist,
@@ -747,23 +663,22 @@ impl GraphPort for CozoGraphAdapter {
                         access_count: neighbor_access_count
                     }}
                 "#,
-                edge_types_list
+                HNSW_EF_SEARCH, edge_types_list
             )
         } else {
-            r#"
-                # Step 1: HNSW vector search for relevant nodes
+            format!(
+                r#"
                 found_nodes[id, dist] :=
-                    ~nodes:embedding_idx{
+                    ~nodes:embedding_idx{{
                         id, embedding |
                         query: $query_vec,
                         k: $k,
-                        ef: 100,
+                        ef: {},
                         bind_distance: dist
-                    },
-                    *nodes{ id, vault_id },
+                    }},
+                    *nodes{{ id, vault_id }},
                     vault_id == $vault_id
 
-                # Step 2: Join with edges and neighbor nodes in single query
                 ?[
                     id, node_type, vault_id, namespace, content, labels, embedding,
                     created_at, updated_at, accessed_at, access_count, dist,
@@ -772,16 +687,16 @@ impl GraphPort for CozoGraphAdapter {
                     neighbor_created_at, neighbor_updated_at, neighbor_accessed_at, neighbor_access_count
                 ] :=
                     found_nodes[id, dist],
-                    *nodes{
+                    *nodes{{
                         id, node_type, vault_id, namespace, content, labels, embedding,
                         created_at, updated_at, accessed_at, access_count
-                    },
-                    *edges{ from_node, to_node, vault_id: edge_vault_id },
+                    }},
+                    *edges{{ from_node, to_node, vault_id: edge_vault_id }},
                     edge_vault_id == $vault_id,
                     (from_node == id || to_node == id),
                     neighbor_id = if(from_node == id, to_node, from_node),
                     neighbor_id != id,
-                    *nodes{
+                    *nodes{{
                         id: neighbor_id,
                         node_type: neighbor_node_type,
                         vault_id: neighbor_vault_id,
@@ -793,15 +708,15 @@ impl GraphPort for CozoGraphAdapter {
                         updated_at: neighbor_updated_at,
                         accessed_at: neighbor_accessed_at,
                         access_count: neighbor_access_count
-                    }
-            "#.to_string()
+                    }}
+                "#,
+                HNSW_EF_SEARCH
+            )
         };
 
         let result = db.run_script(&query, params, ScriptMutability::Immutable)
             .map_err(|e| GraphError::DatabaseError(format!("Vector search with neighbors failed: {}", e)))?;
 
-        // Group results by node ID
-        // Row format: [node (0-10), dist (11), neighbor (12-22)]
         use std::collections::HashMap;
         let mut nodes_map: HashMap<String, (GraphNode, f32, Vec<GraphNode>)> = HashMap::new();
 
@@ -810,7 +725,6 @@ impl GraphPort for CozoGraphAdapter {
             let dist = row.get(11).and_then(|v| v.get_float()).unwrap_or(2.0);
             let similarity = 1.0 - (dist as f32 / 2.0);
 
-            // Filter by min_similarity
             if let Some(min_sim) = min_similarity {
                 if similarity < min_sim {
                     continue;
@@ -993,59 +907,6 @@ mod tests {
 
         let nodes = adapter2.list_nodes_by_type("test_vault", "document", None).await.unwrap();
         assert_eq!(nodes.len(), 1);
-    }
-
-    #[wasm_bindgen_test]
-    async fn test_get_neighbors() {
-        let adapter = CozoGraphAdapter::new();
-
-        let node1 = adapter.create_node(
-            "test_vault",
-            "document",
-            b"Node 1".to_vec(),
-            vec![],
-            None,
-            None,
-        ).await.unwrap();
-
-        let node2 = adapter.create_node(
-            "test_vault",
-            "document",
-            b"Node 2".to_vec(),
-            vec![],
-            None,
-            None,
-        ).await.unwrap();
-
-        let node3 = adapter.create_node(
-            "test_vault",
-            "document",
-            b"Node 3".to_vec(),
-            vec![],
-            None,
-            None,
-        ).await.unwrap();
-
-        let props = EdgeProperties {
-            weight: 1.0,
-            bidirectional: false,
-            encrypted_context: None,
-            metadata: HashMap::new(),
-        };
-
-        adapter.create_edge("test_vault", &node1, &node2, "references", props.clone()).await.unwrap();
-        adapter.create_edge("test_vault", &node1, &node3, "cites", props).await.unwrap();
-
-        let all_neighbors = adapter.get_neighbors("test_vault", &node1, None).await.unwrap();
-        assert_eq!(all_neighbors.len(), 2);
-
-        let filtered = adapter.get_neighbors(
-            "test_vault",
-            &node1,
-            Some(vec!["references".to_string()]),
-        ).await.unwrap();
-        assert_eq!(filtered.len(), 1);
-        assert_eq!(filtered[0].content, b"Node 2");
     }
 
     #[wasm_bindgen_test]
