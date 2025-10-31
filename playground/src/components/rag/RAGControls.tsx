@@ -1,27 +1,36 @@
 import {
+  ExperimentOutlined,
   FolderOpenOutlined,
   LockOutlined,
   SaveOutlined,
   UnlockOutlined,
-  ExperimentOutlined,
 } from '@ant-design/icons';
-import { Button, Checkbox, Divider, Input, Space, Tag, Typography, message } from 'antd';
+import {
+  Button,
+  Checkbox,
+  Divider,
+  Input,
+  Space,
+  Tag,
+  Typography,
+  message,
+} from 'antd';
 import { useState } from 'react';
+
+import { EmbeddingService } from '../../services/embedding';
 import { createTestNodes } from '../../utils/createTestNodes';
 
 const { Text } = Typography;
 
-import { EmbeddingService } from '../../services/embedding';
-
 interface RAGControlsProps {
   selectedVault: string;
   onVaultChange: (vault: string) => void;
-  useRAG: boolean;
-  onRAGChange: (useRAG: boolean) => void;
-  useGraphRAG: boolean;
-  onGraphRAGChange: (useGraphRAG: boolean) => void;
+  withRAG: boolean;
+  onRAGChange: (withRAG: boolean) => void;
+  withGraphRAG: boolean;
+  onGraphRAGChange: (withGraphRAG: boolean) => void;
   canUseRAG: boolean;
-  embeddingService?: EmbeddingService;
+  embeddingService: EmbeddingService | null;
   isAuthenticated: boolean;
   onAuthPassphrase: () => void;
   onAuthMFARegister: () => void;
@@ -35,9 +44,9 @@ interface RAGControlsProps {
 export const RAGControls = ({
   selectedVault,
   onVaultChange,
-  useRAG,
+  withRAG,
   onRAGChange,
-  useGraphRAG,
+  withGraphRAG,
   onGraphRAGChange,
   canUseRAG,
   embeddingService,
@@ -60,12 +69,17 @@ export const RAGControls = ({
     }
 
     if (!embeddingService || !embeddingService.isReady()) {
-      messageApi.error('Embedding service not ready. Please wait for initialization.');
+      messageApi.error(
+        'Embedding service not ready. Please wait for initialization.',
+      );
       return;
     }
 
     setIsCreatingTestNodes(true);
-    const hideLoading = messageApi.loading('Creating 3 test nodes with real embeddings...', 0);
+    const hideLoading = messageApi.loading(
+      'Creating 3 test nodes with real embeddings...',
+      0,
+    );
 
     try {
       await createTestNodes(selectedVault, embeddingService);
@@ -92,20 +106,20 @@ export const RAGControls = ({
           style={{ width: 200 }}
         />
         <Checkbox
-          checked={useRAG}
+          checked={withRAG}
           onChange={e => onRAGChange(e.target.checked)}
         >
           Use RAG
         </Checkbox>
-        {useRAG && !canUseRAG && (
+        {withRAG && !canUseRAG && (
           <Text type="warning" style={{ fontSize: 12 }}>
             (Embeddings unavailable)
           </Text>
         )}
         <Checkbox
-          checked={useGraphRAG}
+          checked={withGraphRAG}
           onChange={e => onGraphRAGChange(e.target.checked)}
-          disabled={!useRAG || !canUseRAG}
+          disabled={!withRAG || !canUseRAG}
         >
           Graph RAG
         </Checkbox>

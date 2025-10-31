@@ -18,9 +18,9 @@ export interface RAGQueryOptions {
   maxContextItems?: number;
   searchQuality?: number;
   temperature?: number;
-  useStreaming?: boolean;
+  withStreaming?: boolean;
   vaultName?: string;
-  useGraphRAG?: boolean;
+  withGraphRAG?: boolean;
   neighborEdgeTypes?: string[];
 }
 
@@ -125,7 +125,7 @@ Always cite which parts of the context you used to answer.`;
       return `[${node.labels.join(', ')}]`;
     };
 
-    if (options.useGraphRAG) {
+    if (options.withGraphRAG) {
       const results: GraphNodeWithNeighborsResult[] =
         await graph_vector_search_with_neighbors(
           options.vaultName,
