@@ -1,4 +1,3 @@
-
 use crate::domain::graph::{
     GraphBackup, GraphEdge, GraphError, GraphNode, GraphResult, Id, NeighborNode, SearchResult,
 };
@@ -634,193 +633,511 @@ impl GraphPort for CozoGraphAdapter {
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//     use wasm_bindgen_test::*;
+#[cfg(all(test, target_arch = "wasm32"))]
+mod tests {
+    use super::*;
+    use wasm_bindgen_test::*;
 
-//     wasm_bindgen_test_configure!(run_in_browser);
+    wasm_bindgen_test_configure!(run_in_browser);
 
-//     #[wasm_bindgen_test]
-//     async fn test_cozo_adapter_creation() {
-//         let _adapter = CozoGraphAdapter::new();
-//     }
+    #[wasm_bindgen_test]
+    async fn test_cozo_adapter_creation() {
+        let _adapter = CozoGraphAdapter::new().unwrap();
+    }
 
-//     #[wasm_bindgen_test]
-//     async fn test_vector_search() {
-//         let adapter = CozoGraphAdapter::new();
+    #[wasm_bindgen_test]
+    async fn test_create_node_basic() {
+        let adapter = CozoGraphAdapter::new().unwrap();
 
-//         let emb1 = vec![1.0, 0.0, 0.0];
-//         let emb2 = vec![0.9, 0.1, 0.0];
-//         let emb3 = vec![0.0, 1.0, 0.0];
+        let node_id = adapter
+            .create_node(
+                "test_vault_basic",
+                "document",
+                "Test content".to_string(),
+                vec![],
+                None,
+                None,
+            )
+            .await
+            .unwrap();
 
-//         adapter
-//             .create_node(
-//                 "test_vault",
-//                 "document",
-//                 b"Doc 1".to_vec(),
-//                 vec![],
-//                 Some(emb1.clone()),
-//                 None,
-//                 None,
-//             )
-//             .await
-//             .unwrap();
+        assert!(!node_id.as_str().is_empty());
 
-//         adapter
-//             .create_node(
-//                 "test_vault",
-//                 "document",
-//                 b"Doc 2".to_vec(),
-//                 vec![],
-//                 Some(emb2),
-//                 None,
-//                 None,
-//             )
-//             .await
-//             .unwrap();
+        let nodes = adapter
+            .list_nodes_by_type("test_vault_basic", "document", None)
+            .await
+            .unwrap();
 
-//         adapter
-//             .create_node(
-//                 "test_vault",
-//                 "document",
-//                 b"Doc 3".to_vec(),
-//                 vec![],
-//                 Some(emb3),
-//                 None,
-//                 None,
-//             )
-//             .await
-//             .unwrap();
+        assert_eq!(nodes.len(), 1);
+        assert_eq!(nodes[0].content, "Test content");
+        assert_eq!(nodes[0].node_type, "document");
+    }
 
-//         let query = vec![1.0, 0.0, 0.0];
-//         let results = adapter
-//             .vector_search("test_vault", query, 2, None)
-//             .await
-//             .unwrap();
+    #[wasm_bindgen_test]
+    async fn test_create_node_with_labels() {
+        let adapter = CozoGraphAdapter::new().unwrap();
 
-//         assert_eq!(results.len(), 2);
-//         assert_eq!(results[0].0.content, b"Doc 1");
-//         assert!(results[0].1 > results[1].1);
-//     }
+        let labels = vec!["tag1".to_string(), "tag2".to_string(), "tag3".to_string()];
 
-//     #[wasm_bindgen_test]
-//     async fn test_export_import_backup() {
-//         let adapter1 = CozoGraphAdapter::new();
+        adapter
+            .create_node(
+                "test_vault_labels",
+                "document",
+                "Content with labels".to_string(),
+                labels.clone(),
+                None,
+                None,
+            )
+            .await
+            .unwrap();
 
-//         adapter1
-//             .create_node(
-//                 "test_vault",
-//                 "document",
-//                 b"Test".to_vec(),
-//                 vec![],
-//                 None,
-//                 None,
-//                 None,
-//             )
-//             .await
-//             .unwrap();
+        let nodes = adapter
+            .list_nodes_by_type("test_vault_labels", "document", None)
+            .await
+            .unwrap();
 
-//         let backup = adapter1.export_backup("test_vault").await.unwrap();
-//         assert_eq!(backup.nodes.len(), 1);
+        assert_eq!(nodes.len(), 1);
+        assert_eq!(nodes[0].labels, labels);
+    }
 
-//         let adapter2 = CozoGraphAdapter::new();
-//         adapter2.import_backup(&backup).await.unwrap();
+    #[wasm_bindgen_test]
+    async fn test_create_node_with_embedding() {
+        let adapter = CozoGraphAdapter::new().unwrap();
 
-//         let nodes = adapter2
-//             .list_nodes_by_type("test_vault", "document", None)
-//             .await
-//             .unwrap();
-//         assert_eq!(nodes.len(), 1);
-//     }
+        let embedding = vec![0.5; DEFAULT_EMBEDDING_DIM];
 
-//     #[wasm_bindgen_test]
-//     async fn test_vector_search_min_similarity() {
-//         let adapter = CozoGraphAdapter::new();
+        adapter
+            .create_node(
+                "test_vault_emb",
+                "document",
+                "Content with embedding".to_string(),
+                vec![],
+                Some(embedding.clone()),
+                None,
+            )
+            .await
+            .unwrap();
 
-//         let emb1 = vec![1.0, 0.0, 0.0];
-//         let emb2 = vec![0.5, 0.5, 0.0];
-//         let emb3 = vec![0.0, 1.0, 0.0];
+        let nodes = adapter
+            .list_nodes_by_type("test_vault_emb", "document", None)
+            .await
+            .unwrap();
 
-//         adapter
-//             .create_node(
-//                 "test_vault",
-//                 "document",
-//                 b"Similar".to_vec(),
-//                 vec![],
-//                 Some(emb1),
-//                 None,
-//                 None,
-//             )
-//             .await
-//             .unwrap();
+        assert_eq!(nodes.len(), 1);
+        assert!(nodes[0].embedding.is_some());
+        assert_eq!(
+            nodes[0].embedding.as_ref().unwrap().len(),
+            DEFAULT_EMBEDDING_DIM
+        );
+    }
 
-//         adapter
-//             .create_node(
-//                 "test_vault",
-//                 "document",
-//                 b"Somewhat similar".to_vec(),
-//                 vec![],
-//                 Some(emb2),
-//                 None,
-//                 None,
-//             )
-//             .await
-//             .unwrap();
+    #[wasm_bindgen_test]
+    async fn test_create_edge() {
+        let adapter = CozoGraphAdapter::new().unwrap();
 
-//         adapter
-//             .create_node(
-//                 "test_vault",
-//                 "document",
-//                 b"Different".to_vec(),
-//                 vec![],
-//                 Some(emb3),
-//                 None,
-//                 None,
-//             )
-//             .await
-//             .unwrap();
+        let node1_id = adapter
+            .create_node(
+                "test_vault_edges",
+                "document",
+                "Node 1".to_string(),
+                vec![],
+                None,
+                None,
+            )
+            .await
+            .unwrap();
 
-//         let query = vec![1.0, 0.0, 0.0];
-//         let results = adapter
-//             .vector_search("test_vault", query, 10, Some(0.7))
-//             .await
-//             .unwrap();
+        let node2_id = adapter
+            .create_node(
+                "test_vault_edges",
+                "document",
+                "Node 2".to_string(),
+                vec![],
+                None,
+                None,
+            )
+            .await
+            .unwrap();
 
-//         assert_eq!(results.len(), 2);
-//         assert!(results[0].1 >= 0.7);
-//         assert!(results[1].1 >= 0.7);
-//     }
+        let edge_id = adapter
+            .create_edge(
+                "test_vault_edges",
+                &node1_id,
+                &node2_id,
+                "relates_to",
+                Some(0.8),
+                None,
+            )
+            .await
+            .unwrap();
 
-//     #[wasm_bindgen_test]
-//     async fn test_list_nodes_with_limit() {
-//         let adapter = CozoGraphAdapter::new();
+        assert!(!edge_id.as_str().is_empty());
+    }
 
-//         for i in 0..5 {
-//             adapter
-//                 .create_node(
-//                     "test_vault",
-//                     "document",
-//                     format!("Doc {}", i).into_bytes(),
-//                     vec![],
-//                     None,
-//                     None,
-//                     None,
-//                 )
-//                 .await
-//                 .unwrap();
-//         }
+    #[wasm_bindgen_test]
+    async fn test_vector_search() {
+        let adapter = CozoGraphAdapter::new().unwrap();
 
-//         let all = adapter
-//             .list_nodes_by_type("test_vault", "document", None)
-//             .await
-//             .unwrap();
-//         assert_eq!(all.len(), 5);
+        let mut emb1 = vec![1.0; DEFAULT_EMBEDDING_DIM];
+        emb1[0] = 1.0;
+        emb1[1] = 0.0;
 
-//         let limited = adapter
-//             .list_nodes_by_type("test_vault", "document", Some(3))
-//             .await
-//             .unwrap();
-//         assert_eq!(limited.len(), 3);
-//     }
-// }
+        let mut emb2 = vec![0.0; DEFAULT_EMBEDDING_DIM];
+        emb2[0] = 0.9;
+        emb2[1] = 0.1;
+
+        let mut emb3 = vec![0.0; DEFAULT_EMBEDDING_DIM];
+        emb3[0] = 0.0;
+        emb3[1] = 1.0;
+
+        adapter
+            .create_node(
+                "test_vault_search",
+                "document",
+                "Doc 1".to_string(),
+                vec![],
+                Some(emb1.clone()),
+                None,
+            )
+            .await
+            .unwrap();
+
+        adapter
+            .create_node(
+                "test_vault_search",
+                "document",
+                "Doc 2".to_string(),
+                vec![],
+                Some(emb2),
+                None,
+            )
+            .await
+            .unwrap();
+
+        adapter
+            .create_node(
+                "test_vault_search",
+                "document",
+                "Doc 3".to_string(),
+                vec![],
+                Some(emb3),
+                None,
+            )
+            .await
+            .unwrap();
+
+        let mut query = vec![0.0; DEFAULT_EMBEDDING_DIM];
+        query[0] = 1.0;
+        query[1] = 0.0;
+
+        let results = adapter
+            .vector_search_with_neighbors("test_vault_search", query, 2, 100, false)
+            .await
+            .unwrap();
+
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].node.content, "Doc 1");
+        assert!(results[0].distance < results[1].distance);
+    }
+
+    #[wasm_bindgen_test]
+    async fn test_vector_search_with_neighbors() {
+        let adapter = CozoGraphAdapter::new().unwrap();
+
+        let mut emb1 = vec![0.0; DEFAULT_EMBEDDING_DIM];
+        emb1[0] = 1.0;
+
+        let mut emb2 = vec![0.0; DEFAULT_EMBEDDING_DIM];
+        emb2[0] = 0.9;
+
+        let mut emb3 = vec![0.0; DEFAULT_EMBEDDING_DIM];
+        emb3[0] = 0.8;
+
+        let node1_id = adapter
+            .create_node(
+                "test_vault_neighbors",
+                "document",
+                "Central node".to_string(),
+                vec![],
+                Some(emb1.clone()),
+                None,
+            )
+            .await
+            .unwrap();
+
+        let node2_id = adapter
+            .create_node(
+                "test_vault_neighbors",
+                "document",
+                "Neighbor 1".to_string(),
+                vec![],
+                Some(emb2),
+                None,
+            )
+            .await
+            .unwrap();
+
+        let node3_id = adapter
+            .create_node(
+                "test_vault_neighbors",
+                "document",
+                "Neighbor 2".to_string(),
+                vec![],
+                Some(emb3),
+                None,
+            )
+            .await
+            .unwrap();
+
+        adapter
+            .create_edge(
+                "test_vault_neighbors",
+                &node1_id,
+                &node2_id,
+                "relates_to",
+                Some(1.0),
+                None,
+            )
+            .await
+            .unwrap();
+
+        adapter
+            .create_edge(
+                "test_vault_neighbors",
+                &node1_id,
+                &node3_id,
+                "links_to",
+                Some(0.5),
+                None,
+            )
+            .await
+            .unwrap();
+
+        let results = adapter
+            .vector_search_with_neighbors("test_vault_neighbors", emb1, 1, 100, true)
+            .await
+            .unwrap();
+
+        assert!(!results.is_empty());
+        assert_eq!(results[0].node.content, "Central node");
+        assert_eq!(results[0].neighbors.len(), 2);
+    }
+
+    #[wasm_bindgen_test]
+    async fn test_export_import_backup() {
+        let adapter1 = CozoGraphAdapter::new().unwrap();
+
+        let embedding = vec![0.1; DEFAULT_EMBEDDING_DIM];
+
+        adapter1
+            .create_node(
+                "test_vault_backup",
+                "document",
+                "Test".to_string(),
+                vec!["label1".to_string()],
+                Some(embedding),
+                None,
+            )
+            .await
+            .unwrap();
+
+        let backup = adapter1.export_backup("test_vault_backup").await.unwrap();
+        assert_eq!(backup.nodes.len(), 1);
+        assert_eq!(backup.version, 1);
+
+        let adapter2 = CozoGraphAdapter::new().unwrap();
+        adapter2.import_backup(&backup).await.unwrap();
+
+        let nodes = adapter2
+            .list_nodes_by_type("test_vault_backup", "document", None)
+            .await
+            .unwrap();
+
+        assert_eq!(nodes.len(), 1);
+        assert_eq!(nodes[0].content, "Test");
+        assert!(nodes[0].embedding.is_some());
+    }
+
+    #[wasm_bindgen_test]
+    async fn test_backup_with_edges() {
+        let adapter = CozoGraphAdapter::new().unwrap();
+
+        let node1_id = adapter
+            .create_node(
+                "test_vault_backup_edges",
+                "document",
+                "Node 1".to_string(),
+                vec![],
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+
+        let node2_id = adapter
+            .create_node(
+                "test_vault_backup_edges",
+                "document",
+                "Node 2".to_string(),
+                vec![],
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+
+        adapter
+            .create_edge(
+                "test_vault_backup_edges",
+                &node1_id,
+                &node2_id,
+                "connects",
+                Some(0.9),
+                None,
+            )
+            .await
+            .unwrap();
+
+        let backup = adapter
+            .export_backup("test_vault_backup_edges")
+            .await
+            .unwrap();
+
+        assert_eq!(backup.nodes.len(), 2);
+        assert_eq!(backup.edges.len(), 1);
+        assert_eq!(backup.edges[0].edge_type, "connects");
+        assert_eq!(backup.edges[0].weight, 0.9);
+    }
+
+    #[wasm_bindgen_test]
+    async fn test_list_nodes_with_limit() {
+        let adapter = CozoGraphAdapter::new().unwrap();
+
+        for i in 0..5 {
+            adapter
+                .create_node(
+                    "test_vault_limit",
+                    "document",
+                    format!("Doc {}", i),
+                    vec![],
+                    None,
+                    None,
+                )
+                .await
+                .unwrap();
+        }
+
+        let all = adapter
+            .list_nodes_by_type("test_vault_limit", "document", None)
+            .await
+            .unwrap();
+        assert_eq!(all.len(), 5);
+
+        let limited = adapter
+            .list_nodes_by_type("test_vault_limit", "document", Some(3))
+            .await
+            .unwrap();
+        assert_eq!(limited.len(), 3);
+    }
+
+    #[wasm_bindgen_test]
+    async fn test_invalid_embedding_dimension() {
+        let adapter = CozoGraphAdapter::new().unwrap();
+
+        let wrong_embedding = vec![1.0, 0.0, 0.0];
+
+        let result = adapter
+            .vector_search_with_neighbors("test_vault_error", wrong_embedding, 5, 100, false)
+            .await;
+
+        assert!(result.is_err());
+        match result {
+            Err(GraphError::InvalidEmbedding(_)) => (),
+            _ => panic!("Expected InvalidEmbedding error"),
+        }
+    }
+
+    #[wasm_bindgen_test]
+    async fn test_helper_functions() {
+        let labels = vec!["tag1".to_string(), "tag2".to_string(), "tag3".to_string()];
+        let labels_str = labels_to_string(&labels);
+        assert_eq!(labels_str, "tag1,tag2,tag3");
+
+        let parsed = string_to_labels(&labels_str);
+        assert_eq!(parsed, labels);
+
+        let empty = string_to_labels("");
+        assert_eq!(empty.len(), 0);
+    }
+
+    #[wasm_bindgen_test]
+    async fn test_custom_node_id() {
+        let adapter = CozoGraphAdapter::new().unwrap();
+
+        let custom_id = Id::new();
+        let returned_id = adapter
+            .create_node(
+                "test_vault_custom_id",
+                "document",
+                "Custom ID node".to_string(),
+                vec![],
+                None,
+                Some(&custom_id),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(returned_id.as_str(), custom_id.as_str());
+
+        let nodes = adapter
+            .list_nodes_by_type("test_vault_custom_id", "document", None)
+            .await
+            .unwrap();
+
+        assert_eq!(nodes[0].id.as_str(), custom_id.as_str());
+    }
+
+    #[wasm_bindgen_test]
+    async fn test_multiple_node_types() {
+        let adapter = CozoGraphAdapter::new().unwrap();
+
+        adapter
+            .create_node(
+                "test_vault_types",
+                "document",
+                "Document".to_string(),
+                vec![],
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+
+        adapter
+            .create_node(
+                "test_vault_types",
+                "memory",
+                "Memory".to_string(),
+                vec![],
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+
+        let documents = adapter
+            .list_nodes_by_type("test_vault_types", "document", None)
+            .await
+            .unwrap();
+
+        let memories = adapter
+            .list_nodes_by_type("test_vault_types", "memory", None)
+            .await
+            .unwrap();
+
+        assert_eq!(documents.len(), 1);
+        assert_eq!(memories.len(), 1);
+        assert_eq!(documents[0].node_type, "document");
+        assert_eq!(memories[0].node_type, "memory");
+    }
+}
