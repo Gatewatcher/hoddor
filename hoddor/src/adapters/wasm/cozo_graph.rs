@@ -51,10 +51,6 @@ impl TryFrom<Vec<DataValue>> for GraphNode {
     type Error = GraphError;
 
     fn try_from(row: Vec<DataValue>) -> Result<Self, Self::Error> {
-        if row.len() < 7 {
-            return Err(GraphError::DatabaseError("Invalid row format".to_string()));
-        }
-
         Ok(GraphNode {
             id: Id::from_string(
                 row[0]
@@ -79,13 +75,6 @@ impl TryFrom<Vec<DataValue>> for GraphEdge {
     type Error = GraphError;
 
     fn try_from(row: Vec<DataValue>) -> Result<Self, Self::Error> {
-        if row.len() < 7 {
-            return Err(GraphError::DatabaseError(format!(
-                "Invalid edge row: expected 7 columns, got {}",
-                row.len()
-            )));
-        }
-
         Ok(GraphEdge {
             id: Id::from_string(
                 row[0]
@@ -211,10 +200,6 @@ impl CozoGraphAdapter {
         let mut results = Vec::new();
 
         for row in rows {
-            if row.len() < 5 {
-                continue;
-            }
-
             let node_id = Id::from_string(
                 row[0]
                     .get_str()
@@ -250,10 +235,6 @@ impl CozoGraphAdapter {
         let mut node_map: HashMap<String, SearchResult> = HashMap::new();
 
         for row in rows {
-            if row.len() < 10 {
-                continue;
-            }
-
             let node_id_str = row[0]
                 .get_str()
                 .ok_or_else(|| GraphError::DatabaseError("Missing id".to_string()))?;
@@ -481,31 +462,45 @@ impl GraphPort for CozoGraphAdapter {
                 },
                 *nodes{id, vault_id},
                 vault_id == $vault_id
-            
+
+            nodes_with_neighbors[id] :=
+                similar_nodes[id, _],
+                *edges{from_node, to_node, vault_id: edge_vault},
+                edge_vault == $vault_id,
+                (from_node == id or to_node == id)
+
             ?[
                 id, node_type, content, labels, dist,
                 neighbor_id, neighbor_type, neighbor_content, edge_type, weight
             ] :=
                 similar_nodes[id, dist],
                 *nodes{
-                    id, 
-                    node_type, 
-                    content, 
+                    id,
+                    node_type,
+                    content,
                     labels
                 },
                 *edges{from_node, to_node, edge_type, weight, vault_id: edge_vault},
                 edge_vault == $vault_id,
                 (
-                    (from_node == id, neighbor_id = to_node) or 
+                    (from_node == id, neighbor_id = to_node) or
                     (to_node == id, neighbor_id = from_node)
                 ),
                 neighbor_id != id,
                 *nodes{
-                    id: neighbor_id, 
+                    id: neighbor_id,
                     node_type: neighbor_type,
                     content: neighbor_content
                 }
-            
+
+            ?[
+                id, node_type, content, labels, dist,
+                null, null, null, null, null
+            ] :=
+                similar_nodes[id, dist],
+                *nodes{id, node_type, content, labels},
+                not nodes_with_neighbors[id]
+
             :order dist
         "#
         } else {
