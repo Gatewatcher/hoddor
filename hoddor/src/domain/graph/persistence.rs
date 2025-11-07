@@ -128,9 +128,12 @@ impl<G: GraphPort, S: StoragePort> GraphPersistenceService<G, S> {
 #[cfg(all(test, target_arch = "wasm32"))]
 mod tests {
     use super::*;
-    use crate::adapters::wasm::{OpfsStorage, SimpleGraphAdapter};
+    use crate::adapters::wasm::OpfsStorage;
+
+    #[cfg(feature = "graph")]
+    use crate::adapters::wasm::CozoGraphAdapter;
+
     use crate::domain::crypto;
-    use crate::domain::graph::EdgeProperties;
     use crate::platform::Platform;
     use wasm_bindgen_test::*;
 
@@ -164,7 +167,7 @@ mod tests {
             identity: identity.clone(),
         };
 
-        let graph = SimpleGraphAdapter::new();
+        let graph = CozoGraphAdapter::new().unwrap();
         let storage = OpfsStorage::new();
 
         storage.create_directory("graph_backups").await.unwrap();
@@ -179,7 +182,7 @@ mod tests {
             .create_node(
                 vault_id,
                 "memory",
-                vec![1, 2, 3],
+                "Test content 1".to_string(),
                 vec!["test".to_string()],
                 None,
                 None,
@@ -192,7 +195,7 @@ mod tests {
             .create_node(
                 vault_id,
                 "entity",
-                vec![4, 5, 6],
+                "Test content 2".to_string(),
                 vec!["test2".to_string()],
                 None,
                 None,
@@ -200,16 +203,16 @@ mod tests {
             .await
             .unwrap();
 
-        let edge_props = EdgeProperties {
-            weight: 0.8,
-            bidirectional: false,
-            encrypted_context: None,
-            metadata: Default::default(),
-        };
-
         service
             .graph
-            .create_edge(vault_id, &node1_id, &node2_id, "relates_to", edge_props)
+            .create_edge(
+                vault_id,
+                &node1_id,
+                &node2_id,
+                "relates_to",
+                Some(0.8),
+                None,
+            )
             .await
             .unwrap();
 
@@ -223,7 +226,7 @@ mod tests {
             identity,
         };
 
-        let graph2 = SimpleGraphAdapter::new();
+        let graph2 = CozoGraphAdapter::new().unwrap();
         let storage2 = OpfsStorage::new();
         let service2 = GraphPersistenceService::new(
             graph2,
@@ -254,7 +257,7 @@ mod tests {
             identity,
         };
 
-        let graph = SimpleGraphAdapter::new();
+        let graph = CozoGraphAdapter::new().unwrap();
         let storage = OpfsStorage::new();
         storage.create_directory("graph_backups").await.unwrap();
         let service =
@@ -278,7 +281,7 @@ mod tests {
             identity,
         };
 
-        let graph = SimpleGraphAdapter::new();
+        let graph = CozoGraphAdapter::new().unwrap();
         let storage = OpfsStorage::new();
         storage.create_directory("graph_backups").await.unwrap();
         let service =
@@ -288,36 +291,35 @@ mod tests {
 
         let node1 = service
             .graph
-            .create_node(vault_id, "memory", vec![1], vec![], None, None)
+            .create_node(vault_id, "memory", "Node 1".to_string(), vec![], None, None)
             .await
             .unwrap();
 
         let node2 = service
             .graph
-            .create_node(vault_id, "memory", vec![2], vec![], None, None)
+            .create_node(vault_id, "memory", "Node 2".to_string(), vec![], None, None)
             .await
             .unwrap();
 
         let node3 = service
             .graph
-            .create_node(vault_id, "memory", vec![3], vec![], None, None)
+            .create_node(vault_id, "memory", "Node 3".to_string(), vec![], None, None)
             .await
             .unwrap();
 
-        let props = EdgeProperties::default();
         service
             .graph
-            .create_edge(vault_id, &node1, &node2, "relates_to", props.clone())
+            .create_edge(vault_id, &node1, &node2, "relates_to", Some(1.0), None)
             .await
             .unwrap();
         service
             .graph
-            .create_edge(vault_id, &node2, &node3, "relates_to", props.clone())
+            .create_edge(vault_id, &node2, &node3, "relates_to", Some(1.0), None)
             .await
             .unwrap();
         service
             .graph
-            .create_edge(vault_id, &node1, &node3, "relates_to", props)
+            .create_edge(vault_id, &node1, &node3, "relates_to", Some(1.0), None)
             .await
             .unwrap();
 
@@ -337,7 +339,7 @@ mod tests {
         let identity = crypto::generate_identity(&platform).unwrap();
         let recipient = crypto::identity_to_public(&platform, &identity).unwrap();
 
-        let graph = SimpleGraphAdapter::new();
+        let graph = CozoGraphAdapter::new().unwrap();
         let storage = OpfsStorage::new();
         storage
             .create_directory("encrypted_graph_backups")
@@ -364,7 +366,7 @@ mod tests {
             .create_node(
                 vault_id,
                 "memory",
-                vec![1, 2, 3, 4, 5],
+                "Encrypted test content".to_string(),
                 vec!["encrypted".to_string(), "test".to_string()],
                 None,
                 None,
@@ -377,7 +379,7 @@ mod tests {
             .create_node(
                 vault_id,
                 "entity",
-                vec![6, 7, 8, 9, 10],
+                "Sensitive data".to_string(),
                 vec!["sensitive".to_string()],
                 None,
                 None,
@@ -385,16 +387,16 @@ mod tests {
             .await
             .unwrap();
 
-        let edge_props = EdgeProperties {
-            weight: 0.95,
-            bidirectional: true,
-            encrypted_context: Some(vec![11, 12, 13]),
-            metadata: Default::default(),
-        };
-
         service
             .graph
-            .create_edge(vault_id, &node1_id, &node2_id, "secure_link", edge_props)
+            .create_edge(
+                vault_id,
+                &node1_id,
+                &node2_id,
+                "secure_link",
+                Some(0.95),
+                None,
+            )
             .await
             .unwrap();
 
@@ -422,12 +424,11 @@ mod tests {
             .iter()
             .find(|n| n.node_type == "memory")
             .unwrap();
-        assert_eq!(restored_node1.content, vec![1, 2, 3, 4, 5]);
+        assert_eq!(restored_node1.content, "Encrypted test content");
 
         let restored_edge = &restored_backup.edges[0];
         assert_eq!(restored_edge.edge_type, "secure_link");
-        assert_eq!(restored_edge.properties.weight, 0.95);
-        assert_eq!(restored_edge.properties.bidirectional, true);
+        assert_eq!(restored_edge.weight, 0.95);
 
         service.delete_backup(vault_id).await.unwrap();
         assert!(!service.backup_exists(vault_id).await);
@@ -446,7 +447,7 @@ mod tests {
 
         let identity2 = crypto::generate_identity(&platform).unwrap();
 
-        let graph = SimpleGraphAdapter::new();
+        let graph = CozoGraphAdapter::new().unwrap();
         let storage = OpfsStorage::new();
         storage.create_directory("wrong_key_test").await.unwrap();
 
@@ -463,13 +464,20 @@ mod tests {
 
         service1
             .graph
-            .create_node(vault_id, "memory", vec![1, 2, 3], vec![], None, None)
+            .create_node(
+                vault_id,
+                "memory",
+                "Test content".to_string(),
+                vec![],
+                None,
+                None,
+            )
             .await
             .unwrap();
 
         service1.backup(vault_id).await.unwrap();
 
-        let graph2 = SimpleGraphAdapter::new();
+        let graph2 = CozoGraphAdapter::new().unwrap();
         let storage2 = OpfsStorage::new();
 
         let encryption2 = EncryptionConfig {
@@ -489,5 +497,57 @@ mod tests {
         assert!(result.is_err());
 
         service1.delete_backup(vault_id).await.unwrap();
+    }
+
+    #[wasm_bindgen_test]
+    async fn test_backup_with_embeddings() {
+        let platform = Platform::new();
+        let identity = crypto::generate_identity(&platform).unwrap();
+        let recipient = crypto::identity_to_public(&platform, &identity).unwrap();
+
+        let encryption = EncryptionConfig {
+            platform: platform.clone(),
+            recipient,
+            identity,
+        };
+
+        let graph = CozoGraphAdapter::new().unwrap();
+        let storage = OpfsStorage::new();
+        storage.create_directory("graph_backups").await.unwrap();
+        let service =
+            GraphPersistenceService::new(graph, storage, "graph_backups".to_string(), encryption);
+
+        let vault_id = "test_vault_embeddings";
+
+        // Create node with 384-dim embedding
+        let embedding = vec![0.1; 384];
+
+        let node_id = service
+            .graph
+            .create_node(
+                vault_id,
+                "memory",
+                "Content with embedding".to_string(),
+                vec!["test".to_string(), "embedding".to_string()],
+                Some(embedding.clone()),
+                None,
+            )
+            .await
+            .unwrap();
+
+        service.backup(vault_id).await.unwrap();
+
+        let backup = service.restore(vault_id).await.unwrap();
+
+        assert_eq!(backup.nodes.len(), 1);
+        assert_eq!(backup.nodes[0].content, "Content with embedding");
+        assert_eq!(backup.nodes[0].labels.len(), 2);
+        assert!(backup.nodes[0].embedding.is_some());
+
+        let restored_embedding = backup.nodes[0].embedding.as_ref().unwrap();
+        assert_eq!(restored_embedding.len(), 384);
+        assert_eq!(restored_embedding[0], 0.1);
+
+        service.delete_backup(vault_id).await.unwrap();
     }
 }

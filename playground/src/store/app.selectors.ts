@@ -44,8 +44,12 @@ const getSelectedModel = (state: States) => {
   return state.appState.selectedModel;
 };
 
-const getUseRAG = (state: States) => {
-  return state.appState.useRAG;
+const getWithRAG = (state: States) => {
+  return state.appState.withRAG;
+};
+
+const getWithGraphRAG = (state: States) => {
+  return state.appState.withGraphRAG;
 };
 
 const getServicesReady = (state: States) => {
@@ -68,7 +72,8 @@ export const appSelectors = {
   getText,
   getAudio,
   getSelectedModel,
-  getUseRAG,
+  getWithRAG,
+  getWithGraphRAG,
   getServicesReady,
   getMemoryRefreshTrigger,
 };

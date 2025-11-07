@@ -1,4 +1,3 @@
-/// Platform - Dependency injection container for all ports.
 use crate::adapters::{
     AgeEncryption, AgeIdentity, Argon2Kdf, Clock, ConsoleLogger, Locks, Notifier, Persistence, Prf,
     Storage,
@@ -44,7 +43,7 @@ impl Platform {
             kdf: Argon2Kdf::new(),
             prf: Prf::new(),
             #[cfg(feature = "graph")]
-            graph: Graph::new(),
+            graph: Graph::default(),
         }
     }
 

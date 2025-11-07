@@ -61,16 +61,15 @@ export const RAGWorkspace = () => {
   const { isSaving, isRestoring, saveGraph, loadGraph } =
     useGraphPersistence(messageApi);
 
-  // Redux state
   const selectedVault = useSelector(appSelectors.getSelectedVault);
   const selectedModel = useSelector(appSelectors.getSelectedModel);
-  const useRAG = useSelector(appSelectors.getUseRAG);
+  const withRAG = useSelector(appSelectors.getWithRAG);
+  const withGraphRAG = useSelector(appSelectors.getWithGraphRAG);
   const servicesReady = useSelector(appSelectors.getServicesReady);
   const identity = useSelector(appSelectors.getIdentity);
 
   const dispatch = useDispatch();
 
-  // Services from context
   const { ragOrchestrator, embeddingService } = useServices();
 
   const handleInitialize = async () => {
@@ -188,9 +187,14 @@ export const RAGWorkspace = () => {
                 <RAGControls
                   selectedVault={selectedVault || ''}
                   onVaultChange={vault => dispatch(actions.selectVault(vault))}
-                  useRAG={useRAG}
+                  withRAG={withRAG}
                   onRAGChange={use => dispatch(actions.setUseRAG(use))}
+                  withGraphRAG={withGraphRAG}
+                  onGraphRAGChange={use =>
+                    dispatch(actions.setUseGraphRAG(use))
+                  }
                   canUseRAG={canUseRAG}
+                  embeddingService={embeddingService}
                   isAuthenticated={!!identity}
                   onAuthPassphrase={() => openAuthModal('passphrase')}
                   onAuthMFARegister={() => openAuthModal('mfa-register')}
