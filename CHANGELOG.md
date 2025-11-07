@@ -1,3 +1,10 @@
+# [1.4.0](https://github.com/Gatewatcher/hoddor/compare/v1.3.0...v1.4.0) (2025-11-07)
+
+
+### Features
+
+* add cozodb ([#77](https://github.com/Gatewatcher/hoddor/issues/77)) ([3505f15](https://github.com/Gatewatcher/hoddor/commit/3505f155add15b7593f9a89b3dd31506afba32cf))
+
 # [1.3.0](https://github.com/Gatewatcher/hoddor/compare/v1.2.0...v1.3.0) (2025-10-20)
 
 
